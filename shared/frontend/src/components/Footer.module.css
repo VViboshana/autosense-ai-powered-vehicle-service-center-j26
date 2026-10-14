@@ -1,0 +1,4 @@
+.footer { background: var(--navy); color: var(--on-navy); }
+.inner { max-width: var(--max-w); margin: 0 auto; padding: 2rem var(--gutter); display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.inner p { margin: 0; }
+.muted { color: var(--on-navy-muted); }

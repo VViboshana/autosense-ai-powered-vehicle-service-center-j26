@@ -1,0 +1,12 @@
+.hero { background: var(--navy); color: var(--on-navy); }
+.inner { max-width: var(--max-w); margin: 0 auto; padding: 4rem var(--gutter) 4.5rem; display: flex; flex-direction: column; gap: 1.25rem; }
+.eyebrow { font-family: var(--font-mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--orange); margin: 0; }
+.title { font-family: var(--font-display); font-weight: 800; font-size: clamp(2rem, 5vw, 3.4rem); line-height: 1.1; max-width: 18ch; margin: 0; text-wrap: balance; }
+.summary { max-width: 62ch; font-size: 1.15rem; color: var(--on-navy-muted); margin: 0; }
+.actions { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.5rem; }
+.primary, .secondary { padding: 0.75rem 1.3rem; border-radius: var(--radius); font-weight: 700; text-decoration: none; }
+.primary { background: var(--orange); color: var(--navy); }
+.secondary { border: 1px solid var(--on-navy-muted); color: var(--on-navy); }
+.primary:hover { filter: brightness(1.08); }
+.secondary:hover { background: rgba(255, 255, 255, 0.08); }
+.meta { font-size: 0.9rem; color: var(--on-navy-muted); margin: 1rem 0 0; }

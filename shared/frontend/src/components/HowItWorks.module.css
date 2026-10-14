@@ -1,0 +1,5 @@
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 1.25rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.n { width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; background: var(--orange); color: var(--navy); font-weight: 800; font-family: var(--font-display); }
+.title { font-family: var(--font-display); font-size: 1.05rem; margin: 0; }
+.text { margin: 0; color: var(--muted); }

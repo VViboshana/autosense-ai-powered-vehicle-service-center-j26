@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+coverage/
+# ML / data (Component 4 datasets and weights live outside this repo)
+data/
+*.pt
+*.onnx
