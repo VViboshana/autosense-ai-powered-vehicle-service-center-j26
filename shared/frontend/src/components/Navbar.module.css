@@ -1,9 +1,0 @@
-.bar { position: sticky; top: 0; z-index: 10; background: var(--navy); color: var(--on-navy); }
-.inner { max-width: var(--max-w); margin: 0 auto; padding: 0.8rem var(--gutter); display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
-.brand { font-family: var(--font-display); font-weight: 800; font-size: 1.25rem; color: inherit; text-decoration: none; display: flex; align-items: center; gap: 0.5rem; }
-.logo { color: var(--orange); }
-.links { display: flex; gap: 1.25rem; list-style: none; margin: 0 0 0 auto; padding: 0; flex-wrap: wrap; }
-.links a { color: var(--on-navy-muted); text-decoration: none; font-weight: 600; }
-.links a:hover, .links a:focus-visible { color: var(--on-navy); }
-.signIn { background: transparent; color: var(--on-navy); border: 1px solid var(--on-navy-muted); border-radius: var(--radius); padding: 0.4rem 0.9rem; font: inherit; font-weight: 600; opacity: 0.7; cursor: not-allowed; }
-@media (max-width: 720px) { .links { margin-left: 0; width: 100%; order: 3; } .signIn { margin-left: auto; } }
