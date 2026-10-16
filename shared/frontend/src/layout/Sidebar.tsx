@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useSession, type MenuNode } from '@/app/session';
+import { Brand } from '@/components/Brand';
 
 function containsPath(node: MenuNode, path: string): boolean {
   return node.url === path || node.children.some((c) => containsPath(c, path));
@@ -68,16 +69,7 @@ export function Sidebar() {
   return (
     <aside className="app-sidebar" data-bs-theme="dark">
       <div className="sidebar-brand">
-        <Link to="/" className="as-brand" aria-label="AutoSense home">
-          <svg viewBox="0 0 32 32" aria-hidden="true">
-            <rect width="32" height="32" rx="8" fill="#F26A1B" />
-            <path d="M9 24V10h14v14" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-            <circle cx="16" cy="17" r="3.2" fill="#fff" />
-          </svg>
-          <span className="as-brand-text">
-            Auto<b>Sense</b>
-          </span>
-        </Link>
+        <Brand />
       </div>
       <div className="sidebar-wrapper">
         <nav className="mt-2" aria-label="Main menu">

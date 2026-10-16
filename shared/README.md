@@ -33,19 +33,19 @@ Open http://localhost:5173. Check the API at http://localhost:5000/api/health �
 
 On Windows PowerShell use `Copy-Item backend/.env.example backend/.env` instead of `cp`.
 
-### Who am I signed in as?
+### Accounts
 
-Sign-in is the next feature. Until then the API treats every request as `DEV_USER` from `backend/.env`. Change it and
-restart `npm run dev` to see the app as another role:
+There are no built-in accounts or passwords.
 
-| DEV_USER | Role | Sees |
-|---|---|---|
-| `admin` | System administrator (super admin) | Everything |
-| `nimal.perera` | Service manager | All operational screens, reports, audit log |
-| `dilani.fernando`, `ruwan.silva` | Service advisor | Check-in, new inspection, history, bays, forecasts |
-| `ishara.silva` | Technician | Inspections incl. review, bays, forecasts, safety alerts |
+1. **First run.** While the database has no staff account, the web app shows **Set up AutoSense**. Create the System
+   administrator there (a super admin: every staff screen). The page disappears once that account exists.
+   On a server others can reach, set `SETUP_KEY` in `backend/.env` first; the page then asks for it.
+2. **Team.** The administrator creates roles in Administration › **Roles**, ticks what each can use in **Role
+   permissions**, and adds people in **Users** with a starting password, handed over privately.
+3. **Customers** create their own account at `/register`, then ask to add their vehicle; staff approve it in
+   Service floor › Customer vehicle requests.
 
-All sample users have the password `Demo@1234` (used once sign-in exists).
+Five wrong passwords lock an account; an administrator unlocks it in Administration › Users.
 
 ## Everyday commands (run in `shared/`)
 
@@ -54,7 +54,7 @@ All sample users have the password `Demo@1234` (used once sign-in exists).
 | `npm run dev` | API and web app with live reload |
 | `npm run check` | Typecheck, lint and test everything. **Run before every pull request.** |
 | `npm run db:migrate` | Apply new migrations, refresh screens/roles/settings |
-| `npm run db:seed` | Refresh the sample day (re-run it on a new day to make the dashboard look live again) |
+| `npm run db:seed` | Sample vehicles, jobs, bays and inspections (no accounts). Re-run on a new day to make the dashboard look live again |
 | `npm run db:reset -- --yes` | Drop and rebuild the database with sample data (development databases only) |
 | `npm run db:status -w backend` | Which migrations are applied |
 | `npm run build` | Production build of both |
@@ -64,9 +64,9 @@ All sample users have the password `Demo@1234` (used once sign-in exists).
 
 | Where | What |
 |---|---|
-| `backend/.env` | Secrets and machine settings: `DATABASE_URL`, `PORT`, `DEV_USER`, AI service URLs, `LOG_LEVEL`. Checked at startup; a bad value stops the API with a message saying which. See `backend/.env.example`. |
+| `backend/.env` | Secrets and machine settings: `DATABASE_URL`, `PORT`, `ALLOWED_ORIGINS`, AI service URLs, `LOG_LEVEL`. Checked at startup; a bad value stops the API with a message saying which. See `backend/.env.example`. |
 | `frontend/.env` (optional) | `API_PROXY_TARGET`, `WEB_PORT` for the dev server. |
-| `app.settings` table | Business settings: time zone (Asia/Colombo), date format, currency, photo limits, bay rules. Defaults in `database/reference/030_settings.sql`. Public ones reach the browser via `GET /api/app-config`. |
+| `app.settings` table | Business settings: time zone (Asia/Colombo), date format, currency, photo limits, bay rules, password rules (`auth.password_policy`), lockout (`auth.lockout`), session length (`auth.sessions`). Defaults in `database/reference/030_settings.sql`. Public ones reach the browser via `GET /api/app-config`. |
 
 Never commit `.env` files, datasets, model weights (`.pt`, `.pkl`, `.onnx`), photos or camera footage.
 
@@ -77,7 +77,9 @@ Never commit `.env` files, datasets, model weights (`.pt`, `.pkl`, `.onnx`), pho
 | `Invalid configuration in backend/.env` | The message names the setting. Copy `.env.example` again if unsure. |
 | `Could not connect to the database` | Check `DATABASE_URL`. Neon sleeps when idle: wait a few seconds and retry. |
 | Page says *AutoSense couldn't start* | The API isn't running or can't reach the database. Look at the terminal running `npm run dev`. |
-| `DEV_USER "…" is not an active user` | Run `npm run db:seed`, or set `DEV_USER` to one of the users above. |
+| Setup page doesn't appear | A staff account already exists. Sign in, or ask the administrator for an account. |
+| *This account is locked* | An administrator: Administration › Users, ⋯ › Unlock (or Reset password). |
+| *This request came from a page outside AutoSense* | You opened the web app on an address not in `ALLOWED_ORIGINS` (backend/.env). Add it and restart. |
 | `… was changed after it was applied` | Someone edited an old migration. Add a new migration instead; on your own dev database you may `db:reset`. |
 | Port 5000 or 5173 in use | `netstat -ano \| findstr :5000`, then `taskkill /PID <pid> /F`; or change `PORT` / `WEB_PORT`. |
 | Dashboard shows "—" and "Connects when … is ready" | Expected: that component isn't connected yet. |

@@ -32,7 +32,7 @@ export type BayBoardData = {
 };
 
 export type ActionItem = {
-  key: 'safety_alerts' | 'inspection_review' | 'maintenance_suggestions' | 'waiting_for_bay' | 'cameras_offline';
+  key: 'safety_alerts' | 'inspection_review' | 'maintenance_suggestions' | 'waiting_for_bay' | 'vehicle_requests' | 'cameras_offline';
   connected: boolean;
   count: number;
   detail: string | null;

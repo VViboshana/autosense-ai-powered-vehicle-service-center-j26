@@ -3,6 +3,7 @@ import type { Env } from '../../config/env.js';
 import type { Db } from '../../db/pool.js';
 import { sendOk } from '../../http/envelope.js';
 import { checkMlService } from '../../integrations/ml/mlServices.js';
+import { needsSetup } from '../admin/users.repository.js';
 import { APP_VERSION } from '../../version.js';
 
 /**
@@ -41,6 +42,8 @@ export function systemRoutes(db: Db, env: Env) {
       appName: 'AutoSense',
       version: APP_VERSION,
       environment: env.NODE_ENV,
+      // No staff account yet: the web app shows "Create the administrator" instead of sign-in
+      setup: { needed: await needsSetup(db), keyRequired: Boolean(env.SETUP_KEY) },
       settings: Object.fromEntries(rows.map((r) => [r.setting_key, r.value])),
     });
   });

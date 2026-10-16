@@ -8,7 +8,13 @@ const schema = z.object({
     .string({ error: 'DATABASE_URL is missing. Copy backend/.env.example to backend/.env and fill it in.' })
     .regex(/^postgres(ql)?:\/\//, 'DATABASE_URL must start with postgres:// or postgresql://'),
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(50).default(10),
-  DEV_USER: z.string().trim().min(1).optional(),
+  /** Web addresses allowed to send changes (protects signed-in users from other sites posting on their behalf). */
+  ALLOWED_ORIGINS: z
+    .string()
+    .default('http://localhost:5173')
+    .transform((s) => s.split(',').map((o) => o.trim().replace(/\/$/, '')).filter(Boolean)),
+  /** Optional. When set, the first-run setup page asks for it before creating the first administrator. */
+  SETUP_KEY: z.string().min(8, 'SETUP_KEY must be at least 8 characters').optional(),
   ML_DAMAGE_URL: z.url().optional(),
   ML_OCCUPANCY_URL: z.url().optional(),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
@@ -22,9 +28,5 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     const lines = parsed.error.issues.map((i) => `  - ${i.path.join('.') || 'env'}: ${i.message}`);
     throw new Error(`Invalid configuration in backend/.env:\n${lines.join('\n')}`);
   }
-  const env = parsed.data;
-  if (env.NODE_ENV === 'production' && env.DEV_USER) {
-    throw new Error('DEV_USER must not be set in production: it signs every request in as that user.');
-  }
-  return env;
+  return parsed.data;
 }

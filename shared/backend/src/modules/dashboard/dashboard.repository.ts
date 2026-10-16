@@ -113,7 +113,7 @@ export async function getBayBoard(db: Db): Promise<BayBoard> {
 }
 
 export type ActionItem = {
-  key: 'safety_alerts' | 'inspection_review' | 'maintenance_suggestions' | 'waiting_for_bay' | 'cameras_offline';
+  key: 'safety_alerts' | 'inspection_review' | 'maintenance_suggestions' | 'waiting_for_bay' | 'vehicle_requests' | 'cameras_offline';
   /** False while the component that owns this queue is not connected yet. */
   connected: boolean;
   count: number;
@@ -129,6 +129,8 @@ export async function getActions(db: Db): Promise<ActionItem[]> {
        (SELECT min(created_at) FROM damage.inspections WHERE status = 'awaiting_review') AS review_oldest_at,
        (SELECT count(*) FROM workshop.jobs WHERE stage = 'waiting_for_bay') AS waiting_count,
        (SELECT min(checked_in_at) FROM workshop.jobs WHERE stage = 'waiting_for_bay') AS waiting_since,
+       (SELECT count(*) FROM workshop.vehicle_claims WHERE status = 'pending') AS claims_count,
+       (SELECT min(requested_at) FROM workshop.vehicle_claims WHERE status = 'pending') AS claims_oldest,
        (SELECT count(*) FROM occupancy.cameras WHERE is_active AND status = 'offline') AS offline_count,
        (SELECT name FROM occupancy.cameras WHERE is_active AND status = 'offline' ORDER BY last_seen_at NULLS FIRST LIMIT 1) AS offline_name,
        (SELECT last_seen_at FROM occupancy.cameras WHERE is_active AND status = 'offline' ORDER BY last_seen_at NULLS FIRST LIMIT 1) AS offline_since`,
@@ -139,6 +141,7 @@ export async function getActions(db: Db): Promise<ActionItem[]> {
     { key: 'inspection_review', connected: true, count: r.review_count, detail: r.review_oldest_no, at: r.review_oldest_at },
     { key: 'maintenance_suggestions', connected: false, count: 0, detail: null, at: null },
     { key: 'waiting_for_bay', connected: true, count: r.waiting_count, detail: null, at: r.waiting_since },
+    { key: 'vehicle_requests', connected: true, count: r.claims_count, detail: null, at: r.claims_oldest },
     { key: 'cameras_offline', connected: true, count: r.offline_count, detail: r.offline_name, at: r.offline_since },
   ];
 }
