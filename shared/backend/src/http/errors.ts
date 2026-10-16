@@ -28,8 +28,22 @@ export class UnauthenticatedError extends AppError {
 }
 
 export class ForbiddenError extends AppError {
-  constructor(message = "You don't have permission to do this. Ask an administrator for access.") {
-    super(403, 'FORBIDDEN', message);
+  constructor(message = "You don't have permission to do this. Ask an administrator for access.", code = 'FORBIDDEN') {
+    super(403, code, message);
+  }
+}
+
+/** Something with the same key already exists (e.g. a username). */
+export class ConflictError extends AppError {
+  constructor(code: string, message: string) {
+    super(409, code, message);
+  }
+}
+
+/** Too many attempts; try again later. */
+export class TooManyRequestsError extends AppError {
+  constructor(message: string) {
+    super(429, 'TOO_MANY_ATTEMPTS', message);
   }
 }
 

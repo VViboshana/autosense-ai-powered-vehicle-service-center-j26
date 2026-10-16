@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type pg from 'pg';
-import { hashPassword } from '../lib/password.js';
 
 /**
  * Applies the SQL in shared/database:
@@ -13,7 +12,6 @@ import { hashPassword } from '../lib/password.js';
  * - seeds/       sample data for development (`db:seed`). Refused when NODE_ENV=production.
  */
 export const DATABASE_DIR = path.resolve(import.meta.dirname, '../../../database');
-export const DEMO_PASSWORD = 'Demo@1234';
 const SCHEMAS = ['security', 'maintenance', 'occupancy', 'damage', 'workshop', 'app'];
 
 type Log = (message: string) => void;
@@ -77,12 +75,8 @@ export async function migrate(client: pg.PoolClient, log: Log) {
 }
 
 export async function seed(client: pg.PoolClient, log: Log) {
-  const hash = await hashPassword(DEMO_PASSWORD);
   for (const file of await sqlFiles('seeds')) {
-    await inTransaction(client, async () => {
-      await client.query("SELECT set_config('app.demo_password_hash', $1, true)", [hash]);
-      await client.query(file.sql);
-    });
+    await inTransaction(client, () => client.query(file.sql).then(() => undefined));
     log(`  seeded    seeds/${file.name}`);
   }
 }

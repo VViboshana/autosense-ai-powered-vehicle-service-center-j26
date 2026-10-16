@@ -1,40 +1,23 @@
 /*
     SAMPLE DATA for development and demos only. Never run against a real service centre's database.
-    Run with `npm run db:seed` (after db:migrate). Each run:
-    - adds the demo users if missing (password from the seed runner: Demo@1234), customers, vehicles, cameras and bays;
+    Run with `npm run db:seed` (after db:migrate). It creates NO user accounts and NO roles: the first administrator is
+    created on the setup page, and the team is added in Administration › Users. Each run:
+    - adds sample customers (records only, no accounts), vehicles, cameras and bays if missing;
     - replaces the sample day: demo jobs (JOB-DEMO-*), their inspections, bay states and bay history, all timed
       relative to now, so the dashboard shows a live-looking floor whenever you seed.
-    The runner sets app.demo_password_hash before running this file.
+    Advisor and reviewer fields on sample records are left blank, since there are no sample staff.
 */
 DO $$
 DECLARE
-    pw text := current_setting('app.demo_password_hash');
     cam_a int; cam_w int;
     bay int[] := ARRAY[]::int[];
     j int[] := ARRAY[]::int[];
     v int[] := ARRAY[]::int[];
     c int[] := ARRAY[]::int[];
-    dilani int; ruwan int; ishara int; nimal int;
+    dilani int; ruwan int; ishara int;  -- no sample staff: these stay NULL (advisor / reviewer left blank)
     mv int; ins int; img int;
     i int;
 BEGIN
-    -- Users (one per shipped role; the administrator is a super admin)
-    INSERT INTO app.users (username, password_hash, first_name, last_name, email, designation, role_id, is_super_admin, must_change_password)
-    SELECT u.username, pw, u.first_name, u.last_name, u.email, u.designation, r.role_id, u.super_admin, false
-    FROM (VALUES
-        ('admin',           'System', 'Administrator', 'admin@autosense.local',  'System administrator', 'System administrator', true),
-        ('nimal.perera',    'Nimal',  'Perera',        'nimal@autosense.local',  'Service manager',      'Service manager',      false),
-        ('dilani.fernando', 'Dilani', 'Fernando',      'dilani@autosense.local', 'Service advisor',      'Service advisor',      false),
-        ('ruwan.silva',     'Ruwan',  'Silva',         'ruwan@autosense.local',  'Service advisor',      'Service advisor',      false),
-        ('ishara.silva',    'Ishara', 'Silva',         'ishara@autosense.local', 'Technician',           'Technician',           false)
-    ) AS u (username, first_name, last_name, email, designation, role_name, super_admin)
-    JOIN app.roles r ON lower(r.name) = lower(u.role_name)
-    ON CONFLICT ((lower(username))) DO NOTHING;
-
-    SELECT user_id INTO nimal  FROM app.users WHERE username = 'nimal.perera';
-    SELECT user_id INTO dilani FROM app.users WHERE username = 'dilani.fernando';
-    SELECT user_id INTO ruwan  FROM app.users WHERE username = 'ruwan.silva';
-    SELECT user_id INTO ishara FROM app.users WHERE username = 'ishara.silva';
 
     -- Customers and vehicles (sample people, Sri Lankan plate formats)
     INSERT INTO workshop.customers (customer_id, full_name, mobile, email) VALUES

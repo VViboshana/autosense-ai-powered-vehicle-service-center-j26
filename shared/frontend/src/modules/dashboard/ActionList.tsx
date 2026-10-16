@@ -25,8 +25,12 @@ const META: Record<ActionItem['key'], Meta> = {
     title: 'Vehicles waiting for a bay', icon: 'bi-hourglass', tone: 'warning', screen: 'JOBS', url: '/floor/jobs', owner: 'Service floor',
     detail: (a) => (a.at ? `Longest: ${formatDuration(minutesSince(a.at))}` : 'No one waiting'),
   },
+  vehicle_requests: {
+    title: 'Customer vehicle requests', icon: 'bi-person-check', tone: 'brand', screen: 'VEHICLE_CLAIMS', url: '/floor/vehicle-requests', owner: 'Service floor',
+    detail: (a) => (a.at ? `Oldest: ${formatDuration(minutesSince(a.at))}` : 'None waiting'),
+  },
   cameras_offline: {
-    title: 'Cameras offline', icon: 'bi-camera-video-off', tone: 'muted', screen: 'BAYS_CAMERAS', url: '/admin/bays', owner: 'Cameras',
+    title: 'Cameras offline', icon: 'bi-camera-video-off', tone: 'muted', screen: 'BAYS_CAMERAS', url: '/setup/bays', owner: 'Cameras',
     detail: (a) => (a.detail ? `${a.detail}${a.at ? ` · ${formatDuration(minutesSince(a.at))}` : ''}` : 'All cameras online'),
   },
 };

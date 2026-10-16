@@ -21,7 +21,8 @@
     "check": "npm run typecheck && npm run lint && npm run test",
     "db:migrate": "npm run db:migrate -w backend",
     "db:seed": "npm run db:seed -w backend",
-    "db:reset": "npm run db:reset -w backend"
+    "db:reset": "npm run db:reset -w backend",
+    "db:status": "npm run db:status -w backend"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

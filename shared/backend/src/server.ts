@@ -19,7 +19,7 @@ pool.on('error', (err) => logger.error('idle database connection failed', { erro
 const server = createApp(pool, env).listen(env.PORT, () => {
   logger.info(`AutoSense API ${APP_VERSION} listening on http://localhost:${env.PORT}`, {
     environment: env.NODE_ENV,
-    devUser: env.DEV_USER ?? null,
+    allowedOrigins: env.ALLOWED_ORIGINS,
   });
 });
 

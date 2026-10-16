@@ -68,7 +68,7 @@ export function inspectionsRoutes(db: Db) {
 }
 ```
 
-Mount it in `backend/src/app.ts` after `currentUser`: `app.use('/api/inspections', inspectionsRoutes(db));`
+Mount it in `backend/src/app.ts` after `authenticate`: `app.use('/api/inspections', inspectionsRoutes(pool));`
 
 Errors: throw `new NotFoundError('Inspection not found.')`, `new BusinessRuleError('ALREADY_CONFIRMED', '…')`, etc.
 The user sees the message, so write it for them.
@@ -79,10 +79,15 @@ made-up result when the model fails.
 
 ## Recipe: add a screen and its menu item
 
-1. **Register it** in `database/reference/010_screens.sql` (code, name, url, parent section, Bootstrap icon, order,
-   owner). A function without its own page (e.g. *confirm inspections*) has `show_on_menu = false`.
-2. **Grant it** to roles in `database/reference/020_roles.sql`, then `npm run db:migrate`.
-   The menu item appears for those roles straight away and opens a "being built" page.
+1. **Register it** in `database/reference/010_screens.sql`: code, name, url, parent section, Bootstrap icon, order, and
+   - `feature`: `occupancy` · `damage` · `maintenance` · `security` · `shared` (groups it in Role permissions),
+   - `access_level`: `use` (daily work) · `manage` (setup of your feature) · `admin` (users, roles, settings),
+   - `audience`: `staff`, or `customer` for the customer pages.
+
+   An action without its own page (e.g. *confirm inspections*) has `show_on_menu = false` and is called a function.
+2. **Grant it.** Shipped roles pick it up automatically on `npm run db:migrate`: System administrator gets every staff
+   screen, Staff gets every `use` screen, Customer gets every customer screen. For other roles, tick it in
+   Administration › Role permissions. The menu item then appears and opens a "being built" page.
 3. **Build the page** in `frontend/src/modules/<module>/<Name>Page.tsx`:
 
    ```tsx
@@ -114,17 +119,29 @@ classes `as-table`, `as-toolbar`, `as-grid-foot`, `as-kpis` (see the dashboard m
 
 ## How access control works
 
-Adapted from the CleanBooks user-management model:
+Adapted from the CleanBooks user-management model, without tenants or branches:
 
-- `app.screens` is the registry of every screen and function. Its parent/child rows also build the menu
-  (section headers, expandable groups, links; three levels at most).
-- `app.roles` + `app.role_screens` say which screens each role may use. Grants are switched off with `is_active`,
-  never deleted.
-- Each user (`app.users`) has one role. Super admins may use everything.
-- On each request the API loads `req.user` with the user's screen codes; `requireScreen()` checks them.
-  `GET /api/me` and `GET /api/navigation/menu` give the browser the same information.
-- **Next:** sign-in replaces `DEV_USER` inside `middleware/currentUser.ts` (tables `user_sessions`, `refresh_tokens`
-  and `password_history` already exist). Routes and screens won't need to change.
+- **Two kinds of user.** Staff use the staff app (sidebar) and work on every vehicle. Customers (vehicle owners) sign
+  up themselves and only see `/my`: their own vehicles, and only after staff approve the vehicle request.
+- **Screens.** `app.screens` registers every screen and function, with its feature, access level and audience. Its
+  parent/child rows also build the menu (section headers, expandable groups, links; three levels at most).
+- **Roles.** `app.roles` + `app.role_screens`. Shipped: System administrator, Staff, Customer. Administrators create
+  more staff roles and tick their screens in Role permissions. A role only ever gets screens of its own audience.
+  Grants are switched off with `is_active`, never deleted. Super admins use every staff screen whatever their role.
+- **Sign-in.** `POST /api/auth/login` checks the password (scrypt), then creates a session: a random token in an
+  HttpOnly cookie, its SHA-256 hash in `app.user_sessions`. Sessions end on sign-out, after `auth.sessions.maxHours`,
+  after `idleMinutes` without activity, when the password changes, or when the account is deactivated.
+  Five wrong passwords lock the account (`auth.lockout`). Password rules: `auth.password_policy`.
+- **Every request.** `middleware/authenticate.ts` turns the cookie into `req.user` (screens, user type, customer id).
+  Then each route decides:
+  - staff routes: `requireScreen('CODE', …)`;
+  - customer routes (`/api/my/*`): `requireCustomer()` and **every query filtered by `req.user.customerId`**. Never take
+    a customer id from the request, and show a vehicle only through an approved `workshop.vehicle_claims` row.
+- **Cross-site protection.** Changes (POST/PUT/PATCH/DELETE) are only accepted from `ALLOWED_ORIGINS`.
+- **Audit.** Sign-ins, lockouts and every change to users, roles, permissions and vehicle requests go to
+  `app.audit_log` via `lib/audit.ts`. Use it for your own important changes too.
+- **Customer pages.** Routed in `frontend/src/app/App.tsx` under `/my` (`CustomerLayout`). What a customer sees about
+  your feature must be confirmed, customer-safe information (e.g. a confirmed inspection, never the raw AI result).
 
 ## Connecting your component
 

@@ -1,7 +1,7 @@
 /* eslint-disable no-console -- a command-line tool talks to the terminal */
 import { loadEnv } from '../config/env.js';
 import { createPool } from './pool.js';
-import { DEMO_PASSWORD, dropAll, migrate, seed, status } from './runner.js';
+import { dropAll, migrate, seed, status } from './runner.js';
 
 /**
  * npm run db:migrate   apply new migrations, then refresh reference data
@@ -41,7 +41,8 @@ try {
       refuseInProduction('Seeding sample data');
       log('Seeding sample data…');
       await seed(client, log);
-      log(`Sample users: admin, nimal.perera, dilani.fernando, ruwan.silva, ishara.silva (password ${DEMO_PASSWORD})`);
+      log('Sample vehicles, jobs, bays and inspections are ready. No accounts are created:');
+      log('open the web app to create the first administrator, then add your team in Administration > Users.');
       break;
     case 'reset':
       refuseInProduction('Reset');
