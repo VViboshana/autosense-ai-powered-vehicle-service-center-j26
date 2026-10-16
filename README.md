@@ -18,6 +18,14 @@ The project consists of four main research components developed by the four memb
 
 ---
 
+## ▶️ Running the web app
+
+The web app (React + Express + PostgreSQL) lives in [`shared/`](shared/README.md). Setup takes five commands; see
+[shared/README.md](shared/README.md). Before adding a screen, table or API route, read
+[shared/docs/DEVELOPING.md](shared/docs/DEVELOPING.md).
+
+---
+
 ## 🎯 Research Components
 
 | Member       | Component                                           | Main Purpose                                                                        |

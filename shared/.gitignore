@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+coverage/
+
+# Uploaded photos and videos stay on the machine that received them
+backend/uploads/
+
+npm-debug.log*
+.DS_Store
