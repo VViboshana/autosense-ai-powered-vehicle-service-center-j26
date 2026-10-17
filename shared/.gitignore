@@ -1,0 +1,16 @@
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+
+# Settings: .env files hold the team's shared settings and ARE committed (the repository root .gitignore ignores
+# .env, so they are re-included here). Secrets and personal overrides go in .env.local, which is never committed.
+!.env
+.env.local
+*.local
+
+# Uploaded photos and videos stay on the machine that received them
+backend/uploads/
+
+npm-debug.log*
+.DS_Store
