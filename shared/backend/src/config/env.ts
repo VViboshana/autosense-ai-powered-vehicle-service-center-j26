@@ -5,7 +5,7 @@ const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(5000),
   DATABASE_URL: z
-    .string({ error: 'DATABASE_URL is missing. Copy backend/.env.example to backend/.env and fill it in.' })
+    .string({ error: 'DATABASE_URL is missing. Copy backend/.env.local.example to backend/.env.local and put the connection string in it.' })
     .regex(/^postgres(ql)?:\/\//, 'DATABASE_URL must start with postgres:// or postgresql://'),
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(50).default(10),
   /** Web addresses allowed to send changes (protects signed-in users from other sites posting on their behalf). */
@@ -26,7 +26,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const parsed = schema.safeParse(source);
   if (!parsed.success) {
     const lines = parsed.error.issues.map((i) => `  - ${i.path.join('.') || 'env'}: ${i.message}`);
-    throw new Error(`Invalid configuration in backend/.env:\n${lines.join('\n')}`);
+    throw new Error(`Invalid configuration in backend/.env or backend/.env.local:\n${lines.join('\n')}`);
   }
   return parsed.data;
 }
