@@ -8,7 +8,7 @@ import { pageQuery } from '../../http/pagination.js';
 import { parse } from '../../http/validate.js';
 import { getSetting } from '../../lib/settings.js';
 import { requireScreen, signedInUser } from '../../middleware/requireScreen.js';
-import { getInspection, imageStorageKey, listInspections } from './inspections.repository.js';
+import { getInspection, imageStorageKey, listInspections, vehicleOptions } from './inspections.repository.js';
 import { DAMAGE_LABELS, INSPECTION_STATUSES, REVIEW_DECISIONS, SEVERITIES, VIEW_ANGLES } from './inspections.rules.js';
 import { confirmInspection, createInspection, reviewDetection, type InspectionDeps } from './inspections.service.js';
 
@@ -21,6 +21,7 @@ const listQuery = pageQuery.extend({
   status: z.enum(INSPECTION_STATUSES).optional(),
   search: z.string().trim().max(60).optional().transform((s) => s || undefined),
 });
+const optionsQuery = z.object({ search: z.string().trim().max(60).optional().transform((s) => s || undefined) });
 const createBody = z
   .object({
     jobId: optionalId,
@@ -79,6 +80,7 @@ async function receivePhotos(req: Request, res: Response, limits: typeof DEFAULT
  *
  *   POST  /api/inspections                                   new inspection (multipart: images, viewAngles, jobId | vehicleId)
  *   GET   /api/inspections?status=&search=&page=&pageSize=    list (review queue: status=awaiting_review)
+ *   GET   /api/inspections/vehicle-options?search=            open jobs to start an inspection for
  *   GET   /api/inspections/:id                               detail with photos and damage regions
  *   GET   /api/inspections/:id/images/:imageId                the photo itself
  *   PATCH /api/inspections/:id/detections/:detectionId        review one region (confirmed | corrected | rejected)
@@ -102,6 +104,12 @@ export function inspectionsRoutes(deps: InspectionDeps) {
 
   router.get('/', requireScreen('INSPECTION_HISTORY', 'INSPECTION_REVIEW'), async (req, res) => {
     sendOk(res, await listInspections(pool, parse(listQuery, req.query)));
+  });
+
+  // Before '/:id', so "vehicle-options" is not read as an inspection id
+  router.get('/vehicle-options', requireScreen('INSPECTION_CREATE'), async (req, res) => {
+    const { search } = parse(optionsQuery, req.query);
+    sendOk(res, await vehicleOptions(pool, search));
   });
 
   router.get('/:id', requireScreen('INSPECTION_HISTORY', 'INSPECTION_REVIEW', 'INSPECTION_CREATE'), async (req, res) => {
