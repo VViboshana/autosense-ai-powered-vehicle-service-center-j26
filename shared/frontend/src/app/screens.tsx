@@ -5,7 +5,7 @@ import { RolesPage } from '@/modules/admin/RolesPage';
 import { UsersPage } from '@/modules/admin/UsersPage';
 import { DashboardPage } from '@/modules/dashboard/DashboardPage';
 import { VehicleRequestsPage } from '@/modules/floor/VehicleRequestsPage';
-
+import { BayMonitorPage } from '@/modules/occupancy/BayMonitorPage';
 /**
  * Built staff screens: path -> page, guarded by the screen code from app.screens (database/reference/010_screens.sql).
  * The path must equal the url in app.screens so the menu link opens it.
@@ -23,4 +23,5 @@ export const SCREENS: ScreenRoute[] = [
   { code: 'ROLES', path: '/admin/roles', element: <RolesPage /> },
   { code: 'ROLE_PERMISSIONS', path: '/admin/role-permissions', element: <RolePermissionsPage /> },
   { code: 'AUDIT_LOG', path: '/admin/audit', element: <AuditLogPage /> },
+  { code: 'BAY_MONITOR', path: '/floor/bays', element: <BayMonitorPage /> },
 ];
