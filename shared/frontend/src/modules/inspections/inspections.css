@@ -1,0 +1,201 @@
+/*
+ * Damage inspection screens (component 2). Colours only through the theme tokens in theme/autosense.css.
+ * Outline colour comes from the .as-tone-* class on each shape (severity), via currentColor.
+ */
+
+/* ---------- Photo with damage outlines ---------- */
+.as-dmg-photo {
+  position: relative;
+  width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--as-neutral-soft);
+  border: 1px solid var(--as-line);
+}
+.as-dmg-photo img,
+.as-dmg-photo svg,
+.as-dmg-missing {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.as-dmg-photo img {
+  object-fit: fill; /* the box already has the photo's aspect ratio, so nothing is distorted */
+}
+.as-dmg-missing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  color: var(--as-muted);
+  font-size: 0.85rem;
+}
+.as-dmg-missing .bi {
+  font-size: 2rem;
+}
+.as-dmg-shape {
+  cursor: pointer;
+}
+/* The .as-tone-* classes set a soft background too; inside the SVG only their text colour is wanted */
+.as-dmg-photo .as-dmg-shape {
+  background: none;
+}
+.as-dmg-shape polygon {
+  fill: currentColor;
+  fill-opacity: 0.16;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+}
+.as-dmg-shape text {
+  fill: currentColor;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: var(--as-surface);
+  stroke-width: 4px;
+}
+.as-dmg-shape:hover polygon,
+.as-dmg-shape.on polygon {
+  fill-opacity: 0.32;
+  stroke-width: 4;
+}
+.as-dmg-shape.rejected polygon {
+  fill-opacity: 0.05;
+  stroke-dasharray: 6 5;
+}
+
+/* ---------- Region list beside the photo ---------- */
+.as-dmg-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+.as-dmg-item {
+  border: 1px solid var(--as-line);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  background: var(--as-surface);
+}
+.as-dmg-item.on {
+  border-color: var(--as-primary);
+  box-shadow: var(--as-focus);
+}
+.as-dmg-item-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.as-dmg-no {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 2px solid currentColor;
+}
+.as-dmg-item-head b {
+  margin-right: auto;
+}
+.as-dmg-was {
+  text-decoration: line-through;
+  color: var(--as-muted);
+  font-weight: 400;
+}
+.as-dmg-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  color: var(--as-ink-2);
+}
+.as-dmg-reason {
+  margin: 0.3rem 0 0;
+  font-size: 0.78rem;
+  color: var(--as-muted);
+}
+.as-dmg-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+  flex-wrap: wrap;
+}
+
+/* ---------- New inspection ---------- */
+.as-dmg-jobs {
+  display: grid;
+  gap: 0.5rem;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+.as-dmg-job {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--as-line);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  background: var(--as-surface);
+}
+.as-dmg-job:hover {
+  background: var(--as-hover);
+}
+.as-dmg-job[aria-pressed='true'] {
+  border-color: var(--as-primary);
+  background: var(--as-primary-soft);
+}
+.as-dmg-job .as-veh {
+  flex: 1;
+}
+.as-dmg-shots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: 0.75rem;
+}
+.as-dmg-shot {
+  border: 1px solid var(--as-line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--as-surface);
+}
+.as-dmg-shot img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: var(--as-neutral-soft);
+}
+.as-dmg-shot-foot {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.5rem;
+}
+.as-dmg-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 11rem;
+  border: 2px dashed var(--as-line);
+  border-radius: 10px;
+  color: var(--as-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.as-dmg-add:hover {
+  border-color: var(--as-primary);
+  color: var(--as-primary);
+}
+.as-dmg-add .bi {
+  font-size: 1.6rem;
+}
