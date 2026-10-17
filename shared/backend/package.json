@@ -1,0 +1,38 @@
+{
+  "name": "autosense-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AutoSense API: the only server the browser talks to",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env --env-file-if-exists=.env.local src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node --env-file-if-exists=.env --env-file-if-exists=.env.local dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "db:migrate": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local src/db/cli.ts migrate",
+    "db:seed": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local src/db/cli.ts seed",
+    "db:reset": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local src/db/cli.ts reset",
+    "db:status": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local src/db/cli.ts status"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "pg": "^8.16.3",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.0",
+    "@types/supertest": "^6.0.3",
+    "eslint": "^9.39.0",
+    "globals": "^16.5.0",
+    "supertest": "^7.1.0",
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.46.0",
+    "vitest": "^5.0.5"
+  }
+}
