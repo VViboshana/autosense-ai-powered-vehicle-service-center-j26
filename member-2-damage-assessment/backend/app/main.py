@@ -1,8 +1,8 @@
 """
 AutoSense damage assessment service (component 2). Called only by the AutoSense API, never by the browser.
 
-  GET  /health    200 when the model is loaded (the API's health check uses this)
-  POST /predict   multipart photo -> quality check + damage detections
+  GET  /health    200 when the models are loaded (the API's health check uses this)
+  POST /predict   multipart photo -> quality check, vehicle, damage detections, preliminary severity
 
 Run (from member-2-damage-assessment/backend):  ..\\.venv\\Scripts\\python -m uvicorn app.main:app --port 8001
 """
@@ -15,25 +15,33 @@ from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from . import config
-from .predictor import DamagePredictor
+from .predictor import SegModel, find_vehicle
 from .quality import check_quality
+from .severity import assess
 
 state: dict = {}
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    state['predictor'] = DamagePredictor()  # loaded once at startup, reused for every request
+    # Loaded once at startup, reused for every request
+    state['coco'] = SegModel(config.COCO_MODEL_PATH)
+    state['placeholder'] = not config.MODEL_PATH.exists()
+    state['damage'] = state['coco'] if state['placeholder'] else SegModel(config.MODEL_PATH)
+    state['version'] = 'coco-placeholder' if state['placeholder'] else config.MODEL_VERSION
     yield
 
 
-app = FastAPI(title='AutoSense damage service', version='0.1.0', lifespan=lifespan)
+app = FastAPI(title='AutoSense damage service', version='0.2.0', lifespan=lifespan)
+
+
+def model_info() -> dict:
+    return {'version': state['version'], 'placeholder': state['placeholder']}
 
 
 @app.get('/health')
 def health():
-    p: DamagePredictor = state['predictor']
-    return {'status': 'up', 'model': {'version': p.version, 'placeholder': p.placeholder, 'classes': p.classes}}
+    return {'status': 'up', 'model': {**model_info(), 'classes': state['damage'].classes}}
 
 
 @app.post('/predict')
@@ -52,17 +60,20 @@ def predict(
         raise HTTPException(400, 'The file is not a readable image (use JPEG or PNG).')
     bgr = np.ascontiguousarray(np.asarray(pil)[:, :, ::-1])  # OpenCV and YOLO expect BGR
 
-    p: DamagePredictor = state['predictor']
     quality = check_quality(bgr)
-    detections = p.predict(bgr, confidence)
+    vehicle = find_vehicle(state['coco'], bgr)
+    detections = state['damage'].predict(bgr, confidence)
     height, width = bgr.shape[:2]
     for d in detections:
         d['areaRatioImage'] = round(d['areaPx'] / (width * height), 4)
+    severity = assess(detections, vehicle)
 
     return {
-        'model': {'version': p.version, 'placeholder': p.placeholder},
+        'model': model_info(),
         'image': {'width': width, 'height': height},
         'quality': quality,
+        'vehicle': vehicle,
         'detections': detections,
+        'severity': severity,
         'processingMs': round((time.perf_counter() - started) * 1000),
     }
