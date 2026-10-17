@@ -155,7 +155,7 @@ export function authRoutes(pool: pg.Pool, secureCookies: boolean, setupKey?: str
       const given = Buffer.from(body.setupKey ?? '');
       const expected = Buffer.from(setupKey);
       if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
-        throw new ValidationError('The setup key is not correct.', [{ field: 'setupKey', message: 'Not correct. It is SETUP_KEY in backend/.env.' }]);
+        throw new ValidationError('The setup key is not correct.', [{ field: 'setupKey', message: 'Not correct. It is SETUP_KEY in backend/.env.local.' }]);
       }
     }
     const policy = await getSetting(pool, 'auth.password_policy', DEFAULT_PASSWORD_POLICY);

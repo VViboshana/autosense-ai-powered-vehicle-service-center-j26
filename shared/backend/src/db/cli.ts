@@ -27,7 +27,7 @@ try {
 } catch (err) {
   const host = new URL(env.DATABASE_URL).host;
   console.error(`Could not connect to the database at ${host}: ${err instanceof Error ? err.message : err}`);
-  console.error('Check DATABASE_URL in backend/.env, and that the database is running (or awake, on Neon).');
+  console.error('Check DATABASE_URL in backend/.env.local, and that the database is running (or awake, on Neon).');
   await pool.end();
   process.exit(1);
 }
