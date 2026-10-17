@@ -19,7 +19,7 @@ import { findMenuLink, useAuth, useSession } from './session';
 /** Opens a built screen only when the user's role allows it. */
 function Guarded({ screen }: { screen: ScreenRoute }) {
   const { can, menu } = useSession();
-  if (can(screen.code)) return <>{screen.element}</>;
+  if (can(screen.code) || screen.also?.some(can)) return <>{screen.element}</>;
   return <AccessDeniedPage name={findMenuLink(menu, screen.path)?.name ?? 'this screen'} />;
 }
 
@@ -94,7 +94,7 @@ function AppRoutes() {
       <Route path="/my/*" element={<Navigate to="/" replace />} />
       <Route element={<AppLayout />}>
         {SCREENS.map((s) => (
-          <Route key={s.code} path={s.path} element={<Guarded screen={s} />} />
+          <Route key={s.path} path={s.path} element={<Guarded screen={s} />} />
         ))}
         <Route path="/account" element={<AccountPage />} />
         <Route path="*" element={<Fallback />} />

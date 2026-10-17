@@ -202,6 +202,51 @@ export async function getInspection(db: Db, id: number): Promise<InspectionDetai
   };
 }
 
+export type VehicleOption = {
+  jobId: number;
+  jobNo: string;
+  vehicleId: number;
+  registrationNo: string;
+  vehicle: string;
+  customer: string | null;
+  stage: string;
+  checkedInAt: string;
+  inspectionCount: number;
+};
+
+/** Open jobs to start an inspection for (newest first), optionally matched by plate or job number. */
+export async function vehicleOptions(db: Db, search?: string): Promise<VehicleOption[]> {
+  const params: unknown[] = [];
+  let filter = '';
+  if (search) {
+    params.push(`%${search.replace(/[\s-]/g, '').toUpperCase()}%`, `%${search}%`);
+    filter = `AND (${PLATE_KEY('v.registration_no')} LIKE $1 OR j.job_no ILIKE $2)`;
+  }
+  const { rows } = await db.query(
+    `SELECT j.job_id, j.job_no, v.vehicle_id, v.registration_no, v.make || ' ' || v.model || coalesce(' · ' || v.year, '') AS vehicle,
+            c.full_name AS customer, j.stage, j.checked_in_at,
+            (SELECT count(*) FROM damage.inspections i WHERE i.job_id = j.job_id) AS inspection_count
+     FROM workshop.jobs j
+     JOIN workshop.vehicles v ON v.vehicle_id = j.vehicle_id
+     LEFT JOIN workshop.customers c ON c.customer_id = j.customer_id
+     WHERE j.stage NOT IN ('completed', 'cancelled') ${filter}
+     ORDER BY j.checked_in_at DESC, j.job_id DESC
+     LIMIT 20`,
+    params,
+  );
+  return rows.map((r) => ({
+    jobId: r.job_id,
+    jobNo: r.job_no,
+    vehicleId: r.vehicle_id,
+    registrationNo: r.registration_no,
+    vehicle: r.vehicle,
+    customer: r.customer,
+    stage: r.stage,
+    checkedInAt: r.checked_in_at,
+    inspectionCount: r.inspection_count,
+  }));
+}
+
 /** The vehicle an inspection is for: from the job when one is given (and it must match vehicleId if both are). */
 export async function findJobOrVehicle(db: Db, input: { jobId?: number; vehicleId?: number }) {
   if (input.jobId) {
