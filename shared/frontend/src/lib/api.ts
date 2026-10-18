@@ -48,16 +48,19 @@ async function request<T>(method: string, path: string, body?: unknown, signal?:
     throw new ApiError(0, 'NETWORK', "Can't reach the AutoSense server. Check your connection, or that the API is running.");
   }
 
-  let envelope: Envelope<T>;
-  try {
-    envelope = (await res.json()) as Envelope<T>;
-  } catch {
-    throw new ApiError(res.status, 'BAD_RESPONSE', `The server answered with something unexpected (HTTP ${res.status}).`);
+  return unwrap<T>(res.status, await res.json().catch(() => null), path);
+}
+
+/** The envelope's data, or the ApiError it describes. Shared by fetch requests and uploads with progress. */
+function unwrap<T>(status: number, body: unknown, path: string): T {
+  const envelope = body as Envelope<T> | null;
+  if (!envelope || typeof envelope !== 'object' || !('success' in envelope)) {
+    throw new ApiError(status, 'BAD_RESPONSE', `The server answered with something unexpected (HTTP ${status}).`);
   }
   if (!envelope.success) {
     // The session ended (signed out elsewhere, expired, account deactivated): send the user back to sign-in.
-    if (res.status === 401 && !path.startsWith('/auth/') && path !== '/me') window.dispatchEvent(new Event(SIGNED_OUT_EVENT));
-    throw new ApiError(res.status, envelope.error.code, envelope.error.message, envelope.requestId, envelope.error.details);
+    if (status === 401 && !path.startsWith('/auth/') && path !== '/me') window.dispatchEvent(new Event(SIGNED_OUT_EVENT));
+    throw new ApiError(status, envelope.error.code, envelope.error.message, envelope.requestId, envelope.error.details);
   }
   return envelope.data;
 }
@@ -83,5 +86,33 @@ export function fieldMessages(error: unknown, field: string): string[] {
 
 export const apiGet = <T>(path: string, query?: Query, signal?: AbortSignal) => request<T>('GET', withQuery(path, query), undefined, signal);
 export const apiSend = <T>(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown) => request<T>(method, path, body);
-/** Uploads files: build a FormData with the files and fields, e.g. form.append('images', file). */
-export const apiUpload = <T>(path: string, form: FormData) => request<T>('POST', path, form);
+/**
+ * Uploads files: build a FormData with the files and fields, e.g. form.append('images', file). With onProgress, it
+ * reports the share of the upload sent (0-1); fetch cannot, so that path uses XMLHttpRequest. 1 means the files are
+ * sent and the server is working on them.
+ */
+export function apiUpload<T>(path: string, form: FormData, onProgress?: (sent: number) => void): Promise<T> {
+  if (!onProgress) return request<T>('POST', path, form);
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api${path}`);
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    xhr.upload.onload = () => onProgress(1);
+    xhr.onerror = () => reject(new ApiError(0, 'NETWORK', "Can't reach the AutoSense server. Check your connection, or that the API is running."));
+    xhr.onload = () => {
+      let body: unknown = null;
+      try {
+        body = JSON.parse(xhr.responseText);
+      } catch {
+        // left as null: unwrap reports BAD_RESPONSE
+      }
+      try {
+        resolve(unwrap<T>(xhr.status, body, path));
+      } catch (err) {
+        reject(err);
+      }
+    };
+    xhr.send(form);
+  });
+}
