@@ -15,6 +15,7 @@ import { inspectionsRoutes } from './modules/inspections/inspections.routes.js';
 import { jobsRoutes } from './modules/jobs/jobs.routes.js';
 import { myRoutes } from './modules/my/my.routes.js';
 import { navigationRoutes } from './modules/navigation/navigation.routes.js';
+import { securityRoutes } from './modules/security/security.routes.js';
 import { systemRoutes } from './modules/system/system.routes.js';
 
 /**
@@ -40,6 +41,7 @@ export function createApp(pool: pg.Pool, env: Env) {
   app.use('/api/jobs', jobsRoutes(pool));
   app.use('/api/vehicle-requests', claimsRoutes(pool));
   app.use('/api/inspections', inspectionsRoutes({ pool, damageServiceUrl: env.ML_DAMAGE_URL, uploadDir: env.UPLOAD_DIR }));
+  app.use('/api/security', securityRoutes(pool));
   app.use('/api/admin/users', usersRoutes(pool));
   app.use('/api/admin/roles', rolesRoutes(pool));
   app.use('/api/admin/audit', auditRoutes(pool));
