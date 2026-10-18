@@ -329,6 +329,42 @@ export async function insertDetection(
   );
 }
 
+/** A photo of the inspection, with its size (to check that a drawn box lies on it). */
+export async function inspectionImage(db: Db, inspectionId: number, imageId: number) {
+  const { rows } = await db.query<{ image_id: number; width: number | null; height: number | null }>(
+    'SELECT image_id, width, height FROM damage.inspection_images WHERE inspection_id = $1 AND image_id = $2',
+    [inspectionId, imageId],
+  );
+  return rows[0] ?? null;
+}
+
+/** Damage the model missed, drawn by a technician: no confidence, confirmed by the person who drew it. */
+export async function insertTechnicianRegion(
+  db: Db,
+  r: { imageId: number; label: DamageLabel; severity: Severity; bbox: number[]; userId: number },
+): Promise<number> {
+  const [x1 = 0, y1 = 0, x2 = 0, y2 = 0] = r.bbox;
+  const { rows } = await db.query<{ detection_id: number }>(
+    `INSERT INTO damage.detections (image_id, label, confidence, bbox, polygon, area_px, severity, severity_reason, source,
+                                    review_status, reviewed_by, reviewed_at)
+     VALUES ($1, $2, NULL, $3, $4, $5, $6, 'Added by the technician', 'technician', 'confirmed', $7, now())
+     RETURNING detection_id`,
+    [r.imageId, r.label, JSON.stringify(r.bbox), JSON.stringify([[x1, y1], [x2, y1], [x2, y2], [x1, y2]]),
+     (x2 - x1) * (y2 - y1), r.severity, r.userId],
+  );
+  return rows[0]!.detection_id;
+}
+
+/** Removes a region a technician added (only those: the model's regions are kept and rejected instead). */
+export async function deleteTechnicianRegion(db: Db, inspectionId: number, detectionId: number): Promise<boolean> {
+  const { rowCount } = await db.query(
+    `DELETE FROM damage.detections d USING damage.inspection_images im
+     WHERE d.detection_id = $2 AND d.image_id = im.image_id AND im.inspection_id = $1 AND d.source = 'technician'`,
+    [inspectionId, detectionId],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
 /** Possible damage still undecided becomes dismissed by the person confirming. Returns how many. */
 export async function dismissOpenSuggestions(db: Db, inspectionId: number, userId: number): Promise<number> {
   const { rowCount } = await db.query(

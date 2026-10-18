@@ -77,6 +77,28 @@
   fill-opacity: 0.2;
 }
 
+/* Drawing a missed region: crosshair, no scrolling while dragging, outlines don't catch the pointer */
+.as-dmg-photo.drawing {
+  cursor: crosshair;
+  box-shadow: var(--as-focus);
+  border-color: var(--as-primary);
+}
+.as-dmg-photo.drawing svg {
+  touch-action: none;
+}
+.as-dmg-photo.drawing .as-dmg-shape {
+  pointer-events: none;
+  opacity: 0.5;
+}
+.as-dmg-draft {
+  fill: var(--as-primary);
+  fill-opacity: 0.15;
+  stroke: var(--as-primary);
+  stroke-width: 2.5;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+}
+
 /* ---------- Possible damage list ---------- */
 .as-dmg-possible {
   margin-top: 1rem;

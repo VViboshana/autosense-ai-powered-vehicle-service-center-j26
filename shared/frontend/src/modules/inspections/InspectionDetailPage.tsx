@@ -29,6 +29,8 @@ export function InspectionDetailPage() {
   const [confirming, setConfirming] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [drawingImage, setDrawingImage] = useState<number | null>(null);
+  const [adding, setAdding] = useState<{ imageId: number; bbox: [number, number, number, number] } | null>(null);
 
   // Region numbers run across all photos, so "3" means the same region on the photo and in the list.
   // Possible damage is numbered P1, P2...; dismissed possible damage gets no number and is not drawn.
@@ -65,11 +67,12 @@ export function InspectionDetailPage() {
   const pending = findings.filter((d) => d.reviewStatus === 'pending').length;
   const possible = all.filter(isOpenSuggestion).length;
 
-  async function review(d: Detection, decision: 'confirmed' | 'rejected') {
+  async function review(d: Detection, decision: 'confirmed' | 'rejected' | 'remove') {
     setBusyId(d.detectionId);
     setActionError(null);
     try {
-      await apiSend('PATCH', `/inspections/${data!.inspectionId}/detections/${d.detectionId}`, { decision });
+      const path = `/inspections/${data!.inspectionId}/detections/${d.detectionId}`;
+      await (decision === 'remove' ? apiSend('DELETE', path) : apiSend('PATCH', path, { decision }));
       reload();
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'The change could not be saved.');
@@ -168,7 +171,25 @@ export function InspectionDetailPage() {
           )}
 
           {data.images.map((image) => (
-            <Card key={image.imageId} icon="bi-camera" title={VIEW_ANGLES[image.viewAngle]} subtitle={photoFacts(image)}>
+            <Card
+              key={image.imageId}
+              icon="bi-camera"
+              title={VIEW_ANGLES[image.viewAngle]}
+              subtitle={photoFacts(image)}
+              actions={
+                editable &&
+                (drawingImage === image.imageId ? (
+                  <button type="button" className="btn btn-sm btn-light" onClick={() => setDrawingImage(null)}>Cancel</button>
+                ) : (
+                  <button type="button" className="btn btn-sm btn-light" onClick={() => setDrawingImage(image.imageId)}>
+                    <i className="bi bi-bounding-box-circles me-1" aria-hidden="true" />Add missed damage
+                  </button>
+                ))
+              }
+            >
+              {drawingImage === image.imageId && (
+                <Alert tone="info">Drag a box around the damage the model missed, then choose its type and severity.</Alert>
+              )}
               {image.quality.warnings && image.quality.warnings.length > 0 && (
                 <Alert tone="warning">
                   Photo quality: {image.quality.warnings.join(' ')} Results from this photo may be less reliable.
@@ -176,7 +197,17 @@ export function InspectionDetailPage() {
               )}
               <div className="row g-3">
                 <div className="col-lg-7">
-                  <DamagePhoto image={image} numbers={numbers} selected={selected} onSelect={setSelected} />
+                  <DamagePhoto
+                    image={image}
+                    numbers={numbers}
+                    selected={selected}
+                    onSelect={setSelected}
+                    drawing={drawingImage === image.imageId}
+                    onDrawn={(bbox) => {
+                      setDrawingImage(null);
+                      setAdding({ imageId: image.imageId, bbox });
+                    }}
+                  />
                 </div>
                 <div className="col-lg-5">
                   {(() => {
@@ -191,6 +222,7 @@ export function InspectionDetailPage() {
                         onSelect={() => setSelected(d.detectionId)}
                         onConfirm={() => review(d, 'confirmed')}
                         onReject={() => review(d, 'rejected')}
+                        onRemove={() => review(d, 'remove')}
                         onCorrect={() => setCorrecting(d)}
                       />
                     );
@@ -240,6 +272,17 @@ export function InspectionDetailPage() {
           }}
         />
       )}
+      {adding && (
+        <AddRegionDialog
+          inspectionId={data.inspectionId}
+          {...adding}
+          onClose={() => setAdding(null)}
+          onDone={() => {
+            setAdding(null);
+            reload();
+          }}
+        />
+      )}
       {confirming && (
         <ConfirmDialog
           inspection={data}
@@ -264,7 +307,7 @@ function photoFacts(image: InspectionDetail['images'][number]) {
   return parts.join(' · ');
 }
 
-function RegionItem({ d, no, on, editable, busy, onSelect, onConfirm, onReject, onCorrect }: {
+function RegionItem({ d, no, on, editable, busy, onSelect, onConfirm, onReject, onRemove, onCorrect }: {
   d: Detection;
   no: string;
   on: boolean;
@@ -273,8 +316,10 @@ function RegionItem({ d, no, on, editable, busy, onSelect, onConfirm, onReject, 
   onSelect: () => void;
   onConfirm: () => void;
   onReject: () => void;
+  onRemove: () => void;
   onCorrect: () => void;
 }) {
+  const added = d.source === 'technician';
   const open = isOpenSuggestion(d);
   // Possible damage shows the severity it would get if accepted
   const severity = open ? d.severity : finalSeverity(d);
@@ -289,19 +334,38 @@ function RegionItem({ d, no, on, editable, busy, onSelect, onConfirm, onReject, 
           {DAMAGE_LABELS[finalLabel(d)]}
         </b>
         {severity && <StatusPill tone={SEVERITY[severity].tone}>{open ? `${SEVERITY[severity].label} if accepted` : SEVERITY[severity].label}</StatusPill>}
-        {open ? <StatusPill tone="muted">Possible</StatusPill> : <StatusPill tone={REVIEW[d.reviewStatus].tone}>{REVIEW[d.reviewStatus].label}</StatusPill>}
+        {open ? (
+          <StatusPill tone="muted">Possible</StatusPill>
+        ) : added ? (
+          <StatusPill tone="brand">Added</StatusPill>
+        ) : (
+          <StatusPill tone={REVIEW[d.reviewStatus].tone}>{REVIEW[d.reviewStatus].label}</StatusPill>
+        )}
       </div>
       {d.suggestion && !open && <p className="as-dmg-reason mb-0">Suggested by the model at low confidence, accepted by the technician.</p>}
-      <div className="as-dmg-facts">
-        <span>Confidence {percent(d.confidence)}</span>
-        {d.areaRatioVehicle != null && <span>{percent(d.areaRatioVehicle, 1)} of vehicle</span>}
-        {d.location && <span>{d.location}</span>}
-      </div>
-      {d.severityReason && <p className="as-dmg-reason">{d.severityReason}</p>}
-      {d.reviewedBy && d.reviewStatus !== 'pending' && (
-        <p className="as-dmg-reason">{REVIEW[d.reviewStatus].label} by {d.reviewedBy}</p>
+      {added ? (
+        <p className="as-dmg-reason">Missed by the model; added by {d.reviewedBy ?? 'a technician'}.</p>
+      ) : (
+        <>
+          <div className="as-dmg-facts">
+            <span>Confidence {percent(d.confidence)}</span>
+            {d.areaRatioVehicle != null && <span>{percent(d.areaRatioVehicle, 1)} of vehicle</span>}
+            {d.location && <span>{d.location}</span>}
+          </div>
+          {d.severityReason && <p className="as-dmg-reason">{d.severityReason}</p>}
+          {d.reviewedBy && d.reviewStatus !== 'pending' && (
+            <p className="as-dmg-reason">{REVIEW[d.reviewStatus].label} by {d.reviewedBy}</p>
+          )}
+        </>
       )}
-      {editable && (
+      {editable && added && (
+        <div className="as-dmg-actions" onClick={(e) => e.stopPropagation()}>
+          <button type="button" className="btn btn-sm btn-light" disabled={busy} onClick={onRemove}>
+            <i className="bi bi-trash me-1" aria-hidden="true" />Remove
+          </button>
+        </div>
+      )}
+      {editable && !added && (
         <div className="as-dmg-actions" onClick={(e) => e.stopPropagation()}>
           <button type="button" className="btn btn-sm btn-light" disabled={busy || d.reviewStatus === 'confirmed'} onClick={onConfirm}>
             <i className="bi bi-check-lg me-1" aria-hidden="true" />{open ? 'Accept' : 'Confirm'}
@@ -356,6 +420,60 @@ function CorrectDialog({ inspectionId, d, onClose, onDone }: { inspectionId: num
           The model said <b>{DAMAGE_LABELS[d.label]}</b>
           {d.severity && d.severity !== 'unavailable' && <>, <b>{SEVERITY[d.severity].label.toLowerCase()}</b></>}. Your correction is kept
           next to the model's answer, so the model can be evaluated later.
+        </p>
+        <SelectField label="Damage type" value={label} onChange={(e) => setLabel(e.target.value as DamageLabel)}>
+          {(Object.keys(DAMAGE_LABELS) as DamageLabel[]).map((l) => <option key={l} value={l}>{DAMAGE_LABELS[l]}</option>)}
+        </SelectField>
+        <SelectField label="Severity" value={severity} onChange={(e) => setSeverity(e.target.value as Severity)}>
+          {(['minor', 'moderate', 'severe'] as const).map((s) => <option key={s} value={s}>{SEVERITY[s].label}</option>)}
+        </SelectField>
+      </form>
+    </Modal>
+  );
+}
+
+function AddRegionDialog({ inspectionId, imageId, bbox, onClose, onDone }: {
+  inspectionId: number;
+  imageId: number;
+  bbox: [number, number, number, number];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [label, setLabel] = useState<DamageLabel>('dent');
+  const [severity, setSeverity] = useState<Severity>('minor');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await apiSend('POST', `/inspections/${inspectionId}/images/${imageId}/detections`, { label, severity, bbox });
+      onDone();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'The damage could not be added.');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Add missed damage"
+      size="sm"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="btn btn-light" onClick={onClose}>Cancel</button>
+          <button type="submit" form="add-region-form" className="btn btn-primary" disabled={busy}>{busy ? 'Adding…' : 'Add damage'}</button>
+        </>
+      }
+    >
+      {error && <Alert>{error}</Alert>}
+      <form id="add-region-form" onSubmit={submit} noValidate>
+        <p className="small">
+          It is recorded as damage the model missed. That is how the model's misses are measured, and it becomes a
+          new example for retraining.
         </p>
         <SelectField label="Damage type" value={label} onChange={(e) => setLabel(e.target.value as DamageLabel)}>
           {(Object.keys(DAMAGE_LABELS) as DamageLabel[]).map((l) => <option key={l} value={l}>{DAMAGE_LABELS[l]}</option>)}
