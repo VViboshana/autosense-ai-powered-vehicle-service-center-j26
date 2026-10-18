@@ -20,7 +20,7 @@ import {
   type InspectionDeps,
 } from './inspections.service.js';
 
-const DEFAULT_UPLOAD = { maxImageMb: 10, maxImagesPerInspection: 3, allowedTypes: ['image/jpeg', 'image/png', 'image/webp'] };
+const DEFAULT_UPLOAD = { maxImageMb: 10, maxImagesPerInspection: 5, allowedTypes: ['image/jpeg', 'image/png', 'image/webp'] };
 
 /** Form fields arrive as text: an empty field means "not given". */
 const optionalId = z.preprocess((v) => (v === '' || v == null ? undefined : v), z.coerce.number().int().positive().optional());

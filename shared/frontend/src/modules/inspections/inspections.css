@@ -276,16 +276,61 @@
 .as-dmg-job .as-veh {
   flex: 1;
 }
-.as-dmg-shots {
+/* Guided capture: one slot per side of the vehicle */
+.as-dmg-slots {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
   gap: 0.75rem;
+}
+.as-dmg-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  min-height: 12.5rem;
+  padding: 1rem 0.75rem;
+  border: 2px dashed var(--as-line);
+  border-radius: 12px;
+  background: var(--as-surface-2);
+  color: var(--as-muted);
+  font-size: 0.8rem;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.as-dmg-slot b {
+  color: var(--as-ink-2);
+  font-size: 0.9rem;
+}
+.as-dmg-slot:hover:not(:disabled),
+.as-dmg-slot:focus-visible {
+  border-color: var(--as-primary);
+  background: var(--as-primary-soft);
+  color: var(--as-primary);
+}
+.as-dmg-slot:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.as-dmg-side {
+  width: 6.5rem;
+  height: auto;
+  margin-bottom: 0.5rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.as-dmg-side .as-dmg-side-light {
+  stroke: var(--as-brand);
 }
 .as-dmg-shot {
   border: 1px solid var(--as-line);
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
   background: var(--as-surface);
+  display: flex;
+  flex-direction: column;
 }
 .as-dmg-shot img {
   display: block;
@@ -294,28 +339,34 @@
   object-fit: cover;
   background: var(--as-neutral-soft);
 }
+.as-dmg-shot-body {
+  padding: 0.55rem 0.65rem 0.6rem;
+  display: grid;
+  gap: 0.35rem;
+}
+.as-dmg-check {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.75rem;
+  font-size: 0.72rem;
+  color: var(--as-muted);
+}
 .as-dmg-shot-foot {
   display: flex;
   gap: 0.4rem;
-  padding: 0.5rem;
 }
-.as-dmg-add {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  min-height: 11rem;
-  border: 2px dashed var(--as-line);
-  border-radius: 10px;
-  color: var(--as-muted);
-  cursor: pointer;
-  font-size: 0.85rem;
+/* After the upload: the bar is full and gently pulses while the server works */
+.as-dmg-bar.working i {
+  width: 100% !important;
+  animation: as-dmg-pulse 1.2s ease-in-out infinite;
 }
-.as-dmg-add:hover {
-  border-color: var(--as-primary);
-  color: var(--as-primary);
+@keyframes as-dmg-pulse {
+  50% {
+    opacity: 0.45;
+  }
 }
-.as-dmg-add .bi {
-  font-size: 1.6rem;
+@media (prefers-reduced-motion: reduce) {
+  .as-dmg-bar.working i {
+    animation: none;
+  }
 }

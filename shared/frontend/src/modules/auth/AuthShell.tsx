@@ -10,7 +10,7 @@ export function AuthShell({ title, children }: { title: string; children: ReactN
   return (
     <div className="as-auth">
       <aside className="as-auth-brand">
-        <Brand to="/login" />
+        <Brand to="/login" height={56} />
         <div>
           <h1>The service floor, inspections and maintenance in one place.</h1>
           <p className="mt-3">
