@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Card } from '@/components/ui/Card';
-import { Alert, Field } from '@/components/ui/Form';
+import { Alert, Field, SelectField } from '@/components/ui/Form';
 import { Modal } from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
@@ -22,6 +22,9 @@ type Claim = {
   customer: { customerId: number; name: string; mobile: string | null };
   vehicle: { vehicleId: number; registrationNo: string; description: string; ownerOnRecord: string | null; ownerMatches: boolean } | null;
 };
+
+const FUEL_TYPES = ['petrol', 'diesel', 'hybrid', 'electric', 'other'] as const;
+type NewVehicle = { make: string; model: string; year: string; colour: string; fuelType: string };
 
 const TABS = [
   { key: 'pending', label: 'Waiting' },
@@ -95,7 +98,7 @@ export function VehicleRequestsPage() {
                                   </div>
                                 </>
                               ) : (
-                                <span className="text-body-secondary">Not on record yet: check the vehicle in first</span>
+                                <span className="text-body-secondary">Not on record yet: you add its details when approving</span>
                               )}
                             </td>
                             <td className="small">{c.customerNote ?? '—'}{c.reviewNote && <div className="text-body-secondary">Reply: {c.reviewNote}</div>}</td>
@@ -106,7 +109,7 @@ export function VehicleRequestsPage() {
                             <td className="text-end text-nowrap">
                               {c.status === 'pending' && (
                                 <>
-                                  <button type="button" className="btn btn-sm btn-primary me-1" disabled={!c.vehicle} onClick={() => setDialog({ claim: c, action: 'approve' })}>Approve</button>
+                                  <button type="button" className="btn btn-sm btn-primary me-1" onClick={() => setDialog({ claim: c, action: 'approve' })}>Approve</button>
                                   <button type="button" className="btn btn-sm btn-light" onClick={() => setDialog({ claim: c, action: 'reject' })}>Reject</button>
                                 </>
                               )}
@@ -143,16 +146,21 @@ export function VehicleRequestsPage() {
 
 function DecisionDialog({ claim, action, onClose, onDone }: { claim: Claim; action: 'approve' | 'reject'; onClose: () => void; onDone: (text: string) => void }) {
   const [note, setNote] = useState('');
+  const [vehicle, setVehicle] = useState<NewVehicle>({ make: '', model: '', year: '', colour: '', fuelType: '' });
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const approve = action === 'approve';
+  // A plate that is not on record yet: staff add the vehicle (from the vehicle or its papers) as they approve
+  const addingVehicle = approve && !claim.vehicle;
+  const fields = fieldErrors(error);
+  const set = (key: keyof NewVehicle) => (e: { target: { value: string } }) => setVehicle((v) => ({ ...v, [key]: e.target.value }));
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      await apiSend('POST', `/vehicle-requests/${claim.claimId}/${action}`, { note });
+      await apiSend('POST', `/vehicle-requests/${claim.claimId}/${action}`, addingVehicle ? { note, vehicle } : { note });
       onDone(approve ? `${claim.registrationNo} now appears in ${claim.customer.name}'s account.` : `The request for ${claim.registrationNo} was rejected.`);
     } catch (err) {
       setError(err);
@@ -163,13 +171,18 @@ function DecisionDialog({ claim, action, onClose, onDone }: { claim: Claim; acti
   return (
     <Modal
       title={approve ? `Approve ${claim.registrationNo}?` : `Reject ${claim.registrationNo}?`}
-      size="sm"
+      size={addingVehicle ? undefined : 'sm'}
       onClose={onClose}
       footer={
         <>
           <button type="button" className="btn btn-light" onClick={onClose}>Cancel</button>
-          <button type="submit" form="decision-form" className={`btn ${approve ? 'btn-primary' : 'btn-danger'}`} disabled={busy || (!approve && note.trim().length < 3)}>
-            {busy ? 'Saving…' : approve ? 'Approve' : 'Reject'}
+          <button
+            type="submit"
+            form="decision-form"
+            className={`btn ${approve ? 'btn-primary' : 'btn-danger'}`}
+            disabled={busy || (!approve && note.trim().length < 3) || (addingVehicle && (!vehicle.make.trim() || !vehicle.model.trim()))}
+          >
+            {busy ? 'Saving…' : addingVehicle ? 'Add vehicle and approve' : approve ? 'Approve' : 'Reject'}
           </button>
         </>
       }
@@ -181,7 +194,24 @@ function DecisionDialog({ claim, action, onClose, onDone }: { claim: Claim; acti
             ? `${claim.customer.name} will see this vehicle's status, confirmed inspections and recommendations. They become its owner on record.`
             : `Tell ${claim.customer.name} why, e.g. "Please bring the registration book to the counter."`}
         </p>
-        <Field label={approve ? 'Note (optional)' : 'Reason'} value={note} onChange={(e) => setNote(e.target.value)} error={fieldErrors(error).note} required={!approve} />
+        {addingVehicle && (
+          <fieldset className="mb-2">
+            <legend className="form-label fw-semibold mb-2">{claim.registrationNo} is not on record yet: add it from the vehicle or its registration book</legend>
+            <div className="row g-2">
+              <div className="col-sm-6"><Field label="Make" placeholder="Toyota" value={vehicle.make} onChange={set('make')} error={fields['vehicle.make']} required maxLength={40} /></div>
+              <div className="col-sm-6"><Field label="Model" placeholder="Aqua" value={vehicle.model} onChange={set('model')} error={fields['vehicle.model']} required maxLength={60} /></div>
+              <div className="col-sm-4"><Field label="Year" inputMode="numeric" placeholder="2015" value={vehicle.year} onChange={set('year')} error={fields['vehicle.year']} maxLength={4} /></div>
+              <div className="col-sm-4"><Field label="Colour" placeholder="White" value={vehicle.colour} onChange={set('colour')} error={fields['vehicle.colour']} maxLength={30} /></div>
+              <div className="col-sm-4">
+                <SelectField label="Fuel" value={vehicle.fuelType} onChange={set('fuelType')} error={fields['vehicle.fuelType']}>
+                  <option value="">Not known</option>
+                  {FUEL_TYPES.map((f) => <option key={f} value={f}>{f[0]!.toUpperCase() + f.slice(1)}</option>)}
+                </SelectField>
+              </div>
+            </div>
+          </fieldset>
+        )}
+        <Field label={approve ? 'Note (optional)' : 'Reason'} value={note} onChange={(e) => setNote(e.target.value)} error={fields.note} required={!approve} />
       </form>
     </Modal>
   );
