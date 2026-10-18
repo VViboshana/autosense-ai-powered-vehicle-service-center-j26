@@ -33,13 +33,15 @@ export function withQuery(path: string, query?: Query) {
 }
 
 async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+  // A FormData body (file uploads) is sent as multipart: the browser sets its Content-Type with the boundary.
+  const form = body instanceof FormData;
   let res: Response;
   try {
     res = await fetch(`/api${path}`, {
       method,
       signal,
-      headers: body === undefined ? { Accept: 'application/json' } : { Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: body === undefined || form ? { Accept: 'application/json' } : { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : form ? body : JSON.stringify(body),
     });
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') throw err;
@@ -81,3 +83,5 @@ export function fieldMessages(error: unknown, field: string): string[] {
 
 export const apiGet = <T>(path: string, query?: Query, signal?: AbortSignal) => request<T>('GET', withQuery(path, query), undefined, signal);
 export const apiSend = <T>(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown) => request<T>(method, path, body);
+/** Uploads files: build a FormData with the files and fields, e.g. form.append('images', file). */
+export const apiUpload = <T>(path: string, form: FormData) => request<T>('POST', path, form);

@@ -1,0 +1,33 @@
+{
+  "method": "rule-v0",
+  "note": "Proposed thresholds, not yet validated with the service technician. ratio = damage area / vehicle area. A class is graded by the first band whose 'below' is above the ratio, otherwise by 'otherwise'. Classes without bands always get 'otherwise'.",
+  "classes": {
+    "scratch": {
+      "bands": [{ "below": 0.03, "severity": "minor" }],
+      "otherwise": "moderate"
+    },
+    "dent": {
+      "bands": [{ "below": 0.01, "severity": "minor" }, { "below": 0.05, "severity": "moderate" }],
+      "otherwise": "severe"
+    },
+    "crack": {
+      "bands": [{ "below": 0.05, "severity": "moderate" }],
+      "otherwise": "severe"
+    },
+    "lamp_broken": {
+      "bands": [],
+      "otherwise": "moderate",
+      "why": "a broken lamp must be replaced before the vehicle is roadworthy"
+    },
+    "glass_shatter": {
+      "bands": [],
+      "otherwise": "severe",
+      "why": "shattered glass affects visibility and safety; the glass must be replaced"
+    },
+    "tire_flat": {
+      "bands": [],
+      "otherwise": "severe",
+      "why": "the vehicle is not safe to drive until the tyre is fixed"
+    }
+  }
+}

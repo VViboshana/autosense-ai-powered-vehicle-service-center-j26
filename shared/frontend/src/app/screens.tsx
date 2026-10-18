@@ -5,7 +5,11 @@ import { RolesPage } from '@/modules/admin/RolesPage';
 import { UsersPage } from '@/modules/admin/UsersPage';
 import { DashboardPage } from '@/modules/dashboard/DashboardPage';
 import { VehicleRequestsPage } from '@/modules/floor/VehicleRequestsPage';
+import { InspectionDetailPage } from '@/modules/inspections/InspectionDetailPage';
+import { InspectionListPage } from '@/modules/inspections/InspectionListPage';
+import { NewInspectionPage } from '@/modules/inspections/NewInspectionPage';
 import { BayMonitorPage } from '@/modules/occupancy/BayMonitorPage';
+import { ForecastDetailPage, ForecastsPage, NewForecastPage, ServiceHistoryDetailPage, ServiceHistoryPage } from '@/modules/maintenance/MaintenancePages';
 /**
  * Built staff screens: path -> page, guarded by the screen code from app.screens (database/reference/010_screens.sql).
  * The path must equal the url in app.screens so the menu link opens it.
@@ -14,7 +18,13 @@ import { BayMonitorPage } from '@/modules/occupancy/BayMonitorPage';
  * Pages for one module live in src/modules/<module>/ (e.g. src/modules/inspections/ReviewQueuePage.tsx).
  * Customer pages (/my) are routed in App.tsx.
  */
-export type ScreenRoute = { code: string; path: string; element: ReactNode };
+export type ScreenRoute = {
+  code: string;
+  /** Other codes that also open the page (e.g. a detail page reached from several lists). */
+  also?: string[];
+  path: string;
+  element: ReactNode;
+};
 
 export const SCREENS: ScreenRoute[] = [
   { code: 'DASHBOARD', path: '/', element: <DashboardPage /> },
@@ -24,4 +34,18 @@ export const SCREENS: ScreenRoute[] = [
   { code: 'ROLE_PERMISSIONS', path: '/admin/role-permissions', element: <RolePermissionsPage /> },
   { code: 'AUDIT_LOG', path: '/admin/audit', element: <AuditLogPage /> },
   { code: 'BAY_MONITOR', path: '/floor/bays', element: <BayMonitorPage /> },
+  { code: 'INSPECTION_CREATE', path: '/inspections/new', element: <NewInspectionPage /> },
+  { code: 'INSPECTION_REVIEW', path: '/inspections/review', element: <InspectionListPage mode="review" /> },
+  { code: 'INSPECTION_HISTORY', path: '/inspections', element: <InspectionListPage mode="history" /> },
+  {
+    code: 'INSPECTION_HISTORY',
+    also: ['INSPECTION_REVIEW', 'INSPECTION_CREATE'],
+    path: '/inspections/:id',
+    element: <InspectionDetailPage />,
+  },
+  { code: 'MAINTENANCE_FORECASTS', path: '/maintenance/forecasts', element: <ForecastsPage /> },
+  { code: 'MAINTENANCE_FORECASTS', path: '/maintenance/forecasts/new', element: <NewForecastPage /> },
+  { code: 'MAINTENANCE_FORECASTS', path: '/maintenance/forecasts/:id', element: <ForecastDetailPage /> },
+  { code: 'SERVICE_HISTORY', path: '/maintenance/history', element: <ServiceHistoryPage /> },
+  { code: 'SERVICE_HISTORY', path: '/maintenance/history/:id', element: <ServiceHistoryDetailPage /> },
 ];
