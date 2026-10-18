@@ -19,7 +19,28 @@ export type MyVehicles = {
   }[];
 };
 
-type Section<T> = { available: false } | { available: true; connected?: boolean; data: T };
+/** One region a technician confirmed, numbered across the report (the same number on the photo and in the list). */
+export type ReportFinding = {
+  no: number;
+  label: string;
+  severity: string | null;
+  location: string | null;
+  bbox: number[];
+  polygon: number[][] | null;
+};
+
+/** A confirmed inspection, as the customer sees it: checked regions only, no model confidence. */
+export type InspectionReport = {
+  inspectionId: number;
+  inspectionNo: string;
+  confirmedAt: string;
+  overallSeverity: string | null;
+  notes: string | null;
+  photos: { imageId: number; viewAngle: string; width: number | null; height: number | null; url: string; findings: ReportFinding[] }[];
+  findings: (ReportFinding & { viewAngle: string })[];
+};
+
+type Section<T> ={ available: false } | { available: true; connected?: boolean; data: T };
 
 export type MyVehicle = {
   vehicle: { vehicleId: number; registrationNo: string; description: string; colour: string | null; fuelType: string | null };
@@ -35,9 +56,7 @@ export type MyVehicle = {
       queuePosition: number | null;
       estimatedReadyAt: string | null;
     } | null>;
-    inspections: Section<
-      { inspectionNo: string; confirmedAt: string; overallSeverity: string | null; findings: { label: string; location: string | null; severity: string | null }[] }[]
-    >;
+    inspections: Section<InspectionReport[]>;
     maintenance: Section<null>;
     safety: Section<null>;
   };
