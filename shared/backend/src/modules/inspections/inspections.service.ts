@@ -15,7 +15,7 @@ export type InspectionDeps = { pool: pg.Pool; damageServiceUrl?: string; uploadD
  * New inspection: every photo goes to the damage service first. Only when all of them have a result are the
  * inspection, photos and detections saved, in one transaction, as 'awaiting_review'. If the service fails, nothing
  * is saved and staff try again (503). Damage the service found outside the inspected vehicle (onVehicle: false) is
- * not stored: it belongs to another car in the photo.
+ * not stored: it belongs to another car in the photo. Possible damage (weaker regions) is stored as suggestions.
  */
 export async function createInspection(
   deps: InspectionDeps,
@@ -89,6 +89,7 @@ export async function createInspection(
             location: d.location,
             severity: d.severity,
             severityReason: d.severityReason,
+            isSuggestion: d.possible,
           });
         }
       }
@@ -149,11 +150,14 @@ export async function confirmInspection(pool: pg.Pool, c: { inspectionId: number
     if (inspection.status !== 'awaiting_review') {
       throw new BusinessRuleError('NOT_UNDER_REVIEW', `This inspection is ${inspection.status.replace('_', ' ')}, so it cannot be confirmed.`);
     }
-    const detections = await repo.detectionsForReview(client, c.inspectionId);
-    const pending = detections.filter((d) => d.review_status === 'pending').length;
+    let detections = await repo.detectionsForReview(client, c.inspectionId);
+    const pending = detections.filter((d) => d.review_status === 'pending' && !d.is_suggestion).length;
     if (pending) {
       throw new BusinessRuleError('DETECTIONS_PENDING', `Review every damage region first (${pending} still to review).`);
     }
+    // Possible damage nobody accepted is recorded as dismissed by the person confirming (kept for measuring suggestions)
+    const dismissed = await repo.dismissOpenSuggestions(client, c.inspectionId, c.userId);
+    if (dismissed) detections = await repo.detectionsForReview(client, c.inspectionId);
 
     const kept = detections.filter((d) => d.review_status !== 'rejected');
     const overallSeverity = worstSeverity(
@@ -176,7 +180,7 @@ export async function confirmInspection(pool: pg.Pool, c: { inspectionId: number
       recordId: c.inspectionId,
       action: 'confirmed',
       userId: c.userId,
-      snapshot: { overallSeverity, kept: kept.length, rejected: detections.length - kept.length },
+      snapshot: { overallSeverity, kept: kept.length, rejected: detections.length - kept.length, suggestionsDismissed: dismissed },
     });
   });
 }

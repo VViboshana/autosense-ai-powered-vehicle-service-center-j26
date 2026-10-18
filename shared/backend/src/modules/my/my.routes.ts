@@ -167,6 +167,7 @@ export function myRoutes(pool: pg.Pool) {
          FROM damage.inspections i
          LEFT JOIN damage.inspection_images im ON im.inspection_id = i.inspection_id
          LEFT JOIN damage.detections d ON d.image_id = im.image_id AND d.review_status <> 'rejected'
+                                       AND (NOT d.is_suggestion OR d.review_status IN ('confirmed', 'corrected'))
          WHERE i.vehicle_id = $1 AND i.status = 'confirmed'
          GROUP BY i.inspection_id
          ORDER BY i.reviewed_at DESC`,

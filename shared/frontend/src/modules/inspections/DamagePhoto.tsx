@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import type { Detection, InspectionImage } from './inspections.types';
-import { DAMAGE_LABELS, SEVERITY, VIEW_ANGLES, finalLabel, finalSeverity } from './inspections.ui';
+import { DAMAGE_LABELS, SEVERITY, VIEW_ANGLES, finalLabel, finalSeverity, isOpenSuggestion } from './inspections.ui';
 
 /**
  * A photo with the damage outlines drawn on top. The SVG uses the photo's own pixel size as its coordinate system
  * (viewBox), so the polygons from the model line up with the photo at any display size. Outlines are coloured by
- * severity; the selected one is highlighted, rejected ones are dashed.
+ * severity; the selected one is highlighted, rejected ones are dashed, possible damage is dotted and faint, and
+ * dismissed possible damage is not drawn.
  */
 export function DamagePhoto({ image, numbers, selected, onSelect }: {
   image: InspectionImage;
-  /** Region number shown next to each outline (matches the list beside the photo). */
-  numbers: Map<number, number>;
+  /** Region label shown next to each outline (matches the list beside the photo): "3", or "P1" for possible damage. */
+  numbers: Map<number, string>;
   selected: number | null;
   onSelect: (detectionId: number) => void;
 }) {
@@ -30,14 +31,15 @@ export function DamagePhoto({ image, numbers, selected, onSelect }: {
         <img src={image.url} alt={`${VIEW_ANGLES[image.viewAngle]} photo`} onError={() => setMissing(true)} />
       )}
       <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="group" aria-label="Damage found in this photo">
-        {image.detections.map((d) => {
-          const severity = finalSeverity(d);
+        {image.detections.filter((d) => numbers.has(d.detectionId)).map((d) => {
+          const open = isOpenSuggestion(d);
+          const severity = open ? d.severity : finalSeverity(d);
           const tone = severity ? SEVERITY[severity].tone : 'muted';
           const [x1 = 0, y1 = 0] = d.bbox;
           return (
             <g
               key={d.detectionId}
-              className={`as-dmg-shape as-tone-${tone}${selected === d.detectionId ? ' on' : ''}${d.reviewStatus === 'rejected' ? ' rejected' : ''}`}
+              className={`as-dmg-shape as-tone-${tone}${selected === d.detectionId ? ' on' : ''}${d.reviewStatus === 'rejected' ? ' rejected' : ''}${open ? ' possible' : ''}`}
               onClick={() => onSelect(d.detectionId)}
             >
               <title>{`${numbers.get(d.detectionId)}. ${DAMAGE_LABELS[finalLabel(d)]}`}</title>

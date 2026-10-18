@@ -65,6 +65,48 @@
   fill-opacity: 0.05;
   stroke-dasharray: 6 5;
 }
+/* Possible damage: the model is less sure, so the outline is dotted and faint until a technician accepts it */
+.as-dmg-shape.possible polygon {
+  fill-opacity: 0.06;
+  stroke-width: 2;
+  stroke-dasharray: 2 4;
+  stroke-linecap: round;
+}
+.as-dmg-shape.possible.on polygon,
+.as-dmg-shape.possible:hover polygon {
+  fill-opacity: 0.2;
+}
+
+/* ---------- Possible damage list ---------- */
+.as-dmg-possible {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px dashed var(--as-line);
+}
+.as-dmg-possible h3 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0 0 0.2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.as-dmg-possible > p {
+  font-size: 0.78rem;
+  color: var(--as-muted);
+  margin: 0 0 0.6rem;
+}
+.as-dmg-item.possible {
+  border-style: dashed;
+  background: var(--as-surface-2);
+}
+.as-dmg-item.possible .as-dmg-no {
+  width: auto;
+  min-width: 1.5rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  border-style: dashed;
+}
 
 /* ---------- Region list beside the photo ---------- */
 .as-dmg-list {

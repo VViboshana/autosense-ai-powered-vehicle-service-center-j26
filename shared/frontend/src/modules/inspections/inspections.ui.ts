@@ -50,5 +50,10 @@ export function finalSeverity(d: Detection): SeverityValue {
   return d.correctedSeverity ?? d.severity;
 }
 
+/** Possible damage nobody has accepted or dismissed yet. */
+export const isOpenSuggestion = (d: Detection) => d.suggestion && d.reviewStatus === 'pending';
+/** Counts as damage: a finding, or a suggestion a technician accepted. */
+export const isFinding = (d: Detection) => !d.suggestion || d.reviewStatus === 'confirmed' || d.reviewStatus === 'corrected';
+
 /** 0.873 -> "87%" */
 export const percent = (v: number | null | undefined, digits = 0) => (v == null ? '—' : `${(v * 100).toFixed(digits)}%`);
