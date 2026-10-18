@@ -15,7 +15,7 @@ export type InspectionDeps = { pool: pg.Pool; damageServiceUrl?: string; uploadD
  * New inspection: every photo goes to the damage service first. Only when all of them have a result are the
  * inspection, photos and detections saved, in one transaction, as 'awaiting_review'. If the service fails, nothing
  * is saved and staff try again (503). Damage the service found outside the inspected vehicle (onVehicle: false) is
- * not stored: it belongs to another car in the photo.
+ * not stored: it belongs to another car in the photo. Possible damage (weaker regions) is stored as suggestions.
  */
 export async function createInspection(
   deps: InspectionDeps,
@@ -89,6 +89,7 @@ export async function createInspection(
             location: d.location,
             severity: d.severity,
             severityReason: d.severityReason,
+            isSuggestion: d.possible,
           });
         }
       }
@@ -113,11 +114,7 @@ export async function reviewDetection(
   r: { inspectionId: number; detectionId: number; decision: ReviewDecision; label?: DamageLabel; severity?: Severity; userId: number },
 ) {
   await withTransaction(pool, async (client) => {
-    const inspection = await repo.lockInspection(client, r.inspectionId);
-    if (!inspection) throw new NotFoundError('Inspection not found.');
-    if (inspection.status !== 'awaiting_review') {
-      throw new BusinessRuleError('NOT_UNDER_REVIEW', `This inspection is ${inspection.status.replace('_', ' ')}, so it can no longer be changed.`);
-    }
+    await lockForReview(client, r.inspectionId);
     const detection = (await repo.detectionsForReview(client, r.inspectionId)).find((d) => d.detection_id === r.detectionId);
     if (!detection) throw new NotFoundError('This damage region is not part of the inspection.');
 
@@ -138,6 +135,56 @@ export async function reviewDetection(
   });
 }
 
+/** The inspection, locked, and still open for review; otherwise the right error. */
+async function lockForReview(client: pg.PoolClient, inspectionId: number) {
+  const inspection = await repo.lockInspection(client, inspectionId);
+  if (!inspection) throw new NotFoundError('Inspection not found.');
+  if (inspection.status !== 'awaiting_review') {
+    throw new BusinessRuleError('NOT_UNDER_REVIEW', `This inspection is ${inspection.status.replace('_', ' ')}, so it can no longer be changed.`);
+  }
+  return inspection;
+}
+
+/**
+ * Damage the model missed, marked by a technician with a box on the photo. The technician gives the type and the
+ * severity (no rule is applied: they are the expert). It counts like any confirmed region, and each one is a measured
+ * miss of the model and a new labelled example for retraining.
+ */
+export async function addTechnicianRegion(
+  pool: pg.Pool,
+  r: { inspectionId: number; imageId: number; label: DamageLabel; severity: Severity; bbox: number[]; userId: number },
+) {
+  return withTransaction(pool, async (client) => {
+    await lockForReview(client, r.inspectionId);
+    const image = await repo.inspectionImage(client, r.inspectionId, r.imageId);
+    if (!image) throw new NotFoundError('This photo is not part of the inspection.');
+    const [x1 = 0, y1 = 0, x2 = 0, y2 = 0] = r.bbox;
+    if ((image.width && x2 > image.width) || (image.height && y2 > image.height)) {
+      throw new ValidationError('The box is outside the photo.', [{ field: 'bbox', message: 'Draw the box on the photo.' }]);
+    }
+    const bbox = [x1, y1, x2, y2].map(Math.round);
+    const detectionId = await repo.insertTechnicianRegion(client, { ...r, bbox });
+    await audit(client, {
+      table: 'damage.detections',
+      recordId: detectionId,
+      action: 'added_by_technician',
+      userId: r.userId,
+      snapshot: { inspectionId: r.inspectionId, imageId: r.imageId, label: r.label, severity: r.severity, bbox },
+    });
+    return detectionId;
+  });
+}
+
+export async function removeTechnicianRegion(pool: pg.Pool, r: { inspectionId: number; detectionId: number; userId: number }) {
+  await withTransaction(pool, async (client) => {
+    await lockForReview(client, r.inspectionId);
+    if (!(await repo.deleteTechnicianRegion(client, r.inspectionId, r.detectionId))) {
+      throw new NotFoundError('Only damage a technician added can be removed; reject the model\'s regions instead.');
+    }
+    await audit(client, { table: 'damage.detections', recordId: r.detectionId, action: 'removed', userId: r.userId, snapshot: { inspectionId: r.inspectionId } });
+  });
+}
+
 /**
  * Confirming makes the inspection final: every region must have been reviewed first. The overall severity is worked
  * out again from the reviewed values, and an inspection.report event tells the other components.
@@ -149,11 +196,14 @@ export async function confirmInspection(pool: pg.Pool, c: { inspectionId: number
     if (inspection.status !== 'awaiting_review') {
       throw new BusinessRuleError('NOT_UNDER_REVIEW', `This inspection is ${inspection.status.replace('_', ' ')}, so it cannot be confirmed.`);
     }
-    const detections = await repo.detectionsForReview(client, c.inspectionId);
-    const pending = detections.filter((d) => d.review_status === 'pending').length;
+    let detections = await repo.detectionsForReview(client, c.inspectionId);
+    const pending = detections.filter((d) => d.review_status === 'pending' && !d.is_suggestion).length;
     if (pending) {
       throw new BusinessRuleError('DETECTIONS_PENDING', `Review every damage region first (${pending} still to review).`);
     }
+    // Possible damage nobody accepted is recorded as dismissed by the person confirming (kept for measuring suggestions)
+    const dismissed = await repo.dismissOpenSuggestions(client, c.inspectionId, c.userId);
+    if (dismissed) detections = await repo.detectionsForReview(client, c.inspectionId);
 
     const kept = detections.filter((d) => d.review_status !== 'rejected');
     const overallSeverity = worstSeverity(
@@ -176,7 +226,7 @@ export async function confirmInspection(pool: pg.Pool, c: { inspectionId: number
       recordId: c.inspectionId,
       action: 'confirmed',
       userId: c.userId,
-      snapshot: { overallSeverity, kept: kept.length, rejected: detections.length - kept.length },
+      snapshot: { overallSeverity, kept: kept.length, rejected: detections.length - kept.length, suggestionsDismissed: dismissed },
     });
   });
 }

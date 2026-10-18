@@ -2,7 +2,8 @@
 AutoSense damage assessment service (component 2). Called only by the AutoSense API, never by the browser.
 
   GET  /health    200 when the models are loaded (the API's health check uses this)
-  POST /predict   multipart photo -> quality check, vehicle, damage detections, preliminary severity
+  POST /predict   multipart photo -> quality check, vehicle, damage detections (findings + possible damage),
+                  preliminary severity
 
 Run (from member-2-damage-assessment/backend):  ..\\.venv\\Scripts\\python -m uvicorn app.main:app --port 8001
 """
@@ -15,6 +16,7 @@ from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from . import config
+from .findings import split_findings
 from .predictor import SegModel, find_vehicle
 from .quality import check_quality
 from .severity import assess
@@ -62,7 +64,9 @@ def predict(
 
     quality = check_quality(bgr)
     vehicle = find_vehicle(state['coco'], bgr)
-    detections = state['damage'].predict(bgr, confidence)
+    # One model run at the lower threshold; then findings (>= confidence) and possible damage (below it)
+    regions = state['damage'].predict(bgr, min(config.POSSIBLE_CONFIDENCE, confidence))
+    detections = split_findings(regions, confidence, config.MAX_POSSIBLE_PER_PHOTO)
     height, width = bgr.shape[:2]
     for d in detections:
         d['areaRatioImage'] = round(d['areaPx'] / (width * height), 4)

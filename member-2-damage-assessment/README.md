@@ -54,6 +54,13 @@ Without `model/best.pt` the service uses the COCO model (`yolo11n-seg.pt`, downl
 ```
 Coordinates are pixels of the photo after EXIF rotation. Errors: 400 not an image, 413 larger than 15 MB.
 
+## Possible damage
+The model runs once at a low threshold (`DAMAGE_POSSIBLE_CONFIDENCE`, 0.10). Regions at or above `confidence` (0.25)
+are findings (`"possible": false`). Weaker regions come back as possible damage (`"possible": true`): at most
+`DAMAGE_MAX_POSSIBLE` (5) per photo, strongest first, and never one that lies mostly on a finding (a duplicate).
+They are graded like findings but do not count towards `severity.overall`. In the app a technician accepts or dismisses
+them; the test set showed the model misses subtle damage (dent, scratch, crack) just below the threshold.
+
 ## Severity (rule-v0, preliminary)
 The COCO model finds the main vehicle (car, motorcycle, bus or truck: the largest one). Each damage's area is divided
 by the vehicle's area (`areaRatioVehicle`), which does not depend on how far away the photo was taken. The rules in
