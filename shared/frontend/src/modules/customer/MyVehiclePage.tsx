@@ -7,12 +7,14 @@ import { formatDate, formatDuration, formatTime, minutesSince } from '@/lib/form
 import { useApi } from '@/lib/useApi';
 import { STAGES } from '@/modules/dashboard/stages';
 import type { MyVehicle } from './customer.types';
+import { ReportPhoto } from './ReportPhoto';
+import { SEVERITY_TONE } from './severity';
 
 const JOURNEY = ['Checked in', 'Inspected', 'Waiting for a bay', 'In service', 'Ready for pickup'];
 const LABELS: Record<string, string> = {
   dent: 'Dent', scratch: 'Scratch', crack: 'Crack', glass_shatter: 'Broken glass', lamp_broken: 'Broken lamp', tire_flat: 'Flat tyre',
 };
-const SEVERITY_TONE = { minor: 'muted', moderate: 'warning', severe: 'danger' } as const;
+const VIEWS: Record<string, string> = { front: 'Front', rear: 'Rear', left: 'Left side', right: 'Right side', other: 'Close-up' };
 
 type Tab = 'status' | 'inspections' | 'maintenance' | 'safety';
 
@@ -140,23 +142,49 @@ function InspectionsTab({ inspections }: { inspections: Extract<MyVehicle['secti
     <div className="d-grid gap-3">
       {inspections.map((i) => (
         <section key={i.inspectionNo} className="as-card p-3">
-          <div className="d-flex justify-content-between flex-wrap gap-2 mb-2">
+          <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
             <b>Inspection {i.inspectionNo}</b>
-            <span className="small text-body-secondary">Confirmed {formatDate(i.confirmedAt)}</span>
+            <span className="d-flex align-items-center gap-2 small text-body-secondary">
+              Confirmed {formatDate(i.confirmedAt)}
+              {i.overallSeverity ? (
+                i.overallSeverity !== 'unavailable' && <StatusPill tone={SEVERITY_TONE[i.overallSeverity] ?? 'muted'}>Overall: {severityText(i.overallSeverity)}</StatusPill>
+              ) : (
+                <StatusPill tone="success">No damage</StatusPill>
+              )}
+            </span>
           </div>
+          {i.notes && (
+            <p className="small mb-3"><i className="bi bi-chat-left-text me-1 text-body-secondary" aria-hidden="true" />Technician's note: {i.notes}</p>
+          )}
           {i.findings.length === 0 ? (
             <p className="small mb-0 text-body-secondary">No visible damage was recorded.</p>
           ) : (
-            <ul className="list-unstyled mb-0 d-grid gap-2">
-              {i.findings.map((f, n) => (
-                <li key={n} className="d-flex justify-content-between gap-2 small">
-                  <span>{LABELS[f.label] ?? f.label}{f.location ? ` · ${f.location}` : ''}</span>
-                  {f.severity && f.severity !== 'unavailable' && (
-                    <StatusPill tone={SEVERITY_TONE[f.severity as keyof typeof SEVERITY_TONE] ?? 'muted'}>{f.severity[0]!.toUpperCase() + f.severity.slice(1)}</StatusPill>
-                  )}
-                </li>
+            <div className="d-grid gap-3">
+              {i.photos.filter((p) => p.findings.length > 0).map((p) => (
+                <div key={p.imageId} className="row g-3 align-items-start">
+                  <div className="col-md-7">
+                    <ReportPhoto url={p.url} width={p.width} height={p.height} findings={p.findings} alt={`${VIEWS[p.viewAngle] ?? 'Vehicle'} photo`} />
+                  </div>
+                  <div className="col-md-5">
+                    <div className="small fw-semibold mb-2">{VIEWS[p.viewAngle] ?? 'Photo'}</div>
+                    <ol className="list-unstyled mb-0 d-grid gap-2">
+                      {p.findings.map((f) => (
+                        <li key={f.no} className="d-flex justify-content-between align-items-start gap-2 small">
+                          <span>
+                            <b className="me-1">{f.no}.</b>
+                            {LABELS[f.label] ?? f.label}
+                            {f.location && <span className="text-body-secondary"> · {f.location} of the photo</span>}
+                          </span>
+                          {f.severity && f.severity !== 'unavailable' && (
+                            <StatusPill tone={SEVERITY_TONE[f.severity] ?? 'muted'}>{severityText(f.severity)}</StatusPill>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </section>
       ))}
@@ -164,3 +192,5 @@ function InspectionsTab({ inspections }: { inspections: Extract<MyVehicle['secti
     </div>
   );
 }
+
+const severityText = (s: string) => s[0]!.toUpperCase() + s.slice(1);
