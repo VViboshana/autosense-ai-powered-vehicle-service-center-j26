@@ -103,7 +103,10 @@ export function NewInspectionPage() {
     setUpload({ sent: 0, bytes });
     try {
       const created = await apiUpload<InspectionDetail>('/inspections', form, (sent) => setUpload({ sent, bytes }));
-      navigate(`/inspections/${created.inspectionId}`);
+      const found = created.images.flatMap((im) => im.detections).length;
+      navigate(`/inspections/${created.inspectionId}`, {
+        state: { toast: `Inspection ${created.inspectionNo} created: ${found} ${found === 1 ? 'region' : 'regions'} to check` },
+      });
     } catch (err) {
       setError(err);
       setUpload(null);

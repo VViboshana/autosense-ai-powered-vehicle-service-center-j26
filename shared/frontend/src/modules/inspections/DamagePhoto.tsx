@@ -13,7 +13,9 @@ const MIN_BOX_PX = 8; // in photo pixels; a smaller box is a stray click, not a 
  * With `drawing` on, dragging on the photo (mouse, pen or finger) draws a box, returned in photo pixels by `onDrawn`:
  * the technician marks damage the model missed.
  */
-export function DamagePhoto({ image, numbers, selected, hovered = null, onSelect, onHover, drawing = false, onDrawn }: {
+export function DamagePhoto({ image, numbers, selected, hovered = null, onSelect, onHover, onExpand, drawing = false, onDrawn }: {
+  /** Shows a button that opens the photo full screen. */
+  onExpand?: () => void;
   image: InspectionImage;
   /** Region label shown next to each outline (matches the list beside the photo): "3", or "P1" for possible damage. */
   numbers: Map<number, string>;
@@ -59,6 +61,11 @@ export function DamagePhoto({ image, numbers, selected, hovered = null, onSelect
 
   return (
     <div className={`as-dmg-photo${drawing ? ' drawing' : ''}`} style={{ aspectRatio: `${width} / ${height}` }}>
+      {onExpand && !drawing && (
+        <button type="button" className="as-dmg-expand" onClick={onExpand} title="Open full screen to zoom">
+          <i className="bi bi-arrows-fullscreen me-1" aria-hidden="true" />Zoom
+        </button>
+      )}
       {missing ? (
         <div className="as-dmg-missing">
           <i className="bi bi-image" aria-hidden="true" />

@@ -15,6 +15,7 @@ export type InspectionListItem = {
   vehicle: string;
   jobNo: string | null;
   imageCount: number;
+  thumbnailUrl: string | null;
   detectionCount: number;
   pendingCount: number;
   possibleCount: number;

@@ -53,7 +53,7 @@
 }
 .as-dmg-shape polygon {
   fill: currentColor;
-  fill-opacity: 0.16;
+  fill-opacity: var(--as-dmg-fill, 0.16); /* the photo viewer's Fill slider sets it */
   stroke: currentColor;
   stroke-width: 2.5;
   vector-effect: non-scaling-stroke;
@@ -137,6 +137,173 @@
   padding: 0 0.3rem;
   border-radius: 999px;
   border-style: dashed;
+}
+
+/* Button on a photo that opens it full screen */
+.as-dmg-expand {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 2;
+  border: 0;
+  border-radius: 8px;
+  padding: 0.3rem 0.55rem;
+  background: rgb(20 26 34 / 65%);
+  color: var(--as-surface);
+  font-size: 0.78rem;
+}
+.as-dmg-expand:hover,
+.as-dmg-expand:focus-visible {
+  background: rgb(20 26 34 / 85%);
+}
+
+/* ---------- Full-screen photo viewer ---------- */
+.as-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 1060;
+  display: flex;
+  flex-direction: column;
+  background: var(--as-sidebar);
+  color: var(--as-sidebar-text);
+}
+.as-viewer-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+}
+.as-viewer-bar b {
+  color: var(--as-surface);
+}
+.as-viewer-count,
+.as-viewer-zoom {
+  font-size: 0.8rem;
+  min-width: 3rem;
+  text-align: center;
+}
+.as-viewer-tools {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.as-viewer-sep {
+  width: 1px;
+  height: 1.4rem;
+  margin: 0 0.3rem;
+  background: rgb(255 255 255 / 15%);
+}
+.as-viewer-check {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.as-viewer-check input[type='range'] {
+  width: 5rem;
+  accent-color: var(--as-brand);
+}
+.as-viewer-check input[type='checkbox'] {
+  accent-color: var(--as-brand);
+}
+.as-viewer-stage {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  touch-action: none;
+}
+.as-viewer-stage.zoomed {
+  cursor: grab;
+}
+.as-viewer-stage.zoomed:active {
+  cursor: grabbing;
+}
+.as-viewer-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: 0 0;
+}
+.as-viewer-photo .as-dmg-photo {
+  border: 0;
+  border-radius: 4px;
+}
+.as-viewer-hint {
+  padding: 0.4rem 1rem;
+  font-size: 0.72rem;
+  color: var(--as-sidebar-muted);
+  text-align: center;
+}
+@media (hover: none) {
+  .as-viewer-hint {
+    display: none;
+  }
+}
+
+/* ---------- Confirmation messages ---------- */
+.as-toasts {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 1070;
+  display: grid;
+  gap: 0.5rem;
+  max-width: min(24rem, calc(100vw - 2.5rem));
+}
+.as-toast {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 10px;
+  background: var(--as-sidebar);
+  color: var(--as-surface);
+  font-size: 0.85rem;
+  box-shadow: var(--as-shadow-pop);
+  animation: as-toast-in 0.18s ease-out;
+}
+.as-toast-success .bi {
+  color: var(--as-success-soft);
+}
+.as-toast-info .bi {
+  color: var(--as-info-soft);
+}
+@keyframes as-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .as-toast {
+    animation: none;
+  }
+}
+
+/* ---------- Review queue: thumbnails, severity strip, waiting time ---------- */
+.as-thumb {
+  width: 4.5rem;
+  height: 3.4rem;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--as-neutral-soft);
+  display: block;
+}
+.as-thumb-none {
+  display: grid;
+  place-items: center;
+  color: var(--as-muted);
+}
+/* A severity-coloured edge on the row; the row sets --as-strip to the severity's state colour */
+.as-table tr.as-sev-strip td:first-child {
+  box-shadow: inset 4px 0 0 var(--as-strip, transparent);
 }
 
 /* ---------- Review progress + keyboard hints ---------- */
