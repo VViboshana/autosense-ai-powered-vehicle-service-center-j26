@@ -220,4 +220,6 @@ __marimo__/
 # Model weights: never committed (large files; trained on CarDD, which can't be shared)
 *.pt
 *.onnx
+*.pkl
+*.joblib
 
