@@ -9,6 +9,7 @@ import { InspectionDetailPage } from '@/modules/inspections/InspectionDetailPage
 import { InspectionListPage } from '@/modules/inspections/InspectionListPage';
 import { NewInspectionPage } from '@/modules/inspections/NewInspectionPage';
 import { BayMonitorPage } from '@/modules/occupancy/BayMonitorPage';
+import { ForecastDetailPage, ForecastsPage, NewForecastPage, ServiceHistoryDetailPage, ServiceHistoryPage } from '@/modules/maintenance/MaintenancePages';
 /**
  * Built staff screens: path -> page, guarded by the screen code from app.screens (database/reference/010_screens.sql).
  * The path must equal the url in app.screens so the menu link opens it.
@@ -42,4 +43,9 @@ export const SCREENS: ScreenRoute[] = [
     path: '/inspections/:id',
     element: <InspectionDetailPage />,
   },
+  { code: 'MAINTENANCE_FORECASTS', path: '/maintenance/forecasts', element: <ForecastsPage /> },
+  { code: 'MAINTENANCE_FORECASTS', path: '/maintenance/forecasts/new', element: <NewForecastPage /> },
+  { code: 'MAINTENANCE_FORECASTS', path: '/maintenance/forecasts/:id', element: <ForecastDetailPage /> },
+  { code: 'SERVICE_HISTORY', path: '/maintenance/history', element: <ServiceHistoryPage /> },
+  { code: 'SERVICE_HISTORY', path: '/maintenance/history/:id', element: <ServiceHistoryDetailPage /> },
 ];
