@@ -22,7 +22,8 @@ async function sqlFiles(folder: string) {
   return Promise.all(
     names.map(async (name) => {
       const sql = await readFile(path.join(dir, name), 'utf8');
-      return { name, sql, checksum: createHash('sha256').update(sql).digest('hex') };
+      // Checksum over LF line endings: Git on Windows may check the same file out with CRLF, which is not a change
+      return { name, sql, checksum: createHash('sha256').update(sql.replace(/\r\n/g, '\n')).digest('hex') };
     }),
   );
 }

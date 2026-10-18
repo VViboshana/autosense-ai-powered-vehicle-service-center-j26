@@ -16,6 +16,8 @@ const schema = z.object({
   /** Optional. When set, the first-run setup page asks for it before creating the first administrator. */
   SETUP_KEY: z.string().min(8, 'SETUP_KEY must be at least 8 characters').optional(),
   ML_DAMAGE_URL: z.url().optional(),
+  /** Folder for uploaded photos (relative to backend/, or absolute). Never committed. */
+  UPLOAD_DIR: z.string().min(1).default('uploads'),
   ML_OCCUPANCY_URL: z.url().optional(),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });

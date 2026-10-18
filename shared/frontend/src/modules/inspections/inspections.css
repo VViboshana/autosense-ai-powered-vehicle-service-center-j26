@@ -1,0 +1,372 @@
+/*
+ * Damage inspection screens (component 2). Colours only through the theme tokens in theme/autosense.css.
+ * Outline colour comes from the .as-tone-* class on each shape (severity), via currentColor.
+ */
+
+/* ---------- Photo with damage outlines ---------- */
+.as-dmg-photo {
+  position: relative;
+  width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--as-neutral-soft);
+  border: 1px solid var(--as-line);
+}
+.as-dmg-photo img,
+.as-dmg-photo svg,
+.as-dmg-missing {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.as-dmg-photo img {
+  object-fit: fill; /* the box already has the photo's aspect ratio, so nothing is distorted */
+}
+.as-dmg-missing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  color: var(--as-muted);
+  font-size: 0.85rem;
+}
+.as-dmg-missing .bi {
+  font-size: 2rem;
+}
+.as-dmg-shape {
+  cursor: pointer;
+}
+/* The .as-tone-* classes set a soft background too; inside the SVG only their text colour is wanted */
+.as-dmg-photo .as-dmg-shape {
+  background: none;
+}
+.as-dmg-shape polygon {
+  fill: currentColor;
+  fill-opacity: 0.16;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+}
+.as-dmg-shape text {
+  fill: currentColor;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: var(--as-surface);
+  stroke-width: 4px;
+}
+.as-dmg-shape:hover polygon,
+.as-dmg-shape.on polygon {
+  fill-opacity: 0.32;
+  stroke-width: 4;
+}
+.as-dmg-shape.rejected polygon {
+  fill-opacity: 0.05;
+  stroke-dasharray: 6 5;
+}
+/* Possible damage: the model is less sure, so the outline is dotted and faint until a technician accepts it */
+.as-dmg-shape.possible polygon {
+  fill-opacity: 0.06;
+  stroke-width: 2;
+  stroke-dasharray: 2 4;
+  stroke-linecap: round;
+}
+.as-dmg-shape.possible.on polygon,
+.as-dmg-shape.possible:hover polygon {
+  fill-opacity: 0.2;
+}
+
+/* Drawing a missed region: crosshair, no scrolling while dragging, outlines don't catch the pointer */
+.as-dmg-photo.drawing {
+  cursor: crosshair;
+  box-shadow: var(--as-focus);
+  border-color: var(--as-primary);
+}
+.as-dmg-photo.drawing svg {
+  touch-action: none;
+}
+.as-dmg-photo.drawing .as-dmg-shape {
+  pointer-events: none;
+  opacity: 0.5;
+}
+.as-dmg-draft {
+  fill: var(--as-primary);
+  fill-opacity: 0.15;
+  stroke: var(--as-primary);
+  stroke-width: 2.5;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+}
+
+/* ---------- Possible damage list ---------- */
+.as-dmg-possible {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px dashed var(--as-line);
+}
+.as-dmg-possible h3 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0 0 0.2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.as-dmg-possible > p {
+  font-size: 0.78rem;
+  color: var(--as-muted);
+  margin: 0 0 0.6rem;
+}
+.as-dmg-item.possible {
+  border-style: dashed;
+  background: var(--as-surface-2);
+}
+.as-dmg-item.possible .as-dmg-no {
+  width: auto;
+  min-width: 1.5rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  border-style: dashed;
+}
+
+/* ---------- Review progress + keyboard hints ---------- */
+.as-dmg-progress {
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1rem;
+  display: grid;
+  gap: 0.55rem;
+}
+.as-dmg-bar {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--as-neutral-soft);
+  overflow: hidden;
+}
+.as-dmg-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--as-primary);
+  transition: width 0.25s ease;
+}
+.as-dmg-progress.done .as-dmg-bar i {
+  background: var(--as-success);
+}
+.as-dmg-progress.done b {
+  color: var(--as-success);
+}
+.as-dmg-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
+  font-size: 0.75rem;
+  color: var(--as-muted);
+}
+.as-dmg-keys kbd {
+  display: inline-block;
+  min-width: 1.35rem;
+  padding: 0.05rem 0.3rem;
+  margin-right: 0.2rem;
+  border: 1px solid var(--as-line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--as-surface);
+  color: var(--as-ink-2);
+  font: 600 0.7rem var(--as-mono);
+  text-align: center;
+}
+/* The keyboard only matters with a keyboard: hide the hints on touch screens */
+@media (hover: none) {
+  .as-dmg-keys {
+    display: none;
+  }
+}
+
+/* ---------- Region list beside the photo ---------- */
+.as-dmg-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+.as-dmg-item {
+  border: 1px solid var(--as-line);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  background: var(--as-surface);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  scroll-margin: 5rem; /* stays clear of the fixed top bar when scrolled into view */
+}
+.as-dmg-item.on {
+  border-color: var(--as-primary);
+  box-shadow: var(--as-focus);
+}
+.as-dmg-item-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.as-dmg-no {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 2px solid currentColor;
+}
+.as-dmg-item-head b {
+  margin-right: auto;
+}
+.as-dmg-was {
+  text-decoration: line-through;
+  color: var(--as-muted);
+  font-weight: 400;
+}
+.as-dmg-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  color: var(--as-ink-2);
+}
+.as-dmg-reason {
+  margin: 0.3rem 0 0;
+  font-size: 0.78rem;
+  color: var(--as-muted);
+}
+.as-dmg-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+  flex-wrap: wrap;
+}
+
+/* ---------- New inspection ---------- */
+.as-dmg-jobs {
+  display: grid;
+  gap: 0.5rem;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+.as-dmg-job {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--as-line);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  background: var(--as-surface);
+}
+.as-dmg-job:hover {
+  background: var(--as-hover);
+}
+.as-dmg-job[aria-pressed='true'] {
+  border-color: var(--as-primary);
+  background: var(--as-primary-soft);
+}
+.as-dmg-job .as-veh {
+  flex: 1;
+}
+/* Guided capture: one slot per side of the vehicle */
+.as-dmg-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
+  gap: 0.75rem;
+}
+.as-dmg-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  min-height: 12.5rem;
+  padding: 1rem 0.75rem;
+  border: 2px dashed var(--as-line);
+  border-radius: 12px;
+  background: var(--as-surface-2);
+  color: var(--as-muted);
+  font-size: 0.8rem;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.as-dmg-slot b {
+  color: var(--as-ink-2);
+  font-size: 0.9rem;
+}
+.as-dmg-slot:hover:not(:disabled),
+.as-dmg-slot:focus-visible {
+  border-color: var(--as-primary);
+  background: var(--as-primary-soft);
+  color: var(--as-primary);
+}
+.as-dmg-slot:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.as-dmg-side {
+  width: 6.5rem;
+  height: auto;
+  margin-bottom: 0.5rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.as-dmg-side .as-dmg-side-light {
+  stroke: var(--as-brand);
+}
+.as-dmg-shot {
+  border: 1px solid var(--as-line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--as-surface);
+  display: flex;
+  flex-direction: column;
+}
+.as-dmg-shot img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: var(--as-neutral-soft);
+}
+.as-dmg-shot-body {
+  padding: 0.55rem 0.65rem 0.6rem;
+  display: grid;
+  gap: 0.35rem;
+}
+.as-dmg-check {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.75rem;
+  font-size: 0.72rem;
+  color: var(--as-muted);
+}
+.as-dmg-shot-foot {
+  display: flex;
+  gap: 0.4rem;
+}
+/* After the upload: the bar is full and gently pulses while the server works */
+.as-dmg-bar.working i {
+  width: 100% !important;
+  animation: as-dmg-pulse 1.2s ease-in-out infinite;
+}
+@keyframes as-dmg-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .as-dmg-bar.working i {
+    animation: none;
+  }
+}
