@@ -3,6 +3,15 @@
  * Outline colour comes from the .as-tone-* class on each shape (severity), via currentColor.
  */
 
+/* Card content that is not a table (tables pad their own first and last columns): the same inset as the card head */
+.as-card-body {
+  padding: 0 1.25rem 1.25rem;
+}
+.as-card-note {
+  padding: 0.75rem 1.25rem 1.1rem;
+  margin: 0;
+}
+
 /* ---------- Photo with damage outlines ---------- */
 .as-dmg-photo {
   position: relative;
@@ -181,6 +190,149 @@
   .as-dmg-keys {
     display: none;
   }
+}
+
+/* ---------- Performance charts: small multiples (one hue) ---------- */
+.as-sm {
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.82rem;
+}
+.as-sm-row {
+  display: grid;
+  grid-template-columns: 8.5rem repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+  align-items: center;
+  padding: 0.3rem 0;
+}
+.as-sm-head {
+  align-items: end;
+  border-bottom: 1px solid var(--as-line);
+  padding-bottom: 0.5rem;
+}
+.as-sm-head b {
+  display: block;
+  color: var(--as-ink-2);
+  font-size: 0.8rem;
+}
+.as-sm-head small {
+  color: var(--as-muted);
+  font-size: 0.72rem;
+}
+.as-sm-total {
+  border-bottom: 1px solid var(--as-line-soft);
+  font-weight: 600;
+}
+.as-sm-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.as-sm-track {
+  flex: 1;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: var(--as-line-soft);
+  overflow: hidden;
+}
+.as-sm-track i {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: color-mix(in srgb, var(--as-primary) 75%, var(--as-surface));
+}
+.as-sm-track i.strong {
+  background: var(--as-primary);
+}
+.as-sm-value {
+  width: 2.6rem;
+  text-align: right;
+  color: var(--as-ink-2);
+}
+.as-sm-none {
+  color: var(--as-muted);
+  font-size: 0.75rem;
+}
+.as-sm-n {
+  width: 2.6rem;
+  color: var(--as-muted);
+  font-size: 0.7rem;
+}
+.as-sm-axis span {
+  display: flex;
+  justify-content: space-between;
+  margin-right: 6.2rem; /* the value and n columns, with their gaps */
+}
+.as-sm-axis i {
+  font-style: normal;
+  font-size: 0.68rem;
+  color: var(--as-muted);
+}
+@media (max-width: 767.98px) {
+  .as-sm-row {
+    grid-template-columns: 5.5rem repeat(3, minmax(0, 1fr));
+    gap: 0.6rem;
+  }
+  .as-sm-head small,
+  .as-sm-axis {
+    display: none;
+  }
+  .as-sm-cell {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.15rem;
+  }
+  .as-sm-value {
+    width: auto;
+    text-align: left;
+  }
+}
+
+/* ---------- Severity rule check: heatmap (one hue) ---------- */
+.as-heat {
+  display: grid;
+  gap: 4px;
+  max-width: 30rem;
+  font-size: 0.8rem;
+}
+.as-heat-row {
+  display: grid;
+  grid-template-columns: 7rem repeat(3, 1fr);
+  gap: 4px;
+  align-items: stretch;
+}
+.as-heat-corner {
+  font-size: 0.7rem;
+  color: var(--as-muted);
+  align-self: end;
+}
+.as-heat-col {
+  text-align: center;
+  font-weight: 600;
+  color: var(--as-ink-2);
+}
+.as-heat-rowh {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  color: var(--as-ink-2);
+}
+.as-heat-cell {
+  display: grid;
+  place-items: center;
+  height: 3rem;
+  border-radius: 6px;
+  background: var(--as-surface-2);
+  border: 1px solid var(--as-line-soft);
+  color: var(--as-ink-2);
+  font: 600 1rem var(--as-mono);
+}
+.as-heat-cell.dark {
+  color: var(--as-surface);
+}
+.as-heat-cell.agree {
+  outline: 2px solid var(--as-ink-2);
+  outline-offset: -2px;
 }
 
 /* ---------- Region list beside the photo ---------- */

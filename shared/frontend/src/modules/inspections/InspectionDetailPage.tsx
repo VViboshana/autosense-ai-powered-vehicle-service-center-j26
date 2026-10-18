@@ -64,7 +64,7 @@ export function InspectionDetailPage() {
     return (
       <div className="app-content pt-4">
         <div className="container-fluid">
-          <Card><Skeleton width="30%" /><div className="mt-3"><Skeleton width="100%" /></div></Card>
+          <Card><div className="as-card-body pt-3"><Skeleton width="30%" /><div className="mt-3"><Skeleton width="100%" /></div></div></Card>
         </div>
       </div>
     );
@@ -162,7 +162,7 @@ export function InspectionDetailPage() {
         <div className="container-fluid">
           {actionError && <Alert>{actionError}</Alert>}
 
-          <section className="as-card as-kpis" aria-label="Inspection summary">
+          <section className="as-card as-kpis mb-3" aria-label="Inspection summary">
             <div className="as-kpi">
               <span className="as-kpi-label"><i className="bi bi-exclamation-octagon" aria-hidden="true" />Overall severity</span>
               <span className="as-kpi-value" style={{ fontSize: '1.1rem' }}>
@@ -229,6 +229,7 @@ export function InspectionDetailPage() {
           {data.images.map((image) => (
             <Card
               key={image.imageId}
+              className="mb-3"
               icon="bi-camera"
               title={VIEW_ANGLES[image.viewAngle]}
               subtitle={photoFacts(image)}
@@ -243,6 +244,7 @@ export function InspectionDetailPage() {
                 ))
               }
             >
+              <div className="as-card-body">
               {drawingImage === image.imageId && (
                 <Alert tone="info">Drag a box around the damage the model missed, then choose its type and severity.</Alert>
               )}
@@ -314,6 +316,7 @@ export function InspectionDetailPage() {
                     );
                   })()}
                 </div>
+              </div>
               </div>
             </Card>
           ))}

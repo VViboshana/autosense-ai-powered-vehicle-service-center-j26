@@ -302,6 +302,29 @@ export async function reviewedRegions(db: Db) {
   };
 }
 
+export type TestSetMetrics = {
+  version: string;
+  split: string;
+  images: number;
+  regions: number;
+  mask: { precision: number; recall: number; mAP50: number; mAP50_95: number };
+  perClassMaskMAP50_95: Partial<Record<DamageLabel, number>>;
+};
+
+/**
+ * The test-set results of the model behind the field figures (the version used most recently with metrics stored);
+ * or, before any confirmed inspection, of the newest damage model with results. Null when none are stored.
+ */
+export async function testSetMetrics(db: Db, versions: string[]): Promise<TestSetMetrics | null> {
+  const { rows } = await db.query<{ version: string; metrics: Omit<TestSetMetrics, 'version'> }>(
+    `SELECT version, metrics FROM app.model_versions
+     WHERE component = 'damage' AND metrics ? 'mask' AND (cardinality($1::text[]) = 0 OR version = ANY($1))
+     ORDER BY registered_at DESC LIMIT 1`,
+    [versions],
+  );
+  return rows[0] ? { version: rows[0].version, ...rows[0].metrics } : null;
+}
+
 /** The vehicle an inspection is for: from the job when one is given (and it must match vehicleId if both are). */
 export async function findJobOrVehicle(db: Db, input: { jobId?: number; vehicleId?: number }) {
   if (input.jobId) {
