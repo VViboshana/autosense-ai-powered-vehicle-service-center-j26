@@ -227,20 +227,9 @@ body.as-app {
   text-decoration: none;
   padding: 0 0.35rem;
 }
-.as-brand svg {
-  width: 30px;
-  height: 30px;
+.as-brand img {
+  display: block;
   flex: none;
-}
-.as-brand-text {
-  font-weight: 700;
-  font-size: 1.08rem;
-  letter-spacing: -0.01em;
-  color: #fff;
-}
-.as-brand-text b {
-  color: var(--as-brand);
-  font-weight: 700;
 }
 .app-sidebar .nav-header {
   font-size: 0.68rem !important;

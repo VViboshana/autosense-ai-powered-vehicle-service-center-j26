@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useSession } from '@/app/session';
 import { Card } from '@/components/ui/Card';
@@ -23,8 +23,12 @@ import './inspections.css';
 export function InspectionDetailPage() {
   const { id } = useParams();
   const { can } = useSession();
-  const { data, error, loading, reload } = useApi<InspectionDetail>(`/inspections/${id}`);
+  const { data: loaded, error, loading, reload } = useApi<InspectionDetail>(`/inspections/${id}`);
+  // The latest version after a review action (optimistic, then the server's answer). A fresh load replaces it.
+  const [latest, setLatest] = useState<{ base: InspectionDetail; value: InspectionDetail } | null>(null);
+  const data = latest && loaded && latest.base === loaded ? latest.value : loaded;
   const [selected, setSelected] = useState<number | null>(null);
+  const [hovered, setHovered] = useState<number | null>(null);
   const [correcting, setCorrecting] = useState<Detection | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -41,6 +45,11 @@ export function InspectionDetailPage() {
     all.filter(isOpenSuggestion).forEach((d, n) => map.set(d.detectionId, `P${n + 1}`));
     return map;
   }, [data]);
+
+  // Keep the selected region in view when it changes (keyboard or click)
+  useEffect(() => {
+    if (selected !== null) document.querySelector(`[data-detection="${selected}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [selected]);
 
   if (error && !data) {
     return (
@@ -66,19 +75,39 @@ export function InspectionDetailPage() {
   const findings = all.filter(isFinding);
   const pending = findings.filter((d) => d.reviewStatus === 'pending').length;
   const possible = all.filter(isOpenSuggestion).length;
+  const order = [...numbers.keys()]; // regions in the order they are numbered: findings, then possible damage
+  const modalOpen = !!(correcting || confirming || adding || drawingImage);
 
+  /** Shows the decision at once, then the server's version; puts the page back if saving fails. */
   async function review(d: Detection, decision: 'confirmed' | 'rejected' | 'remove') {
+    if (busyId) return;
+    const base = loaded!;
+    const before = data!;
     setBusyId(d.detectionId);
     setActionError(null);
+    setLatest({ base, value: withDecision(before, d.detectionId, decision) });
     try {
-      const path = `/inspections/${data!.inspectionId}/detections/${d.detectionId}`;
-      await (decision === 'remove' ? apiSend('DELETE', path) : apiSend('PATCH', path, { decision }));
-      reload();
+      const path = `/inspections/${before.inspectionId}/detections/${d.detectionId}`;
+      const fresh = await (decision === 'remove'
+        ? apiSend<InspectionDetail>('DELETE', path)
+        : apiSend<InspectionDetail>('PATCH', path, { decision }));
+      setLatest({ base, value: fresh });
     } catch (err) {
+      setLatest({ base, value: before });
       setActionError(err instanceof ApiError ? err.message : 'The change could not be saved.');
     } finally {
       setBusyId(null);
     }
+  }
+
+  /** The next region after `from` that still needs a decision (wrapping round), for auto-advance. */
+  function nextOpen(from: number | null) {
+    const start = from === null ? -1 : order.indexOf(from);
+    for (let k = 1; k <= order.length; k++) {
+      const candidate = all.find((d) => d.detectionId === order[(start + k) % order.length]);
+      if (candidate && candidate.reviewStatus === 'pending' && candidate.detectionId !== from) return candidate.detectionId;
+    }
+    return null;
   }
 
   return (
@@ -158,6 +187,33 @@ export function InspectionDetailPage() {
             </div>
           </section>
 
+          {editable && (
+            <ReviewProgress
+              reviewed={findings.length - pending}
+              total={findings.length}
+              possible={possible}
+              canConfirm={can('INSPECTION_CONFIRM')}
+            />
+          )}
+          {editable && (
+            <ReviewKeys
+              disabled={modalOpen}
+              order={order}
+              selected={selected}
+              onMove={setSelected}
+              onDecide={(decision) => {
+                const d = all.find((x) => x.detectionId === selected);
+                if (!d || d.source === 'technician') return;
+                setSelected(nextOpen(d.detectionId) ?? d.detectionId);
+                void review(d, decision);
+              }}
+              onCorrect={() => {
+                const d = all.find((x) => x.detectionId === selected);
+                if (d && d.source !== 'technician') setCorrecting(d);
+              }}
+            />
+          )}
+
           <Alert tone="info">
             Damage is found by an AI model and the severity is a preliminary estimate ({data.severityMethod ?? 'rule-v0'}),
             {data.severityValidated ? ' validated against technician labels.' : ' not yet validated.'} Confidence is the model's
@@ -201,7 +257,9 @@ export function InspectionDetailPage() {
                     image={image}
                     numbers={numbers}
                     selected={selected}
+                    hovered={hovered}
                     onSelect={setSelected}
+                    onHover={setHovered}
                     drawing={drawingImage === image.imageId}
                     onDrawn={(bbox) => {
                       setDrawingImage(null);
@@ -216,10 +274,11 @@ export function InspectionDetailPage() {
                         key={d.detectionId}
                         d={d}
                         no={numbers.get(d.detectionId) ?? ''}
-                        on={selected === d.detectionId}
+                        on={selected === d.detectionId || hovered === d.detectionId}
                         editable={editable}
                         busy={busyId === d.detectionId}
                         onSelect={() => setSelected(d.detectionId)}
+                        onHover={(over) => setHovered(over ? d.detectionId : null)}
                         onConfirm={() => review(d, 'confirmed')}
                         onReject={() => review(d, 'rejected')}
                         onRemove={() => review(d, 'remove')}
@@ -297,6 +356,79 @@ export function InspectionDetailPage() {
   );
 }
 
+/** The inspection with one decision applied locally (shown before the server answers). */
+function withDecision(inspection: InspectionDetail, detectionId: number, decision: 'confirmed' | 'rejected' | 'remove'): InspectionDetail {
+  return {
+    ...inspection,
+    images: inspection.images.map((im) => ({
+      ...im,
+      detections:
+        decision === 'remove'
+          ? im.detections.filter((d) => d.detectionId !== detectionId)
+          : im.detections.map((d) => (d.detectionId === detectionId ? { ...d, reviewStatus: decision } : d)),
+    })),
+  };
+}
+
+function ReviewProgress({ reviewed, total, possible, canConfirm }: { reviewed: number; total: number; possible: number; canConfirm: boolean }) {
+  const done = reviewed === total;
+  return (
+    <section className={`as-card as-dmg-progress${done ? ' done' : ''}`} aria-label="Review progress">
+      <div className="d-flex justify-content-between align-items-baseline flex-wrap gap-2">
+        <b>{done ? (canConfirm ? 'Every region reviewed: ready to confirm' : 'Every region reviewed') : 'Review progress'}</b>
+        <span className="small text-body-secondary as-num">
+          {reviewed} of {total} {total === 1 ? 'region' : 'regions'} reviewed
+          {possible > 0 && ` · ${possible} possible damage to accept or dismiss`}
+        </span>
+      </div>
+      <div className="as-dmg-bar" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={reviewed}>
+        <i style={{ width: `${total ? (reviewed / total) * 100 : 100}%` }} />
+      </div>
+      <div className="as-dmg-keys">
+        <span><kbd>J</kbd><kbd>K</kbd> next / previous</span>
+        <span><kbd>C</kbd> confirm or accept</span>
+        <span><kbd>X</kbd> not damage or dismiss</span>
+        <span><kbd>E</kbd> correct</span>
+        <span><kbd>Esc</kbd> clear</span>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Keyboard review (renders nothing): J/K or arrows move through the regions, C/A confirm or accept, X reject or
+ * dismiss, E correct, Esc clears. Off while typing or while a dialog is open.
+ */
+function ReviewKeys({ disabled, order, selected, onMove, onDecide, onCorrect }: {
+  disabled: boolean;
+  order: number[];
+  selected: number | null;
+  onMove: (id: number | null) => void;
+  onDecide: (decision: 'confirmed' | 'rejected') => void;
+  onCorrect: () => void;
+}) {
+  useEffect(() => {
+    if (disabled) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (e.ctrlKey || e.metaKey || e.altKey || target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      const at = selected === null ? -1 : order.indexOf(selected);
+      const key = e.key.toLowerCase();
+      if ((key === 'j' || key === 'arrowdown') && order.length) onMove(order[Math.min(order.length - 1, at + 1)] ?? null);
+      else if ((key === 'k' || key === 'arrowup') && order.length) onMove(order[Math.max(0, at - 1)] ?? null);
+      else if (selected !== null && (key === 'c' || key === 'a')) onDecide('confirmed');
+      else if (selected !== null && key === 'x') onDecide('rejected');
+      else if (selected !== null && key === 'e') onCorrect();
+      else if (key === 'escape') onMove(null);
+      else return;
+      e.preventDefault();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [disabled, order, selected, onMove, onDecide, onCorrect]);
+  return null;
+}
+
 function photoFacts(image: InspectionDetail['images'][number]) {
   const parts = [];
   if (image.width && image.height) parts.push(`${image.width} × ${image.height}`);
@@ -307,13 +439,14 @@ function photoFacts(image: InspectionDetail['images'][number]) {
   return parts.join(' · ');
 }
 
-function RegionItem({ d, no, on, editable, busy, onSelect, onConfirm, onReject, onRemove, onCorrect }: {
+function RegionItem({ d, no, on, editable, busy, onSelect, onHover, onConfirm, onReject, onRemove, onCorrect }: {
   d: Detection;
   no: string;
   on: boolean;
   editable: boolean;
   busy: boolean;
   onSelect: () => void;
+  onHover: (over: boolean) => void;
   onConfirm: () => void;
   onReject: () => void;
   onRemove: () => void;
@@ -326,7 +459,13 @@ function RegionItem({ d, no, on, editable, busy, onSelect, onConfirm, onReject, 
   const tone = severity ? SEVERITY[severity].tone : 'muted';
   const relabelled = d.correctedLabel && d.correctedLabel !== d.label;
   return (
-    <li className={`as-dmg-item${on ? ' on' : ''}${open ? ' possible' : ''}`} onClick={onSelect}>
+    <li
+      className={`as-dmg-item${on ? ' on' : ''}${open ? ' possible' : ''}`}
+      data-detection={d.detectionId}
+      onClick={onSelect}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
+    >
       <div className="as-dmg-item-head">
         <span className={`as-dmg-no as-tone-${tone}`} style={{ background: 'none' }}>{no}</span>
         <b>

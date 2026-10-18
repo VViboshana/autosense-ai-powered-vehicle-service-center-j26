@@ -13,12 +13,15 @@ const MIN_BOX_PX = 8; // in photo pixels; a smaller box is a stray click, not a 
  * With `drawing` on, dragging on the photo (mouse, pen or finger) draws a box, returned in photo pixels by `onDrawn`:
  * the technician marks damage the model missed.
  */
-export function DamagePhoto({ image, numbers, selected, onSelect, drawing = false, onDrawn }: {
+export function DamagePhoto({ image, numbers, selected, hovered = null, onSelect, onHover, drawing = false, onDrawn }: {
   image: InspectionImage;
   /** Region label shown next to each outline (matches the list beside the photo): "3", or "P1" for possible damage. */
   numbers: Map<number, string>;
   selected: number | null;
+  /** The region under the pointer here or in the list beside the photo (both highlight together). */
+  hovered?: number | null;
   onSelect: (detectionId: number) => void;
+  onHover?: (detectionId: number | null) => void;
   drawing?: boolean;
   onDrawn?: (bbox: [number, number, number, number]) => void;
 }) {
@@ -83,8 +86,10 @@ export function DamagePhoto({ image, numbers, selected, onSelect, drawing = fals
           return (
             <g
               key={d.detectionId}
-              className={`as-dmg-shape as-tone-${tone}${selected === d.detectionId ? ' on' : ''}${d.reviewStatus === 'rejected' ? ' rejected' : ''}${open ? ' possible' : ''}`}
+              className={`as-dmg-shape as-tone-${tone}${selected === d.detectionId || hovered === d.detectionId ? ' on' : ''}${d.reviewStatus === 'rejected' ? ' rejected' : ''}${open ? ' possible' : ''}`}
               onClick={() => onSelect(d.detectionId)}
+              onMouseEnter={() => onHover?.(d.detectionId)}
+              onMouseLeave={() => onHover?.(null)}
             >
               <title>{`${numbers.get(d.detectionId)}. ${DAMAGE_LABELS[finalLabel(d)]}`}</title>
               <polygon points={outline(d)} />

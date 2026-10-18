@@ -258,6 +258,50 @@ export async function vehicleOptions(db: Db, search?: string): Promise<VehicleOp
   }));
 }
 
+/** Confirmed inspections from a real model (alias i): the demo data's '…-sample' model results are not measurements. */
+const MEASURED = `i.status = 'confirmed' AND NOT EXISTS (
+  SELECT 1 FROM app.model_versions s WHERE s.model_version_id = i.model_version_id AND s.version LIKE '%-sample')`;
+
+/** Every region of every confirmed inspection (final technician decisions), plus the sample's size, for the field figures. */
+export async function reviewedRegions(db: Db) {
+  const regions = await db.query(
+    `SELECT d.label, d.corrected_label, d.severity, d.corrected_severity, d.review_status, d.source, d.is_suggestion, d.confidence
+     FROM damage.detections d
+     JOIN damage.inspection_images im USING (image_id)
+     JOIN damage.inspections i ON i.inspection_id = im.inspection_id
+     WHERE ${MEASURED}`,
+  );
+  const sample = await db.query(
+    `SELECT count(DISTINCT i.inspection_id) AS inspections, count(im.image_id) AS photos,
+            round(avg(im.processing_ms)) AS avg_processing_ms, min(i.reviewed_at) AS since,
+            array_remove(array_agg(DISTINCT mv.version), NULL) AS model_versions
+     FROM damage.inspections i
+     LEFT JOIN damage.inspection_images im ON im.inspection_id = i.inspection_id
+     LEFT JOIN app.model_versions mv ON mv.model_version_id = i.model_version_id
+     WHERE ${MEASURED}`,
+  );
+  const s = sample.rows[0];
+  return {
+    regions: regions.rows.map((r) => ({
+      label: r.label,
+      correctedLabel: r.corrected_label,
+      severity: r.severity,
+      correctedSeverity: r.corrected_severity,
+      reviewStatus: r.review_status,
+      source: r.source,
+      isSuggestion: r.is_suggestion,
+      confidence: r.confidence,
+    })),
+    sample: {
+      inspections: s.inspections as number,
+      photos: s.photos as number,
+      avgProcessingMs: s.avg_processing_ms as number | null,
+      since: s.since as string | null,
+      modelVersions: s.model_versions as string[],
+    },
+  };
+}
+
 /** The vehicle an inspection is for: from the job when one is given (and it must match vehicleId if both are). */
 export async function findJobOrVehicle(db: Db, input: { jobId?: number; vehicleId?: number }) {
   if (input.jobId) {

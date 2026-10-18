@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
@@ -6,13 +6,17 @@ import { StatusPill } from '@/components/ui/StatusPill';
 import { formatDate, formatDuration, formatTime, minutesSince } from '@/lib/format';
 import { useApi } from '@/lib/useApi';
 import { STAGES } from '@/modules/dashboard/stages';
-import type { MyVehicle } from './customer.types';
+import type { InspectionReport, MyVehicle } from './customer.types';
+import { DamageMap } from './DamageMap';
+import { ReportPhoto } from './ReportPhoto';
+import { SEVERITY_TONE } from './severity';
+import './report.css';
 
 const JOURNEY = ['Checked in', 'Inspected', 'Waiting for a bay', 'In service', 'Ready for pickup'];
 const LABELS: Record<string, string> = {
   dent: 'Dent', scratch: 'Scratch', crack: 'Crack', glass_shatter: 'Broken glass', lamp_broken: 'Broken lamp', tire_flat: 'Flat tyre',
 };
-const SEVERITY_TONE = { minor: 'muted', moderate: 'warning', severe: 'danger' } as const;
+const VIEWS: Record<string, string> = { front: 'Front', rear: 'Rear', left: 'Left side', right: 'Right side', other: 'Close-up' };
 
 type Tab = 'status' | 'inspections' | 'maintenance' | 'safety';
 
@@ -65,7 +69,7 @@ export function MyVehiclePage() {
         </div>
         <div className="p-4">
           {current === 'status' && sections.status.available && <StatusTab status={sections.status.data} />}
-          {current === 'inspections' && sections.inspections.available && <InspectionsTab inspections={sections.inspections.data} />}
+          {current === 'inspections' && sections.inspections.available && <InspectionsTab vehicle={vehicle} inspections={sections.inspections.data} />}
           {current === 'maintenance' && (
             <EmptyState icon="bi-wrench-adjustable" title="No recommendations yet">
               Maintenance work the technician recommends for this vehicle will appear here.
@@ -128,7 +132,10 @@ function StatusTab({ status }: { status: Extract<MyVehicle['sections']['status']
   );
 }
 
-function InspectionsTab({ inspections }: { inspections: Extract<MyVehicle['sections']['inspections'], { available: true }>['data'] }) {
+function InspectionsTab({ vehicle, inspections }: {
+  vehicle: MyVehicle['vehicle'];
+  inspections: Extract<MyVehicle['sections']['inspections'], { available: true }>['data'];
+}) {
   if (inspections.length === 0) {
     return (
       <EmptyState icon="bi-clipboard-check" title="No inspection reports yet">
@@ -138,29 +145,113 @@ function InspectionsTab({ inspections }: { inspections: Extract<MyVehicle['secti
   }
   return (
     <div className="d-grid gap-3">
-      {inspections.map((i) => (
-        <section key={i.inspectionNo} className="as-card p-3">
-          <div className="d-flex justify-content-between flex-wrap gap-2 mb-2">
-            <b>Inspection {i.inspectionNo}</b>
-            <span className="small text-body-secondary">Confirmed {formatDate(i.confirmedAt)}</span>
-          </div>
-          {i.findings.length === 0 ? (
-            <p className="small mb-0 text-body-secondary">No visible damage was recorded.</p>
-          ) : (
-            <ul className="list-unstyled mb-0 d-grid gap-2">
-              {i.findings.map((f, n) => (
-                <li key={n} className="d-flex justify-content-between gap-2 small">
-                  <span>{LABELS[f.label] ?? f.label}{f.location ? ` · ${f.location}` : ''}</span>
-                  {f.severity && f.severity !== 'unavailable' && (
-                    <StatusPill tone={SEVERITY_TONE[f.severity as keyof typeof SEVERITY_TONE] ?? 'muted'}>{f.severity[0]!.toUpperCase() + f.severity.slice(1)}</StatusPill>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      ))}
+      {inspections.map((i) => <Report key={i.inspectionNo} vehicle={vehicle} i={i} />)}
       <p className="small text-body-secondary mb-0">Reports are checked by a technician. Severity is a guide, not a repair quote.</p>
     </div>
   );
 }
+
+/** Prints just this report (the browser's print dialog also saves it as a PDF); the rest of the page is hidden. */
+function printReport(section: HTMLElement) {
+  document.body.classList.add('as-printing');
+  section.classList.add('as-print-target');
+  const done = () => {
+    document.body.classList.remove('as-printing');
+    section.classList.remove('as-print-target');
+    window.removeEventListener('afterprint', done);
+  };
+  window.addEventListener('afterprint', done);
+  window.print();
+}
+
+function Report({ vehicle, i }: { vehicle: MyVehicle['vehicle']; i: InspectionReport }) {
+  const section = useRef<HTMLElement>(null);
+  const bySeverity = (['severe', 'moderate', 'minor'] as const)
+    .map((s) => [s, i.findings.filter((f) => f.severity === s).length] as const)
+    .filter(([, n]) => n > 0);
+
+  return (
+    <section ref={section} className="as-card p-3">
+      <div className="as-print-only mb-3">
+        <div className="fs-5 fw-semibold">AutoSense · Vehicle inspection report</div>
+        <div className="small text-body-secondary">
+          {vehicle.registrationNo} · {vehicle.description}{vehicle.colour ? ` · ${vehicle.colour}` : ''} · printed {formatDate(new Date())}
+        </div>
+        <hr />
+      </div>
+      <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+        <b>Inspection {i.inspectionNo}</b>
+        <span className="d-flex align-items-center gap-2 small text-body-secondary">
+          Confirmed {formatDate(i.confirmedAt)}
+          {i.overallSeverity ? (
+            i.overallSeverity !== 'unavailable' && <StatusPill tone={SEVERITY_TONE[i.overallSeverity] ?? 'muted'}>Overall: {severityText(i.overallSeverity)}</StatusPill>
+          ) : (
+            <StatusPill tone="success">No damage</StatusPill>
+          )}
+          <button type="button" className="btn btn-sm btn-light" onClick={() => section.current && printReport(section.current)}>
+            <i className="bi bi-printer me-1" aria-hidden="true" />Print / PDF
+          </button>
+        </span>
+      </div>
+      {i.notes && (
+        <p className="small mb-3"><i className="bi bi-chat-left-text me-1 text-body-secondary" aria-hidden="true" />Technician's note: {i.notes}</p>
+      )}
+      {i.findings.length === 0 ? (
+        <p className="small mb-0 text-body-secondary">No visible damage was recorded.</p>
+      ) : (
+        <div className="d-grid gap-3">
+          <div className="row g-3 align-items-center">
+            <div className="col-sm-5 col-md-4 d-flex justify-content-center">
+              <DamageMap findings={i.findings} />
+            </div>
+            <div className="col-sm-7 col-md-8">
+              <div className="small fw-semibold mb-2">
+                {i.findings.length} {i.findings.length === 1 ? 'damaged area' : 'damaged areas'} found and checked by a technician
+              </div>
+              <div className="as-report-counts mb-2">
+                {bySeverity.map(([s, n]) => (
+                  <StatusPill key={s} tone={SEVERITY_TONE[s] ?? 'muted'}>{n} {s}</StatusPill>
+                ))}
+              </div>
+              <p className="small text-body-secondary mb-0">
+                The numbers on the drawing match the photos and the list below. Severity is a guide to how serious the damage
+                looks, not a repair quote.
+              </p>
+            </div>
+          </div>
+          <div className="d-grid gap-3">
+              {i.photos.filter((p) => p.findings.length > 0).map((p) => (
+                <div key={p.imageId} className="row g-3 align-items-start">
+                  <div className="col-md-7">
+                    <ReportPhoto url={p.url} width={p.width} height={p.height} findings={p.findings} alt={`${VIEWS[p.viewAngle] ?? 'Vehicle'} photo`} />
+                  </div>
+                  <div className="col-md-5">
+                    <div className="small fw-semibold mb-2">{VIEWS[p.viewAngle] ?? 'Photo'}</div>
+                    <ol className="list-unstyled mb-0 d-grid gap-2">
+                      {p.findings.map((f) => (
+                        <li key={f.no} className="d-flex justify-content-between align-items-start gap-2 small">
+                          <span>
+                            <b className="me-1">{f.no}.</b>
+                            {LABELS[f.label] ?? f.label}
+                            {f.location && <span className="text-body-secondary"> · {f.location} of the photo</span>}
+                          </span>
+                          {f.severity && f.severity !== 'unavailable' && (
+                            <StatusPill tone={SEVERITY_TONE[f.severity] ?? 'muted'}>{severityText(f.severity)}</StatusPill>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+      <p className="as-print-only small text-body-secondary mt-3 mb-0">
+        Checked by a technician at the service centre. Severity is a guide, not a repair quote.
+      </p>
+    </section>
+  );
+}
+
+const severityText = (s: string) => s[0]!.toUpperCase() + s.slice(1);
