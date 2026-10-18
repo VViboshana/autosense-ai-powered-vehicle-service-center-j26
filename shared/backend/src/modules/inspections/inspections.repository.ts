@@ -18,6 +18,8 @@ export type InspectionListItem = {
   imageCount: number;
   detectionCount: number;
   pendingCount: number;
+  /** Possible damage (suggestions) nobody has accepted or dismissed yet. */
+  possibleCount: number;
   createdBy: string | null;
   createdAt: string;
   reviewedAt: string | null;
@@ -35,6 +37,8 @@ export type DetectionView = {
   severity: OverallSeverity;
   severityReason: string | null;
   source: 'model' | 'technician';
+  /** Possible damage: a weaker region the technician accepts (confirmed/corrected) or dismisses (rejected). */
+  suggestion: boolean;
   reviewStatus: 'pending' | ReviewDecision;
   correctedLabel: DamageLabel | null;
   correctedSeverity: Severity | null;
@@ -42,7 +46,7 @@ export type DetectionView = {
   reviewedAt: string | null;
 };
 
-export type InspectionDetail = Omit<InspectionListItem, 'imageCount' | 'detectionCount' | 'pendingCount' | 'vehicle'> & {
+export type InspectionDetail = Omit<InspectionListItem, 'imageCount' | 'detectionCount' | 'pendingCount' | 'possibleCount' | 'vehicle'> & {
   vehicle: { vehicleId: number; registrationNo: string; description: string };
   job: { jobId: number; jobNo: string } | null;
   severityMethod: string | null;
@@ -63,6 +67,9 @@ export type InspectionDetail = Omit<InspectionListItem, 'imageCount' | 'detectio
 };
 
 export type InspectionFilter = PageRequest & { status?: InspectionStatus; search?: string };
+
+/** A region counts as damage when it is a finding, or a suggestion a technician accepted (alias d). */
+const COUNTS_AS_FINDING = `(NOT d.is_suggestion OR d.review_status IN ('confirmed', 'corrected'))`;
 
 const USER_NAME = (alias: string) => `nullif(trim(${alias}.first_name || ' ' || ${alias}.last_name), '')`;
 
@@ -94,9 +101,11 @@ export async function listInspections(db: Db, f: InspectionFilter): Promise<Page
             ${USER_NAME('cu')} AS created_by,
             (SELECT count(*) FROM damage.inspection_images im WHERE im.inspection_id = i.inspection_id) AS image_count,
             (SELECT count(*) FROM damage.detections d JOIN damage.inspection_images im USING (image_id)
-              WHERE im.inspection_id = i.inspection_id) AS detection_count,
+              WHERE im.inspection_id = i.inspection_id AND ${COUNTS_AS_FINDING}) AS detection_count,
             (SELECT count(*) FROM damage.detections d JOIN damage.inspection_images im USING (image_id)
-              WHERE im.inspection_id = i.inspection_id AND d.review_status = 'pending') AS pending_count
+              WHERE im.inspection_id = i.inspection_id AND d.review_status = 'pending' AND NOT d.is_suggestion) AS pending_count,
+            (SELECT count(*) FROM damage.detections d JOIN damage.inspection_images im USING (image_id)
+              WHERE im.inspection_id = i.inspection_id AND d.review_status = 'pending' AND d.is_suggestion) AS possible_count
      ${from}
      ORDER BY i.created_at ${order}, i.inspection_id ${order}
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
@@ -114,6 +123,7 @@ export async function listInspections(db: Db, f: InspectionFilter): Promise<Page
       imageCount: r.image_count,
       detectionCount: r.detection_count,
       pendingCount: r.pending_count,
+      possibleCount: r.possible_count,
       createdBy: r.created_by,
       createdAt: r.created_at,
       reviewedAt: r.reviewed_at,
@@ -192,6 +202,7 @@ export async function getInspection(db: Db, id: number): Promise<InspectionDetai
           severity: d.severity,
           severityReason: d.severity_reason,
           source: d.source,
+          suggestion: d.is_suggestion,
           reviewStatus: d.review_status,
           correctedLabel: d.corrected_label,
           correctedSeverity: d.corrected_severity,
@@ -306,14 +317,63 @@ export async function insertImage(
 export async function insertDetection(
   db: Db,
   d: { imageId: number; label: DamageLabel; confidence: number; bbox: number[]; polygon: number[][]; areaPx: number;
-       areaRatioVehicle: number | null; location: string | null; severity: string | null; severityReason: string | null },
+       areaRatioVehicle: number | null; location: string | null; severity: string | null; severityReason: string | null;
+       isSuggestion: boolean },
 ) {
   await db.query(
-    `INSERT INTO damage.detections (image_id, label, confidence, bbox, polygon, area_px, area_ratio_vehicle, location, severity, severity_reason)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    `INSERT INTO damage.detections (image_id, label, confidence, bbox, polygon, area_px, area_ratio_vehicle, location, severity,
+                                    severity_reason, is_suggestion)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     [d.imageId, d.label, d.confidence, JSON.stringify(d.bbox), JSON.stringify(d.polygon), Math.round(d.areaPx),
-     d.areaRatioVehicle, d.location?.slice(0, 40) ?? null, d.severity, d.severityReason?.slice(0, 200) ?? null],
+     d.areaRatioVehicle, d.location?.slice(0, 40) ?? null, d.severity, d.severityReason?.slice(0, 200) ?? null, d.isSuggestion],
   );
+}
+
+/** A photo of the inspection, with its size (to check that a drawn box lies on it). */
+export async function inspectionImage(db: Db, inspectionId: number, imageId: number) {
+  const { rows } = await db.query<{ image_id: number; width: number | null; height: number | null }>(
+    'SELECT image_id, width, height FROM damage.inspection_images WHERE inspection_id = $1 AND image_id = $2',
+    [inspectionId, imageId],
+  );
+  return rows[0] ?? null;
+}
+
+/** Damage the model missed, drawn by a technician: no confidence, confirmed by the person who drew it. */
+export async function insertTechnicianRegion(
+  db: Db,
+  r: { imageId: number; label: DamageLabel; severity: Severity; bbox: number[]; userId: number },
+): Promise<number> {
+  const [x1 = 0, y1 = 0, x2 = 0, y2 = 0] = r.bbox;
+  const { rows } = await db.query<{ detection_id: number }>(
+    `INSERT INTO damage.detections (image_id, label, confidence, bbox, polygon, area_px, severity, severity_reason, source,
+                                    review_status, reviewed_by, reviewed_at)
+     VALUES ($1, $2, NULL, $3, $4, $5, $6, 'Added by the technician', 'technician', 'confirmed', $7, now())
+     RETURNING detection_id`,
+    [r.imageId, r.label, JSON.stringify(r.bbox), JSON.stringify([[x1, y1], [x2, y1], [x2, y2], [x1, y2]]),
+     (x2 - x1) * (y2 - y1), r.severity, r.userId],
+  );
+  return rows[0]!.detection_id;
+}
+
+/** Removes a region a technician added (only those: the model's regions are kept and rejected instead). */
+export async function deleteTechnicianRegion(db: Db, inspectionId: number, detectionId: number): Promise<boolean> {
+  const { rowCount } = await db.query(
+    `DELETE FROM damage.detections d USING damage.inspection_images im
+     WHERE d.detection_id = $2 AND d.image_id = im.image_id AND im.inspection_id = $1 AND d.source = 'technician'`,
+    [inspectionId, detectionId],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+/** Possible damage still undecided becomes dismissed by the person confirming. Returns how many. */
+export async function dismissOpenSuggestions(db: Db, inspectionId: number, userId: number): Promise<number> {
+  const { rowCount } = await db.query(
+    `UPDATE damage.detections d SET review_status = 'rejected', reviewed_by = $2, reviewed_at = now()
+     FROM damage.inspection_images im
+     WHERE im.image_id = d.image_id AND im.inspection_id = $1 AND d.is_suggestion AND d.review_status = 'pending'`,
+    [inspectionId, userId],
+  );
+  return rowCount ?? 0;
 }
 
 /** The inspection, locked for the rest of the transaction (so two people cannot confirm or review it at once). */
@@ -326,8 +386,8 @@ export async function lockInspection(db: Db, id: number) {
 }
 
 export async function detectionsForReview(db: Db, inspectionId: number) {
-  const { rows } = await db.query<{ detection_id: number; label: DamageLabel; severity: string | null; review_status: string; corrected_label: DamageLabel | null; corrected_severity: string | null }>(
-    `SELECT d.detection_id, d.label, d.severity, d.review_status, d.corrected_label, d.corrected_severity
+  const { rows } = await db.query<{ detection_id: number; label: DamageLabel; severity: string | null; review_status: string; corrected_label: DamageLabel | null; corrected_severity: string | null; is_suggestion: boolean }>(
+    `SELECT d.detection_id, d.label, d.severity, d.review_status, d.corrected_label, d.corrected_severity, d.is_suggestion
      FROM damage.detections d JOIN damage.inspection_images im USING (image_id)
      WHERE im.inspection_id = $1 ORDER BY d.detection_id`,
     [inspectionId],

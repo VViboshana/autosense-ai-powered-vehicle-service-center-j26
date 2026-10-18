@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { Router } from 'express';
 import type pg from 'pg';
 import { z } from 'zod';
@@ -19,17 +20,98 @@ const claimBody = z.object({
   note: z.string().trim().max(300).optional().transform((s) => s || null),
 });
 const idParam = z.object({ id: z.coerce.number().int().positive() });
+const photoParams = idParam.extend({
+  inspectionId: z.coerce.number().int().positive(),
+  imageId: z.coerce.number().int().positive(),
+});
 
 /**
  * The customer side (/api/my/*). Rule for every query here: filter by the signed-in customer's id
  * (req.user.customerId), and show a vehicle only through an APPROVED request. Never accept a customer id from the
  * request. Customers see confirmed inspections only, never the unreviewed AI result.
  */
-export function myRoutes(pool: pg.Pool) {
+export function myRoutes(pool: pg.Pool, uploadDir: string) {
   const router = Router();
   router.use(requireCustomer());
 
   const customerId = (req: Parameters<typeof signedInUser>[0]) => signedInUser(req).customerId!;
+
+  /**
+   * A vehicle's confirmed inspection reports, as the customer sees them: the technician-checked regions only (never
+   * rejected ones, possible damage nobody accepted, or the model's confidence), with the technician's corrections,
+   * the photos with those regions outlined, the overall severity and the technician's note.
+   */
+  async function confirmedInspections(vehicleId: number) {
+    const heads = await pool.query(
+      `SELECT inspection_id, inspection_no, reviewed_at, overall_severity, review_notes
+       FROM damage.inspections WHERE vehicle_id = $1 AND status = 'confirmed' ORDER BY reviewed_at DESC`,
+      [vehicleId],
+    );
+    if (!heads.rows.length) return [];
+    const ids = heads.rows.map((r) => r.inspection_id);
+    const images = await pool.query(
+      'SELECT image_id, inspection_id, view_angle, width, height FROM damage.inspection_images WHERE inspection_id = ANY($1) ORDER BY image_id',
+      [ids],
+    );
+    const regions = await pool.query(
+      `SELECT d.detection_id, d.image_id, COALESCE(d.corrected_label, d.label) AS label,
+              COALESCE(d.corrected_severity, d.severity) AS severity, d.location, d.bbox, d.polygon
+       FROM damage.detections d JOIN damage.inspection_images im USING (image_id)
+       WHERE im.inspection_id = ANY($1) AND d.review_status <> 'rejected'
+         AND (NOT d.is_suggestion OR d.review_status IN ('confirmed', 'corrected'))
+       ORDER BY d.detection_id`,
+      [ids],
+    );
+    return heads.rows.map((h) => {
+      let no = 0; // numbered across the report's photos, matching the list under them
+      const photos = images.rows
+        .filter((im) => im.inspection_id === h.inspection_id)
+        .map((im) => ({
+          imageId: im.image_id,
+          viewAngle: im.view_angle,
+          width: im.width,
+          height: im.height,
+          url: `/api/my/vehicles/${vehicleId}/inspections/${h.inspection_id}/photos/${im.image_id}`,
+          findings: regions.rows
+            .filter((d) => d.image_id === im.image_id)
+            .map((d) => ({ no: ++no, label: d.label, severity: d.severity, location: d.location, bbox: d.bbox, polygon: d.polygon })),
+        }));
+      return {
+        inspectionId: h.inspection_id,
+        inspectionNo: h.inspection_no,
+        confirmedAt: h.reviewed_at,
+        overallSeverity: h.overall_severity,
+        notes: h.review_notes,
+        photos,
+        findings: photos.flatMap((p) => p.findings.map((f) => ({ ...f, viewAngle: p.viewAngle }))),
+      };
+    });
+  }
+
+  /**
+   * A photo from one of my confirmed inspections. Checked step by step: my approved vehicle, an inspection of that
+   * vehicle that is confirmed, and a photo of that inspection; anything else is "not found" (no hint that it exists).
+   */
+  router.get('/vehicles/:id/inspections/:inspectionId/photos/:imageId', async (req, res) => {
+    const me = customerId(req);
+    const p = parse(photoParams, req.params);
+    const { rows } = await pool.query<{ storage_key: string }>(
+      `SELECT im.storage_key
+       FROM workshop.vehicle_claims vc
+       JOIN damage.inspections i ON i.vehicle_id = vc.vehicle_id AND i.status = 'confirmed'
+       JOIN damage.inspection_images im ON im.inspection_id = i.inspection_id
+       WHERE vc.customer_id = $1 AND vc.status = 'approved' AND vc.vehicle_id = $2 AND i.inspection_id = $3 AND im.image_id = $4`,
+      [me, p.id, p.inspectionId, p.imageId],
+    );
+    const key = rows[0]?.storage_key;
+    if (!key) throw new NotFoundError('Photo not found.');
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    await new Promise<void>((resolve, reject) =>
+      res.sendFile(key, { root: path.resolve(uploadDir), dotfiles: 'deny' }, (err) =>
+        err ? reject(res.headersSent ? err : new NotFoundError('This photo is not stored on this server.')) : resolve(),
+      ),
+    );
+  });
 
   /** My vehicles, with where each one is today, plus my requests that are waiting or were turned down. */
   router.get('/vehicles', async (req, res) => {
@@ -156,29 +238,7 @@ export function myRoutes(pool: pg.Pool) {
     }
 
     let inspections = null;
-    if (can('MY_INSPECTIONS')) {
-      const rows = await pool.query(
-        `SELECT i.inspection_id, i.inspection_no, i.reviewed_at, i.overall_severity,
-                COALESCE(json_agg(json_build_object(
-                  'label', COALESCE(d.corrected_label, d.label),
-                  'location', d.location,
-                  'severity', COALESCE(d.corrected_severity, d.severity)
-                ) ORDER BY d.detection_id) FILTER (WHERE d.detection_id IS NOT NULL), '[]') AS findings
-         FROM damage.inspections i
-         LEFT JOIN damage.inspection_images im ON im.inspection_id = i.inspection_id
-         LEFT JOIN damage.detections d ON d.image_id = im.image_id AND d.review_status <> 'rejected'
-         WHERE i.vehicle_id = $1 AND i.status = 'confirmed'
-         GROUP BY i.inspection_id
-         ORDER BY i.reviewed_at DESC`,
-        [id],
-      );
-      inspections = rows.rows.map((r) => ({
-        inspectionNo: r.inspection_no,
-        confirmedAt: r.reviewed_at,
-        overallSeverity: r.overall_severity,
-        findings: r.findings,
-      }));
-    }
+    if (can('MY_INSPECTIONS')) inspections = await confirmedInspections(id);
 
     sendOk(res, {
       vehicle: {

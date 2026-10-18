@@ -128,12 +128,18 @@ export function InspectionListPage({ mode }: { mode: 'review' | 'history' }) {
                             <td className="as-num text-end">{i.imageCount}</td>
                             <td className="small">
                               {i.detectionCount === 0 ? (
-                                <span className="text-body-secondary">None</span>
+                                <span className="text-body-secondary">
+                                  None
+                                  {i.status === 'awaiting_review' && i.possibleCount > 0 && <div>{i.possibleCount} possible</div>}
+                                </span>
                               ) : (
                                 <>
                                   {i.detectionCount} {i.detectionCount === 1 ? 'region' : 'regions'}
                                   {i.status === 'awaiting_review' && i.pendingCount > 0 && (
                                     <div className="text-body-secondary">{i.pendingCount} to review</div>
+                                  )}
+                                  {i.status === 'awaiting_review' && i.possibleCount > 0 && (
+                                    <div className="text-body-secondary">{i.possibleCount} possible</div>
                                   )}
                                 </>
                               )}

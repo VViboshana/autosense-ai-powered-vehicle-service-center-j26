@@ -12,7 +12,7 @@ import { formatDate, formatTime } from '@/lib/format';
 import { useApi } from '@/lib/useApi';
 import { DamagePhoto } from './DamagePhoto';
 import type { DamageLabel, Detection, InspectionDetail, Severity } from './inspections.types';
-import { DAMAGE_LABELS, REVIEW, SEVERITY, STATUS, VIEW_ANGLES, finalLabel, finalSeverity, percent } from './inspections.ui';
+import { DAMAGE_LABELS, REVIEW, SEVERITY, STATUS, VIEW_ANGLES, finalLabel, finalSeverity, isFinding, isOpenSuggestion, percent } from './inspections.ui';
 import './inspections.css';
 
 /**
@@ -29,11 +29,16 @@ export function InspectionDetailPage() {
   const [confirming, setConfirming] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [drawingImage, setDrawingImage] = useState<number | null>(null);
+  const [adding, setAdding] = useState<{ imageId: number; bbox: [number, number, number, number] } | null>(null);
 
-  // Region numbers run across all photos, so "3" means the same region on the photo and in the list
+  // Region numbers run across all photos, so "3" means the same region on the photo and in the list.
+  // Possible damage is numbered P1, P2...; dismissed possible damage gets no number and is not drawn.
   const numbers = useMemo(() => {
-    const map = new Map<number, number>();
-    data?.images.flatMap((im) => im.detections).forEach((d, n) => map.set(d.detectionId, n + 1));
+    const map = new Map<number, string>();
+    const all = data?.images.flatMap((im) => im.detections) ?? [];
+    all.filter(isFinding).forEach((d, n) => map.set(d.detectionId, String(n + 1)));
+    all.filter(isOpenSuggestion).forEach((d, n) => map.set(d.detectionId, `P${n + 1}`));
     return map;
   }, [data]);
 
@@ -58,13 +63,16 @@ export function InspectionDetailPage() {
 
   const editable = data.status === 'awaiting_review' && can('INSPECTION_REVIEW');
   const all = data.images.flatMap((im) => im.detections);
-  const pending = all.filter((d) => d.reviewStatus === 'pending').length;
+  const findings = all.filter(isFinding);
+  const pending = findings.filter((d) => d.reviewStatus === 'pending').length;
+  const possible = all.filter(isOpenSuggestion).length;
 
-  async function review(d: Detection, decision: 'confirmed' | 'rejected') {
+  async function review(d: Detection, decision: 'confirmed' | 'rejected' | 'remove') {
     setBusyId(d.detectionId);
     setActionError(null);
     try {
-      await apiSend('PATCH', `/inspections/${data!.inspectionId}/detections/${d.detectionId}`, { decision });
+      const path = `/inspections/${data!.inspectionId}/detections/${d.detectionId}`;
+      await (decision === 'remove' ? apiSend('DELETE', path) : apiSend('PATCH', path, { decision }));
       reload();
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'The change could not be saved.');
@@ -138,11 +146,11 @@ export function InspectionDetailPage() {
             </div>
             <div className="as-kpi">
               <span className="as-kpi-label"><i className="bi bi-bounding-box" aria-hidden="true" />Damage regions</span>
-              <span className="as-kpi-value">{all.filter((d) => d.reviewStatus !== 'rejected').length}<small>of {all.length} found</small></span>
+              <span className="as-kpi-value">{findings.filter((d) => d.reviewStatus !== 'rejected').length}<small>of {findings.length} found</small></span>
             </div>
             <div className="as-kpi">
               <span className="as-kpi-label"><i className="bi bi-hourglass-split" aria-hidden="true" />To review</span>
-              <span className="as-kpi-value">{pending}</span>
+              <span className="as-kpi-value">{pending}{possible > 0 && <small>+ {possible} possible</small>}</span>
             </div>
             <div className="as-kpi">
               <span className="as-kpi-label"><i className="bi bi-cpu" aria-hidden="true" />Model</span>
@@ -163,7 +171,25 @@ export function InspectionDetailPage() {
           )}
 
           {data.images.map((image) => (
-            <Card key={image.imageId} icon="bi-camera" title={VIEW_ANGLES[image.viewAngle]} subtitle={photoFacts(image)}>
+            <Card
+              key={image.imageId}
+              icon="bi-camera"
+              title={VIEW_ANGLES[image.viewAngle]}
+              subtitle={photoFacts(image)}
+              actions={
+                editable &&
+                (drawingImage === image.imageId ? (
+                  <button type="button" className="btn btn-sm btn-light" onClick={() => setDrawingImage(null)}>Cancel</button>
+                ) : (
+                  <button type="button" className="btn btn-sm btn-light" onClick={() => setDrawingImage(image.imageId)}>
+                    <i className="bi bi-bounding-box-circles me-1" aria-hidden="true" />Add missed damage
+                  </button>
+                ))
+              }
+            >
+              {drawingImage === image.imageId && (
+                <Alert tone="info">Drag a box around the damage the model missed, then choose its type and severity.</Alert>
+              )}
               {image.quality.warnings && image.quality.warnings.length > 0 && (
                 <Alert tone="warning">
                   Photo quality: {image.quality.warnings.join(' ')} Results from this photo may be less reliable.
@@ -171,29 +197,63 @@ export function InspectionDetailPage() {
               )}
               <div className="row g-3">
                 <div className="col-lg-7">
-                  <DamagePhoto image={image} numbers={numbers} selected={selected} onSelect={setSelected} />
+                  <DamagePhoto
+                    image={image}
+                    numbers={numbers}
+                    selected={selected}
+                    onSelect={setSelected}
+                    drawing={drawingImage === image.imageId}
+                    onDrawn={(bbox) => {
+                      setDrawingImage(null);
+                      setAdding({ imageId: image.imageId, bbox });
+                    }}
+                  />
                 </div>
                 <div className="col-lg-5">
-                  {image.detections.length === 0 ? (
-                    <p className="text-body-secondary small mb-0">No damage was found in this photo.</p>
-                  ) : (
-                    <ol className="as-dmg-list" aria-label="Damage found">
-                      {image.detections.map((d) => (
-                        <RegionItem
-                          key={d.detectionId}
-                          d={d}
-                          no={numbers.get(d.detectionId) ?? 0}
-                          on={selected === d.detectionId}
-                          editable={editable}
-                          busy={busyId === d.detectionId}
-                          onSelect={() => setSelected(d.detectionId)}
-                          onConfirm={() => review(d, 'confirmed')}
-                          onReject={() => review(d, 'rejected')}
-                          onCorrect={() => setCorrecting(d)}
-                        />
-                      ))}
-                    </ol>
-                  )}
+                  {(() => {
+                    const item = (d: Detection) => (
+                      <RegionItem
+                        key={d.detectionId}
+                        d={d}
+                        no={numbers.get(d.detectionId) ?? ''}
+                        on={selected === d.detectionId}
+                        editable={editable}
+                        busy={busyId === d.detectionId}
+                        onSelect={() => setSelected(d.detectionId)}
+                        onConfirm={() => review(d, 'confirmed')}
+                        onReject={() => review(d, 'rejected')}
+                        onRemove={() => review(d, 'remove')}
+                        onCorrect={() => setCorrecting(d)}
+                      />
+                    );
+                    const found = image.detections.filter(isFinding);
+                    const open = image.detections.filter(isOpenSuggestion);
+                    const dismissed = image.detections.filter((d) => d.suggestion && d.reviewStatus === 'rejected').length;
+                    return (
+                      <>
+                        {found.length === 0 ? (
+                          <p className="text-body-secondary small mb-0">No damage was found in this photo.</p>
+                        ) : (
+                          <ol className="as-dmg-list" aria-label="Damage found">{found.map(item)}</ol>
+                        )}
+                        {open.length > 0 && (
+                          <section className="as-dmg-possible" aria-label="Possible damage">
+                            <h3><i className="bi bi-question-circle" aria-hidden="true" />Possible damage</h3>
+                            <p>
+                              The model is less sure about these (confidence under 25%). Accept the ones that are real damage;
+                              the rest are dismissed when the inspection is confirmed.
+                            </p>
+                            <ol className="as-dmg-list">{open.map(item)}</ol>
+                          </section>
+                        )}
+                        {dismissed > 0 && (
+                          <p className="small text-body-secondary mt-2 mb-0">
+                            {dismissed} possible {dismissed === 1 ? 'region was' : 'regions were'} dismissed.
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             </Card>
@@ -208,6 +268,17 @@ export function InspectionDetailPage() {
           onClose={() => setCorrecting(null)}
           onDone={() => {
             setCorrecting(null);
+            reload();
+          }}
+        />
+      )}
+      {adding && (
+        <AddRegionDialog
+          inspectionId={data.inspectionId}
+          {...adding}
+          onClose={() => setAdding(null)}
+          onDone={() => {
+            setAdding(null);
             reload();
           }}
         />
@@ -230,54 +301,80 @@ function photoFacts(image: InspectionDetail['images'][number]) {
   const parts = [];
   if (image.width && image.height) parts.push(`${image.width} × ${image.height}`);
   if (image.processingMs != null) parts.push(`analysed in ${(image.processingMs / 1000).toFixed(1)} s`);
-  parts.push(`${image.detections.length} ${image.detections.length === 1 ? 'region' : 'regions'}`);
+  const found = image.detections.filter(isFinding).length;
+  const open = image.detections.filter(isOpenSuggestion).length;
+  parts.push(`${found} ${found === 1 ? 'region' : 'regions'}${open ? ` + ${open} possible` : ''}`);
   return parts.join(' · ');
 }
 
-function RegionItem({ d, no, on, editable, busy, onSelect, onConfirm, onReject, onCorrect }: {
+function RegionItem({ d, no, on, editable, busy, onSelect, onConfirm, onReject, onRemove, onCorrect }: {
   d: Detection;
-  no: number;
+  no: string;
   on: boolean;
   editable: boolean;
   busy: boolean;
   onSelect: () => void;
   onConfirm: () => void;
   onReject: () => void;
+  onRemove: () => void;
   onCorrect: () => void;
 }) {
-  const severity = finalSeverity(d);
+  const added = d.source === 'technician';
+  const open = isOpenSuggestion(d);
+  // Possible damage shows the severity it would get if accepted
+  const severity = open ? d.severity : finalSeverity(d);
   const tone = severity ? SEVERITY[severity].tone : 'muted';
   const relabelled = d.correctedLabel && d.correctedLabel !== d.label;
   return (
-    <li className={`as-dmg-item${on ? ' on' : ''}`} onClick={onSelect}>
+    <li className={`as-dmg-item${on ? ' on' : ''}${open ? ' possible' : ''}`} onClick={onSelect}>
       <div className="as-dmg-item-head">
         <span className={`as-dmg-no as-tone-${tone}`} style={{ background: 'none' }}>{no}</span>
         <b>
           {relabelled && <span className="as-dmg-was me-1">{DAMAGE_LABELS[d.label]}</span>}
           {DAMAGE_LABELS[finalLabel(d)]}
         </b>
-        {severity && <StatusPill tone={SEVERITY[severity].tone}>{SEVERITY[severity].label}</StatusPill>}
-        <StatusPill tone={REVIEW[d.reviewStatus].tone}>{REVIEW[d.reviewStatus].label}</StatusPill>
+        {severity && <StatusPill tone={SEVERITY[severity].tone}>{open ? `${SEVERITY[severity].label} if accepted` : SEVERITY[severity].label}</StatusPill>}
+        {open ? (
+          <StatusPill tone="muted">Possible</StatusPill>
+        ) : added ? (
+          <StatusPill tone="brand">Added</StatusPill>
+        ) : (
+          <StatusPill tone={REVIEW[d.reviewStatus].tone}>{REVIEW[d.reviewStatus].label}</StatusPill>
+        )}
       </div>
-      <div className="as-dmg-facts">
-        <span>Confidence {percent(d.confidence)}</span>
-        {d.areaRatioVehicle != null && <span>{percent(d.areaRatioVehicle, 1)} of vehicle</span>}
-        {d.location && <span>{d.location}</span>}
-      </div>
-      {d.severityReason && <p className="as-dmg-reason">{d.severityReason}</p>}
-      {d.reviewedBy && d.reviewStatus !== 'pending' && (
-        <p className="as-dmg-reason">{REVIEW[d.reviewStatus].label} by {d.reviewedBy}</p>
+      {d.suggestion && !open && <p className="as-dmg-reason mb-0">Suggested by the model at low confidence, accepted by the technician.</p>}
+      {added ? (
+        <p className="as-dmg-reason">Missed by the model; added by {d.reviewedBy ?? 'a technician'}.</p>
+      ) : (
+        <>
+          <div className="as-dmg-facts">
+            <span>Confidence {percent(d.confidence)}</span>
+            {d.areaRatioVehicle != null && <span>{percent(d.areaRatioVehicle, 1)} of vehicle</span>}
+            {d.location && <span>{d.location}</span>}
+          </div>
+          {d.severityReason && <p className="as-dmg-reason">{d.severityReason}</p>}
+          {d.reviewedBy && d.reviewStatus !== 'pending' && (
+            <p className="as-dmg-reason">{REVIEW[d.reviewStatus].label} by {d.reviewedBy}</p>
+          )}
+        </>
       )}
-      {editable && (
+      {editable && added && (
+        <div className="as-dmg-actions" onClick={(e) => e.stopPropagation()}>
+          <button type="button" className="btn btn-sm btn-light" disabled={busy} onClick={onRemove}>
+            <i className="bi bi-trash me-1" aria-hidden="true" />Remove
+          </button>
+        </div>
+      )}
+      {editable && !added && (
         <div className="as-dmg-actions" onClick={(e) => e.stopPropagation()}>
           <button type="button" className="btn btn-sm btn-light" disabled={busy || d.reviewStatus === 'confirmed'} onClick={onConfirm}>
-            <i className="bi bi-check-lg me-1" aria-hidden="true" />Confirm
+            <i className="bi bi-check-lg me-1" aria-hidden="true" />{open ? 'Accept' : 'Confirm'}
           </button>
           <button type="button" className="btn btn-sm btn-light" disabled={busy} onClick={onCorrect}>
-            <i className="bi bi-pencil me-1" aria-hidden="true" />Correct
+            <i className="bi bi-pencil me-1" aria-hidden="true" />{open ? 'Accept as…' : 'Correct'}
           </button>
           <button type="button" className="btn btn-sm btn-light" disabled={busy || d.reviewStatus === 'rejected'} onClick={onReject}>
-            <i className="bi bi-x-lg me-1" aria-hidden="true" />Not damage
+            <i className="bi bi-x-lg me-1" aria-hidden="true" />{open ? 'Dismiss' : 'Not damage'}
           </button>
         </div>
       )}
@@ -335,11 +432,67 @@ function CorrectDialog({ inspectionId, d, onClose, onDone }: { inspectionId: num
   );
 }
 
+function AddRegionDialog({ inspectionId, imageId, bbox, onClose, onDone }: {
+  inspectionId: number;
+  imageId: number;
+  bbox: [number, number, number, number];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [label, setLabel] = useState<DamageLabel>('dent');
+  const [severity, setSeverity] = useState<Severity>('minor');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await apiSend('POST', `/inspections/${inspectionId}/images/${imageId}/detections`, { label, severity, bbox });
+      onDone();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'The damage could not be added.');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Add missed damage"
+      size="sm"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="btn btn-light" onClick={onClose}>Cancel</button>
+          <button type="submit" form="add-region-form" className="btn btn-primary" disabled={busy}>{busy ? 'Adding…' : 'Add damage'}</button>
+        </>
+      }
+    >
+      {error && <Alert>{error}</Alert>}
+      <form id="add-region-form" onSubmit={submit} noValidate>
+        <p className="small">
+          It is recorded as damage the model missed. That is how the model's misses are measured, and it becomes a
+          new example for retraining.
+        </p>
+        <SelectField label="Damage type" value={label} onChange={(e) => setLabel(e.target.value as DamageLabel)}>
+          {(Object.keys(DAMAGE_LABELS) as DamageLabel[]).map((l) => <option key={l} value={l}>{DAMAGE_LABELS[l]}</option>)}
+        </SelectField>
+        <SelectField label="Severity" value={severity} onChange={(e) => setSeverity(e.target.value as Severity)}>
+          {(['minor', 'moderate', 'severe'] as const).map((s) => <option key={s} value={s}>{SEVERITY[s].label}</option>)}
+        </SelectField>
+      </form>
+    </Modal>
+  );
+}
+
 function ConfirmDialog({ inspection, onClose, onDone }: { inspection: InspectionDetail; onClose: () => void; onDone: () => void }) {
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const kept = inspection.images.flatMap((im) => im.detections).filter((d) => d.reviewStatus !== 'rejected');
+  const all = inspection.images.flatMap((im) => im.detections);
+  const kept = all.filter((d) => isFinding(d) && d.reviewStatus !== 'rejected');
+  const undecided = all.filter(isOpenSuggestion).length;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -371,6 +524,7 @@ function ConfirmDialog({ inspection, onClose, onDone }: { inspection: Inspection
           {kept.length === 0
             ? 'No damage will be recorded on this vehicle.'
             : `${kept.length} damage ${kept.length === 1 ? 'region' : 'regions'} will be recorded.`}{' '}
+          {undecided > 0 && `${undecided} possible ${undecided === 1 ? 'region you did not accept is' : 'regions you did not accept are'} dismissed. `}
           The report becomes final and the customer can see it in their account.
         </p>
         <div className="mb-3">
