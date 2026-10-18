@@ -66,3 +66,9 @@ export class ServiceUnavailableError extends AppError {
     super(503, code, message);
   }
 }
+
+export class GatewayTimeoutError extends AppError {
+  constructor(code: string, message: string) {
+    super(504, code, message);
+  }
+}
