@@ -130,6 +130,59 @@
   border-style: dashed;
 }
 
+/* ---------- Review progress + keyboard hints ---------- */
+.as-dmg-progress {
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1rem;
+  display: grid;
+  gap: 0.55rem;
+}
+.as-dmg-bar {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--as-neutral-soft);
+  overflow: hidden;
+}
+.as-dmg-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--as-primary);
+  transition: width 0.25s ease;
+}
+.as-dmg-progress.done .as-dmg-bar i {
+  background: var(--as-success);
+}
+.as-dmg-progress.done b {
+  color: var(--as-success);
+}
+.as-dmg-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
+  font-size: 0.75rem;
+  color: var(--as-muted);
+}
+.as-dmg-keys kbd {
+  display: inline-block;
+  min-width: 1.35rem;
+  padding: 0.05rem 0.3rem;
+  margin-right: 0.2rem;
+  border: 1px solid var(--as-line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--as-surface);
+  color: var(--as-ink-2);
+  font: 600 0.7rem var(--as-mono);
+  text-align: center;
+}
+/* The keyboard only matters with a keyboard: hide the hints on touch screens */
+@media (hover: none) {
+  .as-dmg-keys {
+    display: none;
+  }
+}
+
 /* ---------- Region list beside the photo ---------- */
 .as-dmg-list {
   list-style: none;
@@ -143,6 +196,9 @@
   border-radius: 10px;
   padding: 0.7rem 0.85rem;
   background: var(--as-surface);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  scroll-margin: 5rem; /* stays clear of the fixed top bar when scrolled into view */
 }
 .as-dmg-item.on {
   border-color: var(--as-primary);
