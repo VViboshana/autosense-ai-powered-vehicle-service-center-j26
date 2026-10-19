@@ -38,7 +38,7 @@ export function createApp(pool: pg.Pool, env: Env) {
   // Staff
   app.use('/api/dashboard', dashboardRoutes(pool));
   app.use('/api/jobs', jobsRoutes(pool));
-  app.use('/api/vehicle-requests', claimsRoutes(pool));
+  app.use('/api/vehicle-requests', claimsRoutes(pool, env.UPLOAD_DIR));
   app.use('/api/inspections', inspectionsRoutes({ pool, damageServiceUrl: env.ML_DAMAGE_URL, uploadDir: env.UPLOAD_DIR }));
   app.use('/api/admin/users', usersRoutes(pool));
   app.use('/api/admin/roles', rolesRoutes(pool));

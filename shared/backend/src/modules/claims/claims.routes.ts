@@ -7,6 +7,7 @@ import { BusinessRuleError, ConflictError, NotFoundError } from '../../http/erro
 import { offsetOf, pageQuery, toPage } from '../../http/pagination.js';
 import { parse } from '../../http/validate.js';
 import { audit } from '../../lib/audit.js';
+import { photoUrl, sendStoredPhoto } from '../../lib/vehiclePhotos.js';
 import { requireScreen, signedInUser } from '../../middleware/requireScreen.js';
 
 /** Plate numbers compared without spaces and dashes, in capitals. */
@@ -37,7 +38,7 @@ const idParam = z.object({ id: z.coerce.number().int().positive() });
  * from the vehicle or its papers, and the vehicle is created and linked in the same step. A customer's request alone
  * never creates a vehicle.
  */
-export function claimsRoutes(pool: pg.Pool) {
+export function claimsRoutes(pool: pg.Pool, uploadDir: string) {
   const router = Router();
   router.use(requireScreen('VEHICLE_CLAIMS'));
 
@@ -45,7 +46,7 @@ export function claimsRoutes(pool: pg.Pool) {
     const f = parse(listQuery, req.query);
     const total = await pool.query('SELECT count(*) AS n FROM workshop.vehicle_claims WHERE status = $1', [f.status]);
     const rows = await pool.query(
-      `SELECT vc.claim_id, vc.registration_no, vc.status, vc.customer_note, vc.review_note, vc.requested_at, vc.reviewed_at,
+      `SELECT vc.claim_id, vc.registration_no, vc.status, vc.photo_key, vc.customer_note, vc.review_note, vc.requested_at, vc.reviewed_at,
               c.customer_id, c.full_name AS customer_name, c.mobile AS customer_mobile,
               v.vehicle_id, v.registration_no AS vehicle_plate, v.make || ' ' || v.model AS vehicle, v.year,
               owner.full_name AS owner_name, v.customer_id AS owner_id,
@@ -68,6 +69,7 @@ export function claimsRoutes(pool: pg.Pool) {
           registrationNo: r.registration_no,
           status: r.status,
           customerNote: r.customer_note,
+          photoUrl: photoUrl(`/api/vehicle-requests/${r.claim_id}/photo`, r.photo_key),
           reviewNote: r.review_note,
           requestedAt: r.requested_at,
           reviewedAt: r.reviewed_at,
@@ -87,6 +89,13 @@ export function claimsRoutes(pool: pg.Pool) {
         f,
       ),
     );
+  });
+
+  /** The photo the customer sent with the request: check that it shows the vehicle with this plate. */
+  router.get('/:id/photo', async (req, res) => {
+    const { id } = parse(idParam, req.params);
+    const { rows } = await pool.query<{ photo_key: string | null }>('SELECT photo_key FROM workshop.vehicle_claims WHERE claim_id = $1', [id]);
+    await sendStoredPhoto(res, uploadDir, rows[0]?.photo_key);
   });
 
   /** Creates the vehicle record from the details staff entered, with the plate exactly as the customer gave it. */
@@ -109,7 +118,7 @@ export function claimsRoutes(pool: pg.Pool) {
 
   async function pendingClaim(client: pg.PoolClient, id: number) {
     const { rows } = await client.query(
-      `SELECT vc.claim_id, vc.customer_id, vc.registration_no, vc.status, v.vehicle_id
+      `SELECT vc.claim_id, vc.customer_id, vc.registration_no, vc.status, vc.photo_key, v.vehicle_id
        FROM workshop.vehicle_claims vc
        LEFT JOIN workshop.vehicles v ON ${PLATE_KEY('v.registration_no')} = ${PLATE_KEY('vc.registration_no')}
        WHERE vc.claim_id = $1 FOR UPDATE OF vc`,
@@ -146,7 +155,12 @@ export function claimsRoutes(pool: pg.Pool) {
          WHERE claim_id = $1`,
         [id, claim.vehicle_id, note, me.userId],
       );
-      await client.query('UPDATE workshop.vehicles SET customer_id = $2 WHERE vehicle_id = $1', [claim.vehicle_id, claim.customer_id]);
+      // The new owner's photo becomes the vehicle's photo (requests made before photos were asked for keep the old one)
+      await client.query('UPDATE workshop.vehicles SET customer_id = $2, photo_key = COALESCE($3, photo_key) WHERE vehicle_id = $1', [
+        claim.vehicle_id,
+        claim.customer_id,
+        claim.photo_key,
+      ]);
       await audit(client, { table: 'workshop.vehicle_claims', recordId: id, action: 'approved', userId: me.userId, snapshot: { vehicleId: claim.vehicle_id, customerId: claim.customer_id } });
     });
     sendOk(res, { claimId: id, status: 'approved' });
