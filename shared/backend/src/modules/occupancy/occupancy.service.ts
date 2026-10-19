@@ -3,6 +3,7 @@ import { withTransaction } from '../../db/pool.js';
 import { BusinessRuleError, NotFoundError } from '../../http/errors.js';
 import {
   cancelVideoJob as cancelOnService,
+  fetchJobFrame,
   fetchVideoJob,
   occupancyModel,
   startVideoJob as startOnService,
@@ -27,13 +28,18 @@ export const serviceJobId = (videoJobId: number) => `VJ-${videoJobId}`;
  * then the service is asked to start. If the service refuses or is down, the job is marked failed with the reason
  * and the caller gets the error.
  */
-export async function startVideoJob(deps: OccupancyDeps, input: { cameraId: number; sampleFps?: number; userId: number }) {
+export async function startVideoJob(deps: OccupancyDeps, input: { cameraId: number; sampleFps?: number; live?: boolean; userId: number }) {
   const camera = await repo.getCamera(deps.pool, input.cameraId);
   if (!camera) throw new NotFoundError('That camera does not exist.');
   if (!camera.isActive) throw new BusinessRuleError('CAMERA_INACTIVE', 'This camera is switched off. Switch it on first.');
   if (!camera.sourceUrl) throw new BusinessRuleError('CAMERA_NO_SOURCE', 'Give this camera a video source first.');
   const bays = await repo.baysToWatch(deps.pool, camera.cameraId);
   if (bays.length === 0) throw new BusinessRuleError('NO_BAYS_DRAWN', 'Draw at least one bay outline on this camera first.');
+  // The service runs one job at a time and a live job never ends on its own: anything started after it would wait forever
+  const running = await repo.liveCameras(deps.pool);
+  if (running.length > 0) {
+    throw new BusinessRuleError('LIVE_CAMERA_RUNNING', `${running[0]!.cameraName} is running live. Stop it before processing another video.`);
+  }
 
   const model = await occupancyModel(deps.serviceUrl);
   const rules = await getSetting<OccupancyRules>(deps.pool, 'occupancy.rules', DEFAULT_RULES);
@@ -47,8 +53,9 @@ export async function startVideoJob(deps: OccupancyDeps, input: { cameraId: numb
       sampleFps,
       modelVersionId: await repo.modelVersionId(client, model.version, model.placeholder),
       userId: input.userId,
+      live: input.live ?? false,
     });
-    await audit(client, { table: 'occupancy.video_jobs', recordId: videoJobId, action: 'start', snapshot: { cameraId: camera.cameraId, sampleFps }, userId: input.userId });
+    await audit(client, { table: 'occupancy.video_jobs', recordId: videoJobId, action: 'start', snapshot: { cameraId: camera.cameraId, sampleFps, live: input.live ?? false }, userId: input.userId });
     return videoJobId;
   });
 
@@ -60,6 +67,7 @@ export async function startVideoJob(deps: OccupancyDeps, input: { cameraId: numb
       bays: bays.map((b) => ({ id: String(b.bayId), polygon: b.polygon })),
       rules: stateRules,
       sampleFps,
+      live: input.live ?? false,
     });
   } catch (err) {
     await repo.updateVideoJob(deps.pool, id, { status: 'failed', framesProcessed: 0, totalFrames: null, error: err instanceof Error ? err.message.slice(0, 500) : 'Could not start.' });
@@ -68,6 +76,15 @@ export async function startVideoJob(deps: OccupancyDeps, input: { cameraId: numb
   // The service decides masking from its model (OCC_ROI_MASK); store what it reported so results can be interpreted
   await repo.setVideoJobMask(deps.pool, id, started.roiMask ?? null);
   return id;
+}
+
+/** The latest picture around a bay from its camera's live job, or null when the camera is not live or has no picture yet. */
+export async function liveBayPicture(deps: OccupancyDeps, bayId: number): Promise<Buffer | null> {
+  const bay = await repo.getBay(deps.pool, bayId);
+  if (!bay) throw new NotFoundError('Bay not found.');
+  const live = (await repo.liveCameras(deps.pool)).find((c) => c.cameraId === bay.cameraId && c.bayIds.includes(bayId));
+  if (!live) return null;
+  return fetchJobFrame(deps.serviceUrl, serviceJobId(live.videoJobId), String(bayId));
 }
 
 export async function cancelVideoJob(deps: OccupancyDeps, videoJobId: number, userId: number) {

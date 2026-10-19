@@ -43,6 +43,8 @@ export type VideoJob = {
   modelVersion: string | null;
   /** Whether the service masked outside the bays (null = not reported, e.g. jobs from before migration 0010). */
   roiMask: boolean | null;
+  /** Replaying the video as a live camera until stopped (no end, no total frames). */
+  live: boolean;
   createdBy: string | null;
   createdAt: string;
   startedAt: string | null;
@@ -191,7 +193,7 @@ export async function bayEvents(db: Db, bayId: number, page: PageRequest): Promi
 const JOB_SELECT = `
   SELECT j.video_job_id AS "videoJobId", j.camera_id AS "cameraId", c.name AS "cameraName", j.source_path AS "sourcePath",
          j.sample_fps AS "sampleFps", j.status, j.frames_processed AS "framesProcessed", j.total_frames AS "totalFrames",
-         j.error, mv.version AS "modelVersion", j.roi_mask AS "roiMask", u.first_name || ' ' || u.last_name AS "createdBy", j.created_at AS "createdAt",
+         j.error, mv.version AS "modelVersion", j.roi_mask AS "roiMask", j.live, u.first_name || ' ' || u.last_name AS "createdBy", j.created_at AS "createdAt",
          j.started_at AS "startedAt", j.finished_at AS "finishedAt",
          (SELECT count(*) FROM occupancy.bay_state_events e WHERE e.video_job_id = j.video_job_id)::int AS transitions
   FROM occupancy.video_jobs j
@@ -213,14 +215,32 @@ export async function listVideoJobs(db: Db, page: PageRequest): Promise<Page<Vid
 
 export async function insertVideoJob(
   db: Db,
-  j: { cameraId: number; sourcePath: string; sampleFps: number; modelVersionId: number; userId: number },
+  j: { cameraId: number; sourcePath: string; sampleFps: number; modelVersionId: number; userId: number; live: boolean },
 ): Promise<number> {
   const { rows } = await db.query<{ id: number }>(
-    `INSERT INTO occupancy.video_jobs (camera_id, source_path, sample_fps, status, model_version_id, created_by)
-     VALUES ($1, $2, $3, 'queued', $4, $5) RETURNING video_job_id AS id`,
-    [j.cameraId, j.sourcePath, j.sampleFps, j.modelVersionId, j.userId],
+    `INSERT INTO occupancy.video_jobs (camera_id, source_path, sample_fps, status, model_version_id, created_by, live)
+     VALUES ($1, $2, $3, 'queued', $4, $5, $6) RETURNING video_job_id AS id`,
+    [j.cameraId, j.sourcePath, j.sampleFps, j.modelVersionId, j.userId, j.live],
   );
   return rows[0]!.id;
+}
+
+export type LiveCamera = { videoJobId: number; cameraId: number; cameraCode: string; cameraName: string; startedAt: string; bayIds: number[] };
+
+/** Cameras with a live job queued or running, and the bays it watches (active bays with an outline). */
+export async function liveCameras(db: Db): Promise<LiveCamera[]> {
+  const { rows } = await db.query<LiveCamera>(
+    `SELECT j.video_job_id AS "videoJobId", c.camera_id AS "cameraId", c.code AS "cameraCode", c.name AS "cameraName",
+            j.created_at AS "startedAt",
+            coalesce(array_agg(b.bay_id ORDER BY b.display_order, b.code) FILTER (WHERE b.bay_id IS NOT NULL), '{}') AS "bayIds"
+     FROM occupancy.video_jobs j
+     JOIN occupancy.cameras c ON c.camera_id = j.camera_id
+     LEFT JOIN occupancy.bays b ON b.camera_id = c.camera_id AND b.is_active AND b.polygon IS NOT NULL
+     WHERE j.live AND j.status IN ('queued', 'running')
+     GROUP BY j.video_job_id, c.camera_id
+     ORDER BY j.video_job_id`,
+  );
+  return rows;
 }
 
 /** What the service reported when it accepted the job: whether it masks outside the bays. */

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchVideoJob, occupancyModel, startVideoJob } from '../../integrations/ml/occupancyService.js';
+import { fetchJobFrame, fetchVideoJob, occupancyModel, startVideoJob } from '../../integrations/ml/occupancyService.js';
 import { area, bayBody, cameraBody, confirmBayBody, polygonSchema, rulesBody, sourceSchema } from './occupancy.routes.js';
 import { pairBaysWithQueue, serviceJobId, transitionRows } from './occupancy.service.js';
 
@@ -103,6 +103,15 @@ describe('occupancy service client', () => {
     expect((await startVideoJob('http://svc:8002', request)).roiMask).toBe(true);
     vi.stubGlobal('fetch', reply(202, report));
     expect((await startVideoJob('http://svc:8002', request)).roiMask).toBeUndefined();
+  });
+
+  it("fetches a live bay picture, and reports 'no picture yet' as null", async () => {
+    const fetch = vi.fn(async () => new Response(new Uint8Array([0xff, 0xd8, 0xff]), { status: 200, headers: { 'content-type': 'image/jpeg' } }));
+    vi.stubGlobal('fetch', fetch);
+    expect((await fetchJobFrame('http://svc:8002', 'VJ-3', '25'))?.length).toBe(3);
+    expect(String((fetch.mock.calls[0] as unknown[])[0])).toBe('http://svc:8002/video-jobs/VJ-3/frame?bay=25&width=480');
+    vi.stubGlobal('fetch', reply(404, { detail: 'No picture yet' }));
+    expect(await fetchJobFrame('http://svc:8002', 'VJ-3', '25')).toBeNull();
   });
 
   it('reports the model and its masking default, for the settings screen', async () => {

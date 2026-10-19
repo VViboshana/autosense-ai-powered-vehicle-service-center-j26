@@ -42,6 +42,8 @@ export type VideoJob = {
   modelVersion: string | null;
   /** Frames greyed out outside the bays before detection; null = not recorded (older jobs). */
   roiMask: boolean | null;
+  /** Replaying the video as a live camera until stopped (no end, no total frames). */
+  live: boolean;
   createdBy: string | null;
   createdAt: string;
   startedAt: string | null;
@@ -95,3 +97,6 @@ export type QueuedJob = {
 };
 export type BaySuggestion = { bayId: number; code: string; name: string; since: string | null; overlap: number | null; suggestedJobId: number | null };
 export type BaySuggestions = { suggestions: BaySuggestion[]; queue: QueuedJob[] };
+
+/** GET /api/occupancy/live: cameras replaying their video as a live camera, and the bays they watch. */
+export type LiveCamera = { videoJobId: number; cameraId: number; cameraCode: string; cameraName: string; startedAt: string; bayIds: number[] };
