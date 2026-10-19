@@ -22,9 +22,10 @@ export function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      await apiSend('POST', '/auth/login', { username, password });
+      const me = await apiSend<{ userType: 'staff' | 'customer' }>('POST', '/auth/login', { username, password });
       await refresh();
-      navigate(next && next.startsWith('/') && !next.startsWith('//') ? next : '/', { replace: true });
+      // Back to where they were going; otherwise customers land on their portal, staff on the dashboard
+      navigate(next && next.startsWith('/') && !next.startsWith('//') ? next : me.userType === 'customer' ? '/my' : '/', { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Sign-in failed. Try again.');
       setBusy(false);
@@ -52,7 +53,7 @@ export function LoginPage() {
         </button>
       </form>
       <p className="mt-4 mb-0 small text-body-secondary">
-        New customer? <Link to="/register">Create an account</Link> to follow your vehicle.
+        New customer? <Link to={next ? `/register?next=${encodeURIComponent(next)}` : '/register'}>Create an account</Link> to follow your vehicle.
         <br />
         Forgot your password? Staff: ask your administrator. Customers: ask the service centre.
       </p>

@@ -38,7 +38,7 @@ export function MyVehiclePage() {
   if (data.error && !data.data) {
     return (
       <>
-        <Link to="/my" className="small">‹ My vehicles</Link>
+        <Link to="/my/vehicles" className="small">‹ My vehicles</Link>
         <ErrorState error={data.error} onRetry={data.reload} title="This vehicle couldn't be shown" />
       </>
     );
@@ -50,7 +50,7 @@ export function MyVehiclePage() {
 
   return (
     <>
-      <Link to="/my" className="small text-decoration-none cp-rise">‹ My vehicles</Link>
+      <Link to="/my/vehicles" className="pt-back cp-rise"><i className="bi bi-chevron-left" aria-hidden="true" />My vehicles</Link>
       <div className="cp-vhead cp-rise" style={{ '--i': 1 } as CSSProperties}>
         {vehicle.photoUrl ? <img className="cp-vthumb" src={vehicle.photoUrl} alt="" /> : <span className="cp-vthumb"><CarArt /></span>}
         <span className="cp-plate"><PlateText plate={vehicle.registrationNo} /></span>

@@ -1,9 +1,9 @@
 import { useEffect, useState, type CSSProperties } from 'react';
-import { useSession } from '@/app/session';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 import { apiSend, apiUpload } from '@/lib/api';
-import { formatDate, localHour } from '@/lib/format';
+import { formatDate } from '@/lib/format';
 import { useApi } from '@/lib/useApi';
 import { Toasts } from '@/modules/inspections/Toasts';
 import { useToasts } from '@/modules/inspections/useToasts';
@@ -15,16 +15,15 @@ import { VehicleHero } from './VehicleHero';
 import './customer.css';
 import '@/modules/inspections/inspections.css';
 
-const greeting = (h: number) => (h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening');
-
 /**
  * The customer's home: their vehicles as photo cards with the visit on top (the one at the service centre first, large),
  * a tile to add a vehicle, and requests waiting for the service centre.
  */
 export function MyVehiclesPage() {
-  const { me } = useSession();
   const data = useApi<MyVehicles>('/my/vehicles', undefined, { refreshMs: 60_000 });
-  const [adding, setAdding] = useState(false);
+  // ?add=1 (e.g. from the booking form) opens "Add a vehicle" straight away
+  const [params, setParams] = useSearchParams();
+  const [adding, setAdding] = useState(params.get('add') === '1');
   const { toasts, show } = useToasts();
 
   useEffect(() => {
@@ -53,10 +52,13 @@ export function MyVehiclesPage() {
 
   return (
     <>
-      <div className="mb-3 cp-rise">
-        <div className="cp-eyebrow">My vehicles</div>
-        <h1 className="cp-title">{greeting(localHour())}, {me.displayName.split(' ')[0]}</h1>
-        <div className="text-body-secondary">Follow your vehicle's visit and see what the inspection found.</div>
+      <div className="pt-head cp-rise">
+        <div>
+          <div className="cp-eyebrow">My vehicles</div>
+          <h1 className="cp-title">Your vehicles</h1>
+          <div className="text-body-secondary">Follow each visit and see what the inspection found.</div>
+        </div>
+        {first && <Link to="/my/bookings/new" className="btn btn-primary"><i className="bi bi-calendar-plus me-2" aria-hidden="true" />Book a service</Link>}
       </div>
 
       <div className="cp-home">
@@ -120,9 +122,10 @@ export function MyVehiclesPage() {
 
       {adding && (
         <AddVehicleDialog
-          onClose={() => setAdding(false)}
+          onClose={() => { setAdding(false); setParams({}, { replace: true }); }}
           onAdded={(plate) => {
             setAdding(false);
+            setParams({}, { replace: true });
             show(`Sent. The service centre will confirm ${plate} is yours.`);
             data.reload();
           }}

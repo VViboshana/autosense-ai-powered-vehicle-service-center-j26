@@ -82,3 +82,61 @@ export type MyVehicle = {
     safety: Section<null>;
   };
 };
+
+export type BookingStatus = 'pending' | 'confirmed' | 'declined' | 'cancelled';
+
+/** A service booking (/api/my/bookings). date is 'YYYY-MM-DD' and time 'HH:MM', in the service centre's time. */
+export type Booking = {
+  bookingId: number;
+  bookingNo: string;
+  status: BookingStatus;
+  date: string;
+  time: string;
+  service: string;
+  minutes: number;
+  notes: string | null;
+  staffNote: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+  vehicle: { vehicleId: number; registrationNo: string; description: string; photoUrl: string | null };
+};
+
+export type MyBookings = { upcoming: Booking[]; past: Booking[] };
+
+export type BookingOptions = {
+  vehicles: { vehicleId: number; registrationNo: string; description: string; photoUrl: string | null }[];
+  services: { serviceTypeId: number; code: string; name: string; minutes: number }[];
+  days: { date: string; closed: boolean; slots: { time: string; left: number }[] }[];
+  minHoursAhead: number;
+};
+
+/** One visit in the service history (/api/my/history). */
+export type Visit = {
+  jobId: number;
+  jobNo: string;
+  stage: JobStage;
+  service: string;
+  bay: string | null;
+  checkedInAt: string;
+  readyAt: string | null;
+  completedAt: string | null;
+  estimateLkr: number | null;
+  estimatedMinutes: number | null;
+  vehicle: { vehicleId: number; registrationNo: string; description: string; photoUrl: string | null };
+  inspection: { inspectionId: number; inspectionNo: string; overallSeverity: string | null } | null;
+};
+
+export type MyHistory = { visits: Visit[]; totals: { visits: number; completed: number; vehicles: number; reports: number } };
+
+export type Notice = {
+  id: string;
+  title: string;
+  body: string | null;
+  at: string;
+  tone: 'success' | 'warning' | 'danger' | 'info' | 'brand' | 'muted';
+  icon: string;
+  link: string | null;
+  unread: boolean;
+};
+
+export type MyNotifications = { unread: number; items: Notice[] };
