@@ -897,3 +897,17 @@
 }
 .as-heat-row:nth-child(3) .as-heat-cell { animation-delay: 400ms; }
 .as-heat-row:nth-child(n + 4) .as-heat-cell { animation-delay: 500ms; }
+
+/* Repair guide: the region's line under its facts */
+.as-dmg-repair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--as-ink-2);
+}
+.as-repair tfoot td {
+  border-bottom: 0;
+}
