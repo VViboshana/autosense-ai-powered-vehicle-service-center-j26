@@ -1,0 +1,139 @@
+/* Bays & cameras (component 1). Colours only through theme tokens. */
+
+.as-cam-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.as-cam {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.15rem 0.5rem;
+  align-items: center;
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--as-line);
+  border-radius: 0.5rem;
+  background: var(--as-surface);
+}
+.as-cam:hover {
+  border-color: var(--as-primary);
+}
+.as-cam.on {
+  border-color: var(--as-primary);
+  box-shadow: inset 3px 0 0 var(--as-brand);
+}
+.as-cam-name {
+  font-weight: 600;
+}
+.as-cam-sub {
+  grid-column: 1;
+  font-size: 0.8rem;
+  color: var(--as-muted);
+}
+.as-cam .as-pill {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+/* The camera frame with bay outlines on top */
+.as-bay-canvas {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  background: var(--as-neutral-soft);
+  border: 1px solid var(--as-line);
+}
+.as-bay-canvas img,
+.as-bay-canvas svg,
+.as-bay-canvas-missing {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.as-bay-canvas img {
+  object-fit: fill;
+  user-select: none;
+}
+.as-bay-canvas-missing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  text-align: center;
+  color: var(--as-muted);
+}
+.as-bay-canvas-missing .bi {
+  font-size: 2rem;
+}
+.as-bay-canvas.drawing {
+  cursor: crosshair;
+  border-color: var(--as-primary);
+  box-shadow: var(--as-focus);
+}
+
+.as-bay-shape {
+  cursor: pointer;
+}
+.as-bay-shape polygon {
+  fill: var(--as-muted);
+  fill-opacity: 0.15;
+  stroke: var(--as-muted);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.as-bay-shape.state-occupied polygon {
+  fill: var(--as-brand);
+  stroke: var(--as-brand);
+}
+.as-bay-shape.state-free polygon {
+  fill: var(--as-success);
+  stroke: var(--as-success);
+}
+.as-bay-shape.state-uncertain polygon {
+  fill: var(--as-info);
+  stroke: var(--as-info);
+}
+.as-bay-shape.inactive polygon {
+  stroke-dasharray: 6 4;
+  fill-opacity: 0.05;
+}
+.as-bay-shape:hover polygon,
+.as-bay-shape.on polygon {
+  fill-opacity: 0.3;
+  stroke-width: 3;
+}
+.as-bay-shape text {
+  font-weight: 700;
+  fill: var(--as-surface);
+  stroke: var(--as-ink);
+  stroke-width: 3;
+  paint-order: stroke;
+  pointer-events: none;
+}
+.as-bay-canvas.drawing .as-bay-shape {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.as-bay-draft polyline {
+  fill: var(--as-primary);
+  fill-opacity: 0.15;
+  stroke: var(--as-primary);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+}
+.as-bay-draft circle {
+  fill: var(--as-surface);
+  stroke: var(--as-primary);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}

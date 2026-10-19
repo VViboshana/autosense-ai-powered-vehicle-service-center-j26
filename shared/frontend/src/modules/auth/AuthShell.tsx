@@ -1,16 +1,21 @@
 import { useEffect, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '@/app/session';
 import { Brand } from '@/components/Brand';
 
 /** The two-panel frame of the sign-in and sign-up pages: brand panel on the left, the form on the right. */
 export function AuthShell({ title, children }: { title: string; children: ReactNode }) {
+  const { config } = useAuth();
   useEffect(() => {
     document.title = `${title} · AutoSense`;
   }, [title]);
+  // During first-run setup there is no website yet: the logo stays on this page
+  const home = config.setup.needed ? '/setup' : '/';
 
   return (
     <div className="as-auth">
       <aside className="as-auth-brand">
-        <Brand to="/login" />
+        <Brand to={home} height={56} />
         <div>
           <h1>The service floor, inspections and maintenance in one place.</h1>
           <p className="mt-3">
@@ -25,6 +30,9 @@ export function AuthShell({ title, children }: { title: string; children: ReactN
         </div>
       </aside>
       <main className="as-auth-panel">
+        {!config.setup.needed && (
+          <Link to="/" className="as-auth-home"><i className="bi bi-arrow-left" aria-hidden="true" />Back to the website</Link>
+        )}
         <div className="as-auth-form">{children}</div>
       </main>
     </div>

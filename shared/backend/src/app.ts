@@ -9,13 +9,17 @@ import { auditRoutes } from './modules/admin/audit.routes.js';
 import { rolesRoutes } from './modules/admin/roles.routes.js';
 import { usersRoutes } from './modules/admin/users.routes.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
+import { bookingsRoutes } from './modules/bookings/bookings.routes.js';
+import { myBookingsRoutes } from './modules/bookings/myBookings.routes.js';
 import { claimsRoutes } from './modules/claims/claims.routes.js';
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes.js';
 import { inspectionsRoutes } from './modules/inspections/inspections.routes.js';
 import { jobsRoutes } from './modules/jobs/jobs.routes.js';
+import { myActivityRoutes } from './modules/my/myActivity.routes.js';
 import { myRoutes } from './modules/my/my.routes.js';
 import { navigationRoutes } from './modules/navigation/navigation.routes.js';
 import { securityRoutes } from './modules/security/security.routes.js';
+import { occupancyRoutes } from './modules/occupancy/occupancy.routes.js';
 import { systemRoutes } from './modules/system/system.routes.js';
 
 /**
@@ -39,14 +43,18 @@ export function createApp(pool: pg.Pool, env: Env) {
   // Staff
   app.use('/api/dashboard', dashboardRoutes(pool));
   app.use('/api/jobs', jobsRoutes(pool));
-  app.use('/api/vehicle-requests', claimsRoutes(pool));
+  app.use('/api/vehicle-requests', claimsRoutes(pool, env.UPLOAD_DIR));
+  app.use('/api/bookings', bookingsRoutes(pool));
   app.use('/api/inspections', inspectionsRoutes({ pool, damageServiceUrl: env.ML_DAMAGE_URL, uploadDir: env.UPLOAD_DIR }));
   app.use('/api/security', securityRoutes(pool));
+  app.use('/api/occupancy', occupancyRoutes({ pool, serviceUrl: env.ML_OCCUPANCY_URL }));
   app.use('/api/admin/users', usersRoutes(pool));
   app.use('/api/admin/roles', rolesRoutes(pool));
   app.use('/api/admin/audit', auditRoutes(pool));
   // Customers
-  app.use('/api/my', myRoutes(pool));
+  app.use('/api/my/bookings', myBookingsRoutes(pool));
+  app.use('/api/my', myActivityRoutes(pool));
+  app.use('/api/my', myRoutes(pool, env.UPLOAD_DIR));
 
   app.use('/api', notFound);
   app.use(errorHandler);
