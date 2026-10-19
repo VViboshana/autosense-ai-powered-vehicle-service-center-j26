@@ -111,7 +111,7 @@ export async function codeTaken(db: Db, table: 'cameras' | 'bays', code: string,
 
 export async function markCameraSeen(db: Db, cameraId: number, online: boolean): Promise<void> {
   await db.query(
-    `UPDATE occupancy.cameras SET status = $2, last_seen_at = CASE WHEN $3 THEN now() ELSE last_seen_at END WHERE camera_id = $1`,
+    `UPDATE occupancy.cameras SET status = $2, last_seen_at = CASE WHEN $3::boolean THEN now() ELSE last_seen_at END WHERE camera_id = $1`,
     [cameraId, online ? 'online' : 'offline', online],
   );
 }
@@ -240,10 +240,11 @@ export async function updateVideoJob(
   p: { status: VideoJob['status']; framesProcessed: number; totalFrames: number | null; error: string | null },
 ): Promise<void> {
   await db.query(
+    // $2 is used three times: give it one explicit type, or PostgreSQL deduces conflicting ones and refuses the query
     `UPDATE occupancy.video_jobs SET
-       status = $2, frames_processed = $3, total_frames = $4, error = $5,
-       started_at = COALESCE(started_at, CASE WHEN $2 <> 'queued' THEN now() END),
-       finished_at = CASE WHEN $2 IN ('completed', 'failed', 'cancelled') THEN COALESCE(finished_at, now()) END
+       status = $2::varchar, frames_processed = $3, total_frames = $4, error = $5,
+       started_at = COALESCE(started_at, CASE WHEN $2::varchar <> 'queued' THEN now() END),
+       finished_at = CASE WHEN $2::varchar IN ('completed', 'failed', 'cancelled') THEN COALESCE(finished_at, now()) END
      WHERE video_job_id = $1`,
     [id, p.status, p.framesProcessed, p.totalFrames, p.error],
   );
