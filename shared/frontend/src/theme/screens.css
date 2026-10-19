@@ -446,3 +446,10 @@ a.as-vehicle-card:hover {
 @keyframes as-auth-glow {
   50% { box-shadow: 0 0 0 3px rgb(242 106 27 / 18%); }
 }
+
+/* "Back to the website" on the sign-in and sign-up pages */
+.as-auth-panel { position: relative; }
+.as-auth-home { position: absolute; top: 1.25rem; left: 1.5rem; display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--as-muted); text-decoration: none; }
+.as-auth-home:hover { color: var(--as-primary); }
+.as-auth-home .bi { transition: transform 0.2s; }
+.as-auth-home:hover .bi { transform: translateX(-3px); }
