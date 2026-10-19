@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useSession } from '@/app/session';
 import { Card } from '@/components/ui/Card';
@@ -10,6 +10,7 @@ import { PageHeader } from '@/layout/PageHeader';
 import { ApiError, apiSend } from '@/lib/api';
 import { formatDate, formatTime } from '@/lib/format';
 import { useApi } from '@/lib/useApi';
+import { Celebration } from './Celebration';
 import { DamagePhoto } from './DamagePhoto';
 import { PhotoViewer } from './PhotoViewer';
 import { Toasts } from './Toasts';
@@ -34,6 +35,7 @@ export function InspectionDetailPage() {
   const [hovered, setHovered] = useState<number | null>(null);
   const [correcting, setCorrecting] = useState<Detection | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [confirmed, setConfirmed] = useState<{ kept: number } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [drawingImage, setDrawingImage] = useState<number | null>(null);
@@ -168,7 +170,7 @@ export function InspectionDetailPage() {
             {data.status === 'awaiting_review' && can('INSPECTION_CONFIRM') && (
               <button
                 type="button"
-                className="btn btn-primary"
+                className={`btn btn-primary${pending === 0 ? ' as-ready' : ''}`}
                 disabled={pending > 0}
                 title={pending > 0 ? `Review every region first (${pending} left)` : undefined}
                 onClick={() => setConfirming(true)}
@@ -286,6 +288,7 @@ export function InspectionDetailPage() {
                     onHover={setHovered}
                     onExpand={() => setViewerIndex(data.images.indexOf(image))}
                     drawing={drawingImage === image.imageId}
+                    intro={data.status === 'awaiting_review'}
                     onDrawn={(bbox) => {
                       setDrawingImage(null);
                       setAdding({ imageId: image.imageId, bbox });
@@ -374,12 +377,25 @@ export function InspectionDetailPage() {
         <ConfirmDialog
           inspection={data}
           onClose={() => setConfirming(false)}
-          onDone={() => {
+          onDone={(kept) => {
             setConfirming(false);
             reload();
-            show('Inspection confirmed: the customer can now see the report');
+            setConfirmed({ kept });
           }}
         />
+      )}
+      {confirmed && (
+        <Celebration
+          title="Inspection confirmed"
+          primary={can('INSPECTION_REVIEW') ? 'Next in review queue' : 'Back to inspections'}
+          onPrimary={() => navigate(can('INSPECTION_REVIEW') ? '/inspections/review' : '/inspections')}
+          onClose={() => setConfirmed(null)}
+        >
+          {confirmed.kept === 0
+            ? `No damage is recorded on ${data.vehicle.registrationNo}.`
+            : `${confirmed.kept} damage ${confirmed.kept === 1 ? 'region is' : 'regions are'} now in ${data.vehicle.registrationNo}'s report.`}{' '}
+          The customer can see it in their account.
+        </Celebration>
       )}
       {viewerIndex !== null && data.images[viewerIndex] && (
         <PhotoViewer
@@ -499,9 +515,20 @@ function RegionItem({ d, no, on, editable, busy, onSelect, onHover, onConfirm, o
   const severity = open ? d.severity : finalSeverity(d);
   const tone = severity ? SEVERITY[severity].tone : 'muted';
   const relabelled = d.correctedLabel && d.correctedLabel !== d.label;
+  // A brief flash when the decision changes while the page is open (not for decisions loaded with the page)
+  const [flash, setFlash] = useState<string | null>(null);
+  const shown = useRef(d.reviewStatus);
+  useEffect(() => {
+    if (shown.current === d.reviewStatus) return;
+    shown.current = d.reviewStatus;
+    if (d.reviewStatus === 'pending') return;
+    setFlash(d.reviewStatus);
+    const t = window.setTimeout(() => setFlash(null), 700);
+    return () => window.clearTimeout(t);
+  }, [d.reviewStatus]);
   return (
     <li
-      className={`as-dmg-item${on ? ' on' : ''}${open ? ' possible' : ''}`}
+      className={`as-dmg-item st-${d.reviewStatus}${on ? ' on' : ''}${open ? ' possible' : ''}${flash ? ` flash-${flash}` : ''}`}
       data-detection={d.detectionId}
       onClick={onSelect}
       onMouseEnter={() => onHover(true)}
@@ -666,7 +693,7 @@ function AddRegionDialog({ inspectionId, imageId, bbox, onClose, onDone }: {
   );
 }
 
-function ConfirmDialog({ inspection, onClose, onDone }: { inspection: InspectionDetail; onClose: () => void; onDone: () => void }) {
+function ConfirmDialog({ inspection, onClose, onDone }: { inspection: InspectionDetail; onClose: () => void; onDone: (kept: number) => void }) {
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -680,7 +707,7 @@ function ConfirmDialog({ inspection, onClose, onDone }: { inspection: Inspection
     setError(null);
     try {
       await apiSend('POST', `/inspections/${inspection.inspectionId}/confirm`, { notes });
-      onDone();
+      onDone(kept.length);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'The inspection could not be confirmed.');
       setBusy(false);

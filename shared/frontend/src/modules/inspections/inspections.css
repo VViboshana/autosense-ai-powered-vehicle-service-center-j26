@@ -689,3 +689,211 @@
     animation: none;
   }
 }
+
+/* ---------- Motion on the review screen ---------- */
+/* Opening an inspection to review: an "AI checking" sweep down the photo, then each outline traces itself in */
+.as-dmg-scan {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  overflow: hidden;
+}
+.as-dmg-scan::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 30%;
+  top: -30%;
+  background: linear-gradient(180deg, transparent, rgb(242 106 27 / 22%) 85%, rgb(242 106 27 / 70%));
+  animation: as-dmg-sweep 0.9s cubic-bezier(0.5, 0, 0.5, 1) both;
+}
+.as-dmg-scan::after {
+  content: 'AI checking the photo…';
+  position: absolute;
+  left: 0.6rem;
+  top: 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+  background: rgb(14 17 22 / 60%);
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  animation: as-dmg-gone 0.3s ease 0.9s both;
+}
+@keyframes as-dmg-sweep {
+  to { top: 100%; }
+}
+@keyframes as-dmg-gone {
+  to { opacity: 0; visibility: hidden; }
+}
+@keyframes as-dmg-fill-in {
+  from { fill-opacity: 0; }
+}
+.as-dmg-photo.as-intro .as-dmg-shape {
+  animation: as-fade 0.3s ease both;
+  animation-delay: calc(900ms + var(--i, 0) * 110ms);
+}
+.as-dmg-photo.as-intro .as-dmg-shape:not(.rejected):not(.possible) polygon {
+  stroke-dasharray: var(--len);
+  animation: as-trace 0.9s cubic-bezier(0.45, 0.05, 0.2, 1) both, as-dmg-fill-in 0.4s ease both;
+  animation-delay: calc(900ms + var(--i, 0) * 110ms), calc(1500ms + var(--i, 0) * 110ms);
+}
+.as-dmg-shape polygon {
+  transition: fill-opacity 0.25s, stroke-width 0.2s;
+}
+
+/* The region list: items come in one after another; a decision flashes, then settles into its look */
+.as-dmg-list > li {
+  animation: as-rise 0.35s var(--as-ease) both;
+}
+.as-dmg-list > li:nth-child(2) { animation-delay: 50ms; }
+.as-dmg-list > li:nth-child(3) { animation-delay: 100ms; }
+.as-dmg-list > li:nth-child(4) { animation-delay: 150ms; }
+.as-dmg-list > li:nth-child(n + 5) { animation-delay: 200ms; }
+.as-dmg-item {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.3s, opacity 0.3s;
+}
+.as-dmg-item.st-confirmed,
+.as-dmg-item.st-corrected {
+  background: linear-gradient(90deg, var(--as-success-soft), var(--as-surface) 65%);
+  border-color: rgb(15 122 82 / 28%);
+}
+.as-dmg-item.st-rejected {
+  opacity: 0.65;
+}
+.as-dmg-item.st-rejected .as-dmg-item-head b {
+  text-decoration: line-through;
+  text-decoration-color: var(--as-muted);
+}
+.as-dmg-item.on {
+  opacity: 1;
+}
+.as-dmg-item.flash-confirmed,
+.as-dmg-item.flash-corrected {
+  animation: as-dmg-flash-ok 0.7s var(--as-ease);
+}
+.as-dmg-item.flash-rejected {
+  animation: as-dmg-flash-no 0.6s var(--as-ease);
+}
+@keyframes as-dmg-flash-ok {
+  0% { box-shadow: 0 0 0 0 rgb(15 122 82 / 45%); transform: scale(1); }
+  35% { box-shadow: 0 0 0 6px rgb(15 122 82 / 18%); transform: scale(1.015); }
+  100% { box-shadow: 0 0 0 0 rgb(15 122 82 / 0%); transform: scale(1); }
+}
+@keyframes as-dmg-flash-no {
+  0% { transform: translateX(0); }
+  30% { transform: translateX(-4px); }
+  60% { transform: translateX(3px); }
+  100% { transform: translateX(0); }
+}
+.as-dmg-item .as-pill {
+  transition: background-color 0.25s, color 0.25s;
+}
+.as-dmg-bar i {
+  transition: width 0.5s var(--as-ease), background-color 0.3s;
+}
+/* Every region reviewed: the Confirm button glows to say it's ready */
+.btn.as-ready {
+  animation: as-dmg-glow 1.6s ease-in-out infinite;
+}
+@keyframes as-dmg-glow {
+  50% { box-shadow: 0 0 0 6px rgb(194 65 12 / 20%); }
+}
+
+/* Confirmed: a check mark draws itself with a small burst */
+.as-celebrate {
+  position: fixed;
+  inset: 0;
+  z-index: 1080;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(14 17 22 / 35%);
+  backdrop-filter: blur(2px);
+  animation: as-fade 0.2s ease both;
+}
+.as-celebrate-card {
+  position: relative;
+  max-width: 24rem;
+  background: var(--as-surface);
+  border-radius: 18px;
+  padding: 1.6rem 1.75rem;
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  box-shadow: var(--as-shadow-pop);
+  animation: as-pop 0.45s var(--as-ease) both;
+}
+.as-celebrate-card svg {
+  width: 76px;
+  height: 76px;
+}
+.as-celebrate-card .c1 {
+  fill: var(--as-success-soft);
+}
+.as-celebrate-card .c2 {
+  fill: none;
+  stroke: var(--as-success);
+  stroke-width: 4;
+  stroke-dasharray: 160;
+  animation: as-dmg-ring 0.6s ease 0.15s both;
+}
+.as-celebrate-card .ck {
+  fill: none;
+  stroke: var(--as-success);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 50;
+  animation: as-dmg-tick 0.4s ease 0.6s both;
+}
+.as-celebrate-card h2 {
+  font-size: 1.2rem;
+  margin: 0.3rem 0 0;
+}
+@keyframes as-dmg-ring {
+  from { stroke-dashoffset: 160; }
+}
+@keyframes as-dmg-tick {
+  from { stroke-dashoffset: 50; }
+}
+.as-burst {
+  position: absolute;
+  top: 3.5rem;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  opacity: 0;
+  animation: as-dmg-burst 0.9s var(--as-ease) 0.5s both;
+}
+.as-burst-brand { background: var(--as-brand); }
+.as-burst-success { background: var(--as-success); }
+.as-burst-info { background: var(--as-info); }
+.as-burst-warning { background: var(--as-warning); }
+@keyframes as-dmg-burst {
+  0% { opacity: 1; transform: translate(-50%, -50%) rotate(0) scale(1); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) rotate(var(--r)) scale(0.6); }
+}
+
+/* Test set vs real use: bars grow from zero, row by row; heatmap cells fade in */
+.as-sm-track i {
+  transform-origin: left;
+  animation: as-grow-x 0.7s var(--as-ease) both;
+  animation-delay: 250ms;
+}
+.as-sm-row:nth-child(3) .as-sm-track i { animation-delay: 300ms; }
+.as-sm-row:nth-child(4) .as-sm-track i { animation-delay: 350ms; }
+.as-sm-row:nth-child(5) .as-sm-track i { animation-delay: 400ms; }
+.as-sm-row:nth-child(6) .as-sm-track i { animation-delay: 450ms; }
+.as-sm-row:nth-child(7) .as-sm-track i { animation-delay: 500ms; }
+.as-sm-row:nth-child(n + 8) .as-sm-track i { animation-delay: 550ms; }
+.as-heat-cell {
+  animation: as-fade 0.5s ease both;
+  animation-delay: 300ms;
+}
+.as-heat-row:nth-child(3) .as-heat-cell { animation-delay: 400ms; }
+.as-heat-row:nth-child(n + 4) .as-heat-cell { animation-delay: 500ms; }

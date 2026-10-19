@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import type { InspectionReport } from './customer.types';
 import { DAMAGE_NAMES, severityTone } from './customer.ui';
 import { mapPosition, spread } from './mapPosition';
-import { useTraceLengths } from './useTraceLengths';
+import { useTraceLengths } from '@/lib/useTraceLengths';
 
 type MapArea = InspectionReport['areas'][number];
 
