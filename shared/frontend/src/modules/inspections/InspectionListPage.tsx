@@ -13,7 +13,26 @@ import type { InspectionListItem, InspectionStatus } from './inspections.types';
 import { SEVERITY, STATUS } from './inspections.ui';
 import './inspections.css';
 
-const HISTORY_TABS: { key: InspectionStatus | ''; label: string }[] = [
+/** A review waiting longer than this (minutes) is highlighted: the customer is usually waiting at the counter. */
+const WAIT_TARGET_MIN = 30;
+/** The row's edge in the severity's state colour. */
+const STRIP: Record<string, string> = {
+  severe: 'var(--as-danger)',
+  moderate: 'var(--as-warning)',
+  minor: 'var(--as-info)',
+  unavailable: 'var(--as-line)',
+};
+
+/** The inspection's first photo, small; an icon when there is none or it is not stored here. */
+function Thumbnail({ url }: { url: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (!url || failed) {
+    return <span className="as-thumb as-thumb-none"><i className="bi bi-image" aria-hidden="true" /></span>;
+  }
+  return <img className="as-thumb" src={url} alt="" loading="lazy" onError={() => setFailed(true)} />;
+}
+
+const HISTORY_TABS:{ key: InspectionStatus | ''; label: string }[] = [
   { key: '', label: 'All' },
   { key: 'awaiting_review', label: 'Waiting for review' },
   { key: 'confirmed', label: 'Confirmed' },
@@ -41,7 +60,11 @@ export function InspectionListPage({ mode }: { mode: 'review' | 'history' }) {
     <>
       <PageHeader
         title={review ? 'Review queue' : 'Inspection history'}
-        subtitle={review ? 'Check the damage the model found on each inspection, oldest first.' : 'Every damage inspection, newest first.'}
+        subtitle={
+          review
+            ? `Check the damage the model found on each inspection, oldest first. Waits over ${WAIT_TARGET_MIN} minutes are highlighted.`
+            : 'Every damage inspection, newest first.'
+        }
         actions={
           can('INSPECTION_CREATE') && (
             <Link className="btn btn-primary" to="/inspections/new">
@@ -97,6 +120,7 @@ export function InspectionListPage({ mode }: { mode: 'review' | 'history' }) {
                 <table className="table as-table">
                   <thead>
                     <tr>
+                      <th><span className="visually-hidden">Photo</span></th>
                       <th>Inspection</th>
                       <th>Vehicle</th>
                       <th>Job</th>
@@ -111,11 +135,19 @@ export function InspectionListPage({ mode }: { mode: 'review' | 'history' }) {
                     {list.loading || !list.data
                       ? Array.from({ length: 4 }, (_, i) => (
                           <tr key={i}>
-                            {['7rem', '8rem', '6rem', '2rem', '7rem', '5rem', '6rem', '1rem'].map((w, j) => <td key={j}><Skeleton width={w} /></td>)}
+                            {['4.5rem', '7rem', '8rem', '6rem', '2rem', '7rem', '5rem', '6rem', '1rem'].map((w, j) => <td key={j}><Skeleton width={w} /></td>)}
                           </tr>
                         ))
                       : list.data.records.map((i) => (
-                          <tr key={i.inspectionId} style={{ cursor: 'pointer' }} onClick={() => open(i)}>
+                          <tr
+                            key={i.inspectionId}
+                            className="as-sev-strip"
+                            style={{ cursor: 'pointer', ['--as-strip' as string]: i.overallSeverity ? STRIP[i.overallSeverity] : undefined }}
+                            onClick={() => open(i)}
+                          >
+                            <td style={{ width: '5.5rem' }}>
+                              <Thumbnail url={i.thumbnailUrl} />
+                            </td>
                             <td className="as-veh">
                               <Link to={`/inspections/${i.inspectionId}`} onClick={(e) => e.stopPropagation()}><b>{i.inspectionNo}</b></Link>
                               <small className="as-num">{formatDate(i.createdAt)} {formatTime(i.createdAt)}</small>
@@ -153,7 +185,11 @@ export function InspectionListPage({ mode }: { mode: 'review' | 'history' }) {
                             </td>
                             <td className="small text-nowrap">
                               {review ? (
-                                <span className="as-num">{formatDuration(minutesSince(i.createdAt))}</span>
+                                minutesSince(i.createdAt) > WAIT_TARGET_MIN ? (
+                                  <StatusPill tone="warning">{formatDuration(minutesSince(i.createdAt))}</StatusPill>
+                                ) : (
+                                  <span className="as-num">{formatDuration(minutesSince(i.createdAt))}</span>
+                                )
                               ) : (
                                 <StatusPill tone={STATUS[i.status].tone}>{STATUS[i.status].label}</StatusPill>
                               )}

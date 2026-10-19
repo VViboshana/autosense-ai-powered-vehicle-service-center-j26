@@ -1,3 +1,4 @@
+import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useSession } from '@/app/session';
 import { Card } from '@/components/ui/Card';
@@ -14,11 +15,46 @@ const STATE_PILL = {
   unknown: <StatusPill tone="muted">No reading</StatusPill>,
 } as const;
 
-function Bay({ bay, next }: { bay: BayCard; next: BayBoardData['nextInQueue'] }) {
+/**
+ * The bay drawn as a parking slot seen from above: a car parks into an occupied bay; on a bay being confirmed it
+ * stops halfway, inside a moving dashed outline; a free bay shows a faint P.
+ */
+function BaySlot({ state, overlap }: { state: BayCard['state']; overlap: number | null }) {
+  const car = state === 'occupied' || state === 'uncertain';
+  return (
+    <svg className={`as-slot ${state}`} viewBox="0 0 52 84" aria-hidden="true">
+      <path className="lines" d="M4 0V84M48 0V84M4 1.5H48" />
+      {state === 'uncertain' && <rect className="zone" x="9" y="5" width="34" height="75" rx="5" />}
+      {state === 'free' && <text className="p" x="26" y="50" textAnchor="middle">P</text>}
+      {state === 'unknown' && <text className="p" x="26" y="50" textAnchor="middle">?</text>}
+      {car && (
+        <g className="car">
+          <rect className="body" x="12" y="9" width="28" height="60" rx="8" />
+          <path className="glass" d="M15 25 Q26 20 37 25 L35 32 Q26 29 17 32 Z M17 54 Q26 57 35 54 L37 61 Q26 65 15 61 Z" />
+          <rect className="wheel" x="9.5" y="16" width="3.5" height="10" rx="1.5" />
+          <rect className="wheel" x="39" y="16" width="3.5" height="10" rx="1.5" />
+          <rect className="wheel" x="9.5" y="51" width="3.5" height="10" rx="1.5" />
+          <rect className="wheel" x="39" y="51" width="3.5" height="10" rx="1.5" />
+          <rect className="lamp" x="15" y="9" width="6" height="2.5" rx="1" />
+          <rect className="lamp" x="31" y="9" width="6" height="2.5" rx="1" />
+        </g>
+      )}
+      {overlap !== null && <title>{`${Math.round(overlap * 100)}% of the vehicle is inside the bay`}</title>}
+    </svg>
+  );
+}
+
+function Bay({ bay, next, index }: { bay: BayCard; next: BayBoardData['nextInQueue']; index: number }) {
   const head = (
     <div className="as-bay-top">
       <span className="as-bay-name">{bay.name}</span>
       {STATE_PILL[bay.state]}
+    </div>
+  );
+  const frame = (body: ReactNode) => (
+    <div className={`as-bay as-bay-slotted${bay.state === 'free' ? ' free' : ''}`} style={{ '--i': index } as CSSProperties}>
+      <BaySlot state={bay.state} overlap={bay.overlap} />
+      <div className="as-bay-body">{body}</div>
     </div>
   );
 
@@ -26,8 +62,8 @@ function Bay({ bay, next }: { bay: BayCard; next: BayBoardData['nextInQueue'] })
     const inBay = bay.job.bayEnteredAt ? minutesSince(bay.job.bayEnteredAt) : null;
     const est = bay.job.estimatedMinutes;
     const over = inBay !== null && est !== null && inBay > est;
-    return (
-      <div className="as-bay">
+    return frame(
+      <>
         {head}
         <div>
           <div className="as-plate">{bay.job.registrationNo}</div>
@@ -51,13 +87,13 @@ function Bay({ bay, next }: { bay: BayCard; next: BayBoardData['nextInQueue'] })
               <span>of {formatDuration(est)} forecast</span>
             ))}
         </div>
-      </div>
+      </>,
     );
   }
 
   const lines: [string, string] =
     bay.state === 'occupied'
-      ? ['Vehicle in bay', 'Not linked to a job yet']
+      ? [bay.since ? `Occupied for ${formatDuration(minutesSince(bay.since))}` : 'Vehicle in bay', 'Not linked to a job yet']
       : bay.state === 'free'
         ? [
             bay.since ? `Free for ${formatDuration(minutesSince(bay.since))}` : 'Free',
@@ -67,14 +103,20 @@ function Bay({ bay, next }: { bay: BayCard; next: BayBoardData['nextInQueue'] })
           ? ['Vehicle detected on the bay line', 'Confirming whether it is parked']
           : ['No reading from the camera yet', 'Check the camera in Bays & cameras'];
 
-  return (
-    <div className={`as-bay${bay.state === 'free' ? ' free' : ''}`}>
+  return frame(
+    <>
       {head}
       <div>
         <div className="text-body-secondary small">{lines[0]}</div>
         <div className="as-bay-line">{lines[1]}</div>
       </div>
-    </div>
+      {bay.overlap !== null && (
+        <div className="as-overlap" title="How much of the vehicle is inside the bay, from the camera">
+          <span className="as-meter"><i style={{ width: `${Math.round(bay.overlap * 100)}%` }} /></span>
+          <span>{Math.round(bay.overlap * 100)}% inside</span>
+        </div>
+      )}
+    </>,
   );
 }
 
@@ -129,8 +171,8 @@ export function BayBoard() {
         </EmptyState>
       ) : (
         <div className="as-bays">
-          {data.bays.map((bay) => (
-            <Bay key={bay.bayId} bay={bay} next={data.nextInQueue} />
+          {data.bays.map((bay, i) => (
+            <Bay key={bay.bayId} bay={bay} next={data.nextInQueue} index={i} />
           ))}
         </div>
       )}

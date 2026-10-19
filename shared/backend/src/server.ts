@@ -2,6 +2,7 @@ import { createApp } from './app.js';
 import { loadEnv } from './config/env.js';
 import { createPool } from './db/pool.js';
 import { logger, setLogLevel } from './lib/logger.js';
+import { startOccupancySync } from './modules/occupancy/occupancy.sync.js';
 import { APP_VERSION } from './version.js';
 
 let env;
@@ -23,8 +24,12 @@ const server = createApp(pool, env).listen(env.PORT, () => {
   });
 });
 
+// Stores bay changes from running video jobs (occupancy service -> database)
+const stopOccupancySync = startOccupancySync({ pool, serviceUrl: env.ML_OCCUPANCY_URL });
+
 function shutdown(signal: string) {
   logger.info(`${signal} received, shutting down`);
+  stopOccupancySync();
   server.close(() => {
     pool.end().finally(() => process.exit(0));
   });
