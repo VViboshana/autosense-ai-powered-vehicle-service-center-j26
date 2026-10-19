@@ -222,6 +222,8 @@ __marimo__/
 # without retraining. The CarDD images themselves are never committed (their licence forbids sharing).
 *.pt
 *.onnx
+*.pkl
+*.joblib
 
 
 # Occupancy test videos (large, may show people/number plates): never committed

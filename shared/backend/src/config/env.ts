@@ -19,6 +19,8 @@ const schema = z.object({
   /** Folder for uploaded photos (relative to backend/, or absolute). Never committed. */
   UPLOAD_DIR: z.string().min(1).default('uploads'),
   ML_OCCUPANCY_URL: z.url().optional(),
+  /** Internal Component 3 FastAPI service; never exposed to the browser. */
+  MAINTENANCE_ML_SERVICE_URL: z.url().optional(),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
 

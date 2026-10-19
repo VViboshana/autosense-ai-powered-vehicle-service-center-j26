@@ -11,6 +11,7 @@ import { InspectionDetailPage } from '@/modules/inspections/InspectionDetailPage
 import { InspectionListPage } from '@/modules/inspections/InspectionListPage';
 import { NewInspectionPage } from '@/modules/inspections/NewInspectionPage';
 import { BayMonitorPage } from '@/modules/occupancy/BayMonitorPage';
+import { ForecastDetailPage, ForecastsPage, NewForecastPage, ServiceHistoryDetailPage, ServiceHistoryPage } from '@/modules/maintenance/MaintenancePages';
 import { AlertDetailPage } from '@/modules/security/AlertDetailPage';
 import { AlertRulesPage } from '@/modules/security/AlertRulesPage';
 import { AlertsPage } from '@/modules/security/AlertsPage';
@@ -51,6 +52,11 @@ export const SCREENS: ScreenRoute[] = [
     path: '/inspections/:id',
     element: <InspectionDetailPage />,
   },
+  { code: 'MAINTENANCE_FORECASTS', path: '/maintenance/forecasts', element: <ForecastsPage /> },
+  { code: 'MAINTENANCE_FORECASTS', path: '/maintenance/forecasts/new', element: <NewForecastPage /> },
+  { code: 'MAINTENANCE_FORECASTS', path: '/maintenance/forecasts/:id', element: <ForecastDetailPage /> },
+  { code: 'SERVICE_HISTORY', path: '/maintenance/history', element: <ServiceHistoryPage /> },
+  { code: 'SERVICE_HISTORY', path: '/maintenance/history/:id', element: <ServiceHistoryDetailPage /> },
   { code: 'SAFETY_ALERTS', path: '/safety/alerts', element: <AlertsPage /> },
   { code: 'SAFETY_ALERTS', path: '/safety/alerts/:id', element: <AlertDetailPage /> },
   { code: 'CAMERAS', path: '/safety/cameras', element: <CamerasPage /> },
