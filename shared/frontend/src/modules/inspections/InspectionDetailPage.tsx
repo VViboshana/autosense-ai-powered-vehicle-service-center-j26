@@ -1,5 +1,5 @@
-import { useMemo, useState, type FormEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useSession } from '@/app/session';
 import { Card } from '@/components/ui/Card';
 import { Alert, SelectField } from '@/components/ui/Form';
@@ -10,7 +10,11 @@ import { PageHeader } from '@/layout/PageHeader';
 import { ApiError, apiSend } from '@/lib/api';
 import { formatDate, formatTime } from '@/lib/format';
 import { useApi } from '@/lib/useApi';
+import { Celebration } from './Celebration';
 import { DamagePhoto } from './DamagePhoto';
+import { PhotoViewer } from './PhotoViewer';
+import { Toasts } from './Toasts';
+import { useToasts } from './useToasts';
 import type { DamageLabel, Detection, InspectionDetail, Severity } from './inspections.types';
 import { DAMAGE_LABELS, REVIEW, SEVERITY, STATUS, VIEW_ANGLES, finalLabel, finalSeverity, isFinding, isOpenSuggestion, percent } from './inspections.ui';
 import './inspections.css';
@@ -23,13 +27,30 @@ import './inspections.css';
 export function InspectionDetailPage() {
   const { id } = useParams();
   const { can } = useSession();
-  const { data, error, loading, reload } = useApi<InspectionDetail>(`/inspections/${id}`);
+  const { data: loaded, error, loading, reload } = useApi<InspectionDetail>(`/inspections/${id}`);
+  // The latest version after a review action (optimistic, then the server's answer). A fresh load replaces it.
+  const [latest, setLatest] = useState<{ base: InspectionDetail; value: InspectionDetail } | null>(null);
+  const data = latest && loaded && latest.base === loaded ? latest.value : loaded;
   const [selected, setSelected] = useState<number | null>(null);
+  const [hovered, setHovered] = useState<number | null>(null);
   const [correcting, setCorrecting] = useState<Detection | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [confirmed, setConfirmed] = useState<{ kept: number } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [drawingImage, setDrawingImage] = useState<number | null>(null);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const { toasts, show } = useToasts();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // A message handed over by the previous page (e.g. "Inspection created"), shown once
+  useEffect(() => {
+    const message = (location.state as { toast?: string } | null)?.toast;
+    if (!message) return;
+    show(message);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.state, location.pathname, navigate, show]);
   const [adding, setAdding] = useState<{ imageId: number; bbox: [number, number, number, number] } | null>(null);
 
   // Region numbers run across all photos, so "3" means the same region on the photo and in the list.
@@ -41,6 +62,11 @@ export function InspectionDetailPage() {
     all.filter(isOpenSuggestion).forEach((d, n) => map.set(d.detectionId, `P${n + 1}`));
     return map;
   }, [data]);
+
+  // Keep the selected region in view when it changes (keyboard or click)
+  useEffect(() => {
+    if (selected !== null) document.querySelector(`[data-detection="${selected}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [selected]);
 
   if (error && !data) {
     return (
@@ -55,7 +81,7 @@ export function InspectionDetailPage() {
     return (
       <div className="app-content pt-4">
         <div className="container-fluid">
-          <Card><Skeleton width="30%" /><div className="mt-3"><Skeleton width="100%" /></div></Card>
+          <Card><div className="as-card-body pt-3"><Skeleton width="30%" /><div className="mt-3"><Skeleton width="100%" /></div></div></Card>
         </div>
       </div>
     );
@@ -66,19 +92,46 @@ export function InspectionDetailPage() {
   const findings = all.filter(isFinding);
   const pending = findings.filter((d) => d.reviewStatus === 'pending').length;
   const possible = all.filter(isOpenSuggestion).length;
+  const order = [...numbers.keys()]; // regions in the order they are numbered: findings, then possible damage
+  const modalOpen = !!(correcting || confirming || adding || drawingImage) || viewerIndex !== null;
 
+  /** Shows the decision at once, then the server's version; puts the page back if saving fails. */
   async function review(d: Detection, decision: 'confirmed' | 'rejected' | 'remove') {
+    if (busyId) return;
+    const base = loaded!;
+    const before = data!;
     setBusyId(d.detectionId);
     setActionError(null);
+    setLatest({ base, value: withDecision(before, d.detectionId, decision) });
     try {
-      const path = `/inspections/${data!.inspectionId}/detections/${d.detectionId}`;
-      await (decision === 'remove' ? apiSend('DELETE', path) : apiSend('PATCH', path, { decision }));
-      reload();
+      const path = `/inspections/${before.inspectionId}/detections/${d.detectionId}`;
+      const fresh = await (decision === 'remove'
+        ? apiSend<InspectionDetail>('DELETE', path)
+        : apiSend<InspectionDetail>('PATCH', path, { decision }));
+      setLatest({ base, value: fresh });
+      const no = numbers.get(d.detectionId);
+      const open = d.suggestion && d.reviewStatus === 'pending';
+      show(
+        decision === 'remove' ? 'Added damage removed'
+        : decision === 'confirmed' ? (open ? 'Possible damage accepted' : `Region ${no} confirmed`)
+        : open ? 'Suggestion dismissed' : `Region ${no} marked as not damage`,
+      );
     } catch (err) {
+      setLatest({ base, value: before });
       setActionError(err instanceof ApiError ? err.message : 'The change could not be saved.');
     } finally {
       setBusyId(null);
     }
+  }
+
+  /** The next region after `from` that still needs a decision (wrapping round), for auto-advance. */
+  function nextOpen(from: number | null) {
+    const start = from === null ? -1 : order.indexOf(from);
+    for (let k = 1; k <= order.length; k++) {
+      const candidate = all.find((d) => d.detectionId === order[(start + k) % order.length]);
+      if (candidate && candidate.reviewStatus === 'pending' && candidate.detectionId !== from) return candidate.detectionId;
+    }
+    return null;
   }
 
   return (
@@ -117,7 +170,7 @@ export function InspectionDetailPage() {
             {data.status === 'awaiting_review' && can('INSPECTION_CONFIRM') && (
               <button
                 type="button"
-                className="btn btn-primary"
+                className={`btn btn-primary${pending === 0 ? ' as-ready' : ''}`}
                 disabled={pending > 0}
                 title={pending > 0 ? `Review every region first (${pending} left)` : undefined}
                 onClick={() => setConfirming(true)}
@@ -133,7 +186,7 @@ export function InspectionDetailPage() {
         <div className="container-fluid">
           {actionError && <Alert>{actionError}</Alert>}
 
-          <section className="as-card as-kpis" aria-label="Inspection summary">
+          <section className="as-card as-kpis mb-3" aria-label="Inspection summary">
             <div className="as-kpi">
               <span className="as-kpi-label"><i className="bi bi-exclamation-octagon" aria-hidden="true" />Overall severity</span>
               <span className="as-kpi-value" style={{ fontSize: '1.1rem' }}>
@@ -158,6 +211,33 @@ export function InspectionDetailPage() {
             </div>
           </section>
 
+          {editable && (
+            <ReviewProgress
+              reviewed={findings.length - pending}
+              total={findings.length}
+              possible={possible}
+              canConfirm={can('INSPECTION_CONFIRM')}
+            />
+          )}
+          {editable && (
+            <ReviewKeys
+              disabled={modalOpen}
+              order={order}
+              selected={selected}
+              onMove={setSelected}
+              onDecide={(decision) => {
+                const d = all.find((x) => x.detectionId === selected);
+                if (!d || d.source === 'technician') return;
+                setSelected(nextOpen(d.detectionId) ?? d.detectionId);
+                void review(d, decision);
+              }}
+              onCorrect={() => {
+                const d = all.find((x) => x.detectionId === selected);
+                if (d && d.source !== 'technician') setCorrecting(d);
+              }}
+            />
+          )}
+
           <Alert tone="info">
             Damage is found by an AI model and the severity is a preliminary estimate ({data.severityMethod ?? 'rule-v0'}),
             {data.severityValidated ? ' validated against technician labels.' : ' not yet validated.'} Confidence is the model's
@@ -173,6 +253,7 @@ export function InspectionDetailPage() {
           {data.images.map((image) => (
             <Card
               key={image.imageId}
+              className="mb-3"
               icon="bi-camera"
               title={VIEW_ANGLES[image.viewAngle]}
               subtitle={photoFacts(image)}
@@ -187,6 +268,7 @@ export function InspectionDetailPage() {
                 ))
               }
             >
+              <div className="as-card-body">
               {drawingImage === image.imageId && (
                 <Alert tone="info">Drag a box around the damage the model missed, then choose its type and severity.</Alert>
               )}
@@ -201,8 +283,12 @@ export function InspectionDetailPage() {
                     image={image}
                     numbers={numbers}
                     selected={selected}
+                    hovered={hovered}
                     onSelect={setSelected}
+                    onHover={setHovered}
+                    onExpand={() => setViewerIndex(data.images.indexOf(image))}
                     drawing={drawingImage === image.imageId}
+                    intro={data.status === 'awaiting_review'}
                     onDrawn={(bbox) => {
                       setDrawingImage(null);
                       setAdding({ imageId: image.imageId, bbox });
@@ -216,10 +302,11 @@ export function InspectionDetailPage() {
                         key={d.detectionId}
                         d={d}
                         no={numbers.get(d.detectionId) ?? ''}
-                        on={selected === d.detectionId}
+                        on={selected === d.detectionId || hovered === d.detectionId}
                         editable={editable}
                         busy={busyId === d.detectionId}
                         onSelect={() => setSelected(d.detectionId)}
+                        onHover={(over) => setHovered(over ? d.detectionId : null)}
                         onConfirm={() => review(d, 'confirmed')}
                         onReject={() => review(d, 'rejected')}
                         onRemove={() => review(d, 'remove')}
@@ -256,6 +343,7 @@ export function InspectionDetailPage() {
                   })()}
                 </div>
               </div>
+              </div>
             </Card>
           ))}
         </div>
@@ -269,6 +357,7 @@ export function InspectionDetailPage() {
           onDone={() => {
             setCorrecting(null);
             reload();
+            show('Correction saved');
           }}
         />
       )}
@@ -280,6 +369,7 @@ export function InspectionDetailPage() {
           onDone={() => {
             setAdding(null);
             reload();
+            show('Missed damage added');
           }}
         />
       )}
@@ -287,14 +377,113 @@ export function InspectionDetailPage() {
         <ConfirmDialog
           inspection={data}
           onClose={() => setConfirming(false)}
-          onDone={() => {
+          onDone={(kept) => {
             setConfirming(false);
             reload();
+            setConfirmed({ kept });
           }}
         />
       )}
+      {confirmed && (
+        <Celebration
+          title="Inspection confirmed"
+          primary={can('INSPECTION_REVIEW') ? 'Next in review queue' : 'Back to inspections'}
+          onPrimary={() => navigate(can('INSPECTION_REVIEW') ? '/inspections/review' : '/inspections')}
+          onClose={() => setConfirmed(null)}
+        >
+          {confirmed.kept === 0
+            ? `No damage is recorded on ${data.vehicle.registrationNo}.`
+            : `${confirmed.kept} damage ${confirmed.kept === 1 ? 'region is' : 'regions are'} now in ${data.vehicle.registrationNo}'s report.`}{' '}
+          The customer can see it in their account.
+        </Celebration>
+      )}
+      {viewerIndex !== null && data.images[viewerIndex] && (
+        <PhotoViewer
+          images={data.images}
+          index={viewerIndex}
+          numbers={numbers}
+          selected={selected}
+          onSelect={setSelected}
+          onIndex={(n) => setViewerIndex(Math.max(0, Math.min(data.images.length - 1, n)))}
+          onClose={() => setViewerIndex(null)}
+        />
+      )}
+      <Toasts toasts={toasts} />
     </>
   );
+}
+
+/** The inspection with one decision applied locally (shown before the server answers). */
+function withDecision(inspection: InspectionDetail, detectionId: number, decision: 'confirmed' | 'rejected' | 'remove'): InspectionDetail {
+  return {
+    ...inspection,
+    images: inspection.images.map((im) => ({
+      ...im,
+      detections:
+        decision === 'remove'
+          ? im.detections.filter((d) => d.detectionId !== detectionId)
+          : im.detections.map((d) => (d.detectionId === detectionId ? { ...d, reviewStatus: decision } : d)),
+    })),
+  };
+}
+
+function ReviewProgress({ reviewed, total, possible, canConfirm }: { reviewed: number; total: number; possible: number; canConfirm: boolean }) {
+  const done = reviewed === total;
+  return (
+    <section className={`as-card as-dmg-progress${done ? ' done' : ''}`} aria-label="Review progress">
+      <div className="d-flex justify-content-between align-items-baseline flex-wrap gap-2">
+        <b>{done ? (canConfirm ? 'Every region reviewed: ready to confirm' : 'Every region reviewed') : 'Review progress'}</b>
+        <span className="small text-body-secondary as-num">
+          {reviewed} of {total} {total === 1 ? 'region' : 'regions'} reviewed
+          {possible > 0 && ` · ${possible} possible damage to accept or dismiss`}
+        </span>
+      </div>
+      <div className="as-dmg-bar" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={reviewed}>
+        <i style={{ width: `${total ? (reviewed / total) * 100 : 100}%` }} />
+      </div>
+      <div className="as-dmg-keys">
+        <span><kbd>J</kbd><kbd>K</kbd> next / previous</span>
+        <span><kbd>C</kbd> confirm or accept</span>
+        <span><kbd>X</kbd> not damage or dismiss</span>
+        <span><kbd>E</kbd> correct</span>
+        <span><kbd>Esc</kbd> clear</span>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Keyboard review (renders nothing): J/K or arrows move through the regions, C/A confirm or accept, X reject or
+ * dismiss, E correct, Esc clears. Off while typing or while a dialog is open.
+ */
+function ReviewKeys({ disabled, order, selected, onMove, onDecide, onCorrect }: {
+  disabled: boolean;
+  order: number[];
+  selected: number | null;
+  onMove: (id: number | null) => void;
+  onDecide: (decision: 'confirmed' | 'rejected') => void;
+  onCorrect: () => void;
+}) {
+  useEffect(() => {
+    if (disabled) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (e.ctrlKey || e.metaKey || e.altKey || target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      const at = selected === null ? -1 : order.indexOf(selected);
+      const key = e.key.toLowerCase();
+      if ((key === 'j' || key === 'arrowdown') && order.length) onMove(order[Math.min(order.length - 1, at + 1)] ?? null);
+      else if ((key === 'k' || key === 'arrowup') && order.length) onMove(order[Math.max(0, at - 1)] ?? null);
+      else if (selected !== null && (key === 'c' || key === 'a')) onDecide('confirmed');
+      else if (selected !== null && key === 'x') onDecide('rejected');
+      else if (selected !== null && key === 'e') onCorrect();
+      else if (key === 'escape') onMove(null);
+      else return;
+      e.preventDefault();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [disabled, order, selected, onMove, onDecide, onCorrect]);
+  return null;
 }
 
 function photoFacts(image: InspectionDetail['images'][number]) {
@@ -307,13 +496,14 @@ function photoFacts(image: InspectionDetail['images'][number]) {
   return parts.join(' · ');
 }
 
-function RegionItem({ d, no, on, editable, busy, onSelect, onConfirm, onReject, onRemove, onCorrect }: {
+function RegionItem({ d, no, on, editable, busy, onSelect, onHover, onConfirm, onReject, onRemove, onCorrect }: {
   d: Detection;
   no: string;
   on: boolean;
   editable: boolean;
   busy: boolean;
   onSelect: () => void;
+  onHover: (over: boolean) => void;
   onConfirm: () => void;
   onReject: () => void;
   onRemove: () => void;
@@ -325,8 +515,25 @@ function RegionItem({ d, no, on, editable, busy, onSelect, onConfirm, onReject, 
   const severity = open ? d.severity : finalSeverity(d);
   const tone = severity ? SEVERITY[severity].tone : 'muted';
   const relabelled = d.correctedLabel && d.correctedLabel !== d.label;
+  // A brief flash when the decision changes while the page is open (not for decisions loaded with the page)
+  const [flash, setFlash] = useState<string | null>(null);
+  const shown = useRef(d.reviewStatus);
+  useEffect(() => {
+    if (shown.current === d.reviewStatus) return;
+    shown.current = d.reviewStatus;
+    if (d.reviewStatus === 'pending') return;
+    setFlash(d.reviewStatus);
+    const t = window.setTimeout(() => setFlash(null), 700);
+    return () => window.clearTimeout(t);
+  }, [d.reviewStatus]);
   return (
-    <li className={`as-dmg-item${on ? ' on' : ''}${open ? ' possible' : ''}`} onClick={onSelect}>
+    <li
+      className={`as-dmg-item st-${d.reviewStatus}${on ? ' on' : ''}${open ? ' possible' : ''}${flash ? ` flash-${flash}` : ''}`}
+      data-detection={d.detectionId}
+      onClick={onSelect}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
+    >
       <div className="as-dmg-item-head">
         <span className={`as-dmg-no as-tone-${tone}`} style={{ background: 'none' }}>{no}</span>
         <b>
@@ -486,7 +693,7 @@ function AddRegionDialog({ inspectionId, imageId, bbox, onClose, onDone }: {
   );
 }
 
-function ConfirmDialog({ inspection, onClose, onDone }: { inspection: InspectionDetail; onClose: () => void; onDone: () => void }) {
+function ConfirmDialog({ inspection, onClose, onDone }: { inspection: InspectionDetail; onClose: () => void; onDone: (kept: number) => void }) {
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -500,7 +707,7 @@ function ConfirmDialog({ inspection, onClose, onDone }: { inspection: Inspection
     setError(null);
     try {
       await apiSend('POST', `/inspections/${inspection.inspectionId}/confirm`, { notes });
-      onDone();
+      onDone(kept.length);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'The inspection could not be confirmed.');
       setBusy(false);

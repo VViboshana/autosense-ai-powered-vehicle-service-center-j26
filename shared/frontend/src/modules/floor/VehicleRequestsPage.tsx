@@ -15,6 +15,7 @@ type Claim = {
   registrationNo: string;
   status: 'pending' | 'approved' | 'rejected' | 'cancelled';
   customerNote: string | null;
+  photoUrl: string | null;
   reviewNote: string | null;
   requestedAt: string;
   reviewedAt: string | null;
@@ -42,6 +43,7 @@ export function VehicleRequestsPage() {
   const [pageSize, setPageSize] = useState(20);
   const [dialog, setDialog] = useState<{ claim: Claim; action: 'approve' | 'reject' } | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<Claim | null>(null);
   const list = useApi<Page<Claim>>('/vehicle-requests', { status, page, pageSize }, { refreshMs: 60_000 });
 
   return (
@@ -66,6 +68,7 @@ export function VehicleRequestsPage() {
                   <thead>
                     <tr>
                       <th>Plate</th>
+                      <th>Photo</th>
                       <th>Customer</th>
                       <th>Vehicle on record</th>
                       <th>Customer's note</th>
@@ -75,10 +78,19 @@ export function VehicleRequestsPage() {
                   </thead>
                   <tbody>
                     {list.loading || !list.data
-                      ? Array.from({ length: 3 }, (_, i) => <tr key={i}>{['6rem', '8rem', '10rem', '8rem', '4rem', '6rem'].map((w, j) => <td key={j}><Skeleton width={w} /></td>)}</tr>)
+                      ? Array.from({ length: 3 }, (_, i) => <tr key={i}>{['6rem', '4.5rem', '8rem', '10rem', '8rem', '4rem', '6rem'].map((w, j) => <td key={j}><Skeleton width={w} /></td>)}</tr>)
                       : list.data.records.map((c) => (
                           <tr key={c.claimId}>
                             <td className="as-veh"><b>{c.registrationNo}</b></td>
+                            <td>
+                              {c.photoUrl ? (
+                                <button type="button" className="as-claim-thumb" onClick={() => setPhoto(c)} aria-label={`See the photo ${c.customer.name} sent of ${c.registrationNo}`}>
+                                  <img src={c.photoUrl} alt="" />
+                                </button>
+                              ) : (
+                                <span className="small text-body-secondary">None</span>
+                              )}
+                            </td>
                             <td>
                               {c.customer.name}
                               <div className="small text-body-secondary as-mono">{c.customer.mobile}</div>
@@ -129,6 +141,12 @@ export function VehicleRequestsPage() {
           </Card>
         </div>
       </div>
+      {photo?.photoUrl && (
+        <Modal title={`${photo.registrationNo} · photo from ${photo.customer.name}`} size="lg" onClose={() => setPhoto(null)}>
+          <img src={photo.photoUrl} alt={`The vehicle ${photo.registrationNo}, as photographed by the customer`} className="w-100 rounded" />
+          <p className="small text-body-secondary mt-2 mb-0">Check that the car and its plate match before approving.</p>
+        </Modal>
+      )}
       {dialog && (
         <DecisionDialog
           {...dialog}
@@ -189,6 +207,7 @@ function DecisionDialog({ claim, action, onClose, onDone }: { claim: Claim; acti
     >
       {error instanceof ApiError && <Alert>{error.message}</Alert>}
       <form id="decision-form" onSubmit={submit} noValidate>
+        {approve && claim.photoUrl && <img src={claim.photoUrl} alt={`The vehicle ${claim.registrationNo}, as photographed by the customer`} className="w-100 rounded mb-3" style={{ maxHeight: 220, objectFit: 'cover' }} />}
         <p className="small">
           {approve
             ? `${claim.customer.name} will see this vehicle's status, confirmed inspections and recommendations. They become its owner on record.`

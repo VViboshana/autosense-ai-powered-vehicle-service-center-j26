@@ -6,16 +6,20 @@ export function Skeleton({ width = '100%', className = '' }: { width?: string; c
   return <span className={`as-skel ${className}`} style={{ width }} aria-hidden="true" />;
 }
 
-/** Nothing to show yet: say what will appear here and, when there is one, how to add the first item. */
-export function EmptyState({ icon = 'bi-inbox', title, children, action }: {
+/**
+ * Nothing to show yet: say what will appear here and, when there is one, how to add the first item. `art` replaces
+ * the icon with a small drawing (e.g. <DrivingCar />).
+ */
+export function EmptyState({ icon = 'bi-inbox', art, title, children, action }: {
   icon?: string;
+  art?: ReactNode;
   title: string;
   children?: ReactNode;
   action?: ReactNode;
 }) {
   return (
     <div className="as-empty">
-      <i className={`bi ${icon}`} aria-hidden="true" />
+      {art ?? <i className={`bi ${icon}`} aria-hidden="true" />}
       <b>{title}</b>
       {children}
       {action && <div className="mt-3">{action}</div>}

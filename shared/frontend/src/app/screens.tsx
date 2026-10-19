@@ -5,6 +5,7 @@ import { RolesPage } from '@/modules/admin/RolesPage';
 import { UsersPage } from '@/modules/admin/UsersPage';
 import { DashboardPage } from '@/modules/dashboard/DashboardPage';
 import { VehicleRequestsPage } from '@/modules/floor/VehicleRequestsPage';
+import { DamagePerformancePage } from '@/modules/inspections/DamagePerformancePage';
 import { InspectionDetailPage } from '@/modules/inspections/InspectionDetailPage';
 import { InspectionListPage } from '@/modules/inspections/InspectionListPage';
 import { NewInspectionPage } from '@/modules/inspections/NewInspectionPage';
@@ -44,4 +45,5 @@ export const SCREENS: ScreenRoute[] = [
     path: '/inspections/:id',
     element: <InspectionDetailPage />,
   },
+  { code: 'DAMAGE_SETTINGS', path: '/setup/damage', element: <DamagePerformancePage /> },
 ];

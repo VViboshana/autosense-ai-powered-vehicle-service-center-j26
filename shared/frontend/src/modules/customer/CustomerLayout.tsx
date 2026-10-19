@@ -9,7 +9,7 @@ export function CustomerLayout() {
     <div className="as-cust">
       <header className="as-cust-bar">
         <div className="container">
-          <Brand to="/my" />
+          <Brand to="/my" height={34} />
           <nav className="as-cust-nav" aria-label="Main">
             <NavLink to="/my" end>My vehicles</NavLink>
             <NavLink to="/my/account">My account</NavLink>

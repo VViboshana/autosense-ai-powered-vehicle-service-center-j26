@@ -3,6 +3,15 @@
  * Outline colour comes from the .as-tone-* class on each shape (severity), via currentColor.
  */
 
+/* Card content that is not a table (tables pad their own first and last columns): the same inset as the card head */
+.as-card-body {
+  padding: 0 1.25rem 1.25rem;
+}
+.as-card-note {
+  padding: 0.75rem 1.25rem 1.1rem;
+  margin: 0;
+}
+
 /* ---------- Photo with damage outlines ---------- */
 .as-dmg-photo {
   position: relative;
@@ -44,7 +53,7 @@
 }
 .as-dmg-shape polygon {
   fill: currentColor;
-  fill-opacity: 0.16;
+  fill-opacity: var(--as-dmg-fill, 0.16); /* the photo viewer's Fill slider sets it */
   stroke: currentColor;
   stroke-width: 2.5;
   vector-effect: non-scaling-stroke;
@@ -130,6 +139,369 @@
   border-style: dashed;
 }
 
+/* Button on a photo that opens it full screen */
+.as-dmg-expand {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 2;
+  border: 0;
+  border-radius: 8px;
+  padding: 0.3rem 0.55rem;
+  background: rgb(20 26 34 / 65%);
+  color: var(--as-surface);
+  font-size: 0.78rem;
+}
+.as-dmg-expand:hover,
+.as-dmg-expand:focus-visible {
+  background: rgb(20 26 34 / 85%);
+}
+
+/* ---------- Full-screen photo viewer ---------- */
+.as-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 1060;
+  display: flex;
+  flex-direction: column;
+  background: var(--as-sidebar);
+  color: var(--as-sidebar-text);
+}
+.as-viewer-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+}
+.as-viewer-bar b {
+  color: var(--as-surface);
+}
+.as-viewer-count,
+.as-viewer-zoom {
+  font-size: 0.8rem;
+  min-width: 3rem;
+  text-align: center;
+}
+.as-viewer-tools {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.as-viewer-sep {
+  width: 1px;
+  height: 1.4rem;
+  margin: 0 0.3rem;
+  background: rgb(255 255 255 / 15%);
+}
+.as-viewer-check {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.as-viewer-check input[type='range'] {
+  width: 5rem;
+  accent-color: var(--as-brand);
+}
+.as-viewer-check input[type='checkbox'] {
+  accent-color: var(--as-brand);
+}
+.as-viewer-stage {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  touch-action: none;
+}
+.as-viewer-stage.zoomed {
+  cursor: grab;
+}
+.as-viewer-stage.zoomed:active {
+  cursor: grabbing;
+}
+.as-viewer-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: 0 0;
+}
+.as-viewer-photo .as-dmg-photo {
+  border: 0;
+  border-radius: 4px;
+}
+.as-viewer-hint {
+  padding: 0.4rem 1rem;
+  font-size: 0.72rem;
+  color: var(--as-sidebar-muted);
+  text-align: center;
+}
+@media (hover: none) {
+  .as-viewer-hint {
+    display: none;
+  }
+}
+
+/* ---------- Confirmation messages ---------- */
+.as-toasts {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 1070;
+  display: grid;
+  gap: 0.5rem;
+  max-width: min(24rem, calc(100vw - 2.5rem));
+}
+.as-toast {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 10px;
+  background: var(--as-sidebar);
+  color: var(--as-surface);
+  font-size: 0.85rem;
+  box-shadow: var(--as-shadow-pop);
+  animation: as-toast-in 0.18s ease-out;
+}
+.as-toast-success .bi {
+  color: var(--as-success-soft);
+}
+.as-toast-info .bi {
+  color: var(--as-info-soft);
+}
+@keyframes as-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .as-toast {
+    animation: none;
+  }
+}
+
+/* ---------- Review queue: thumbnails, severity strip, waiting time ---------- */
+.as-thumb {
+  width: 4.5rem;
+  height: 3.4rem;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--as-neutral-soft);
+  display: block;
+}
+.as-thumb-none {
+  display: grid;
+  place-items: center;
+  color: var(--as-muted);
+}
+/* A severity-coloured edge on the row; the row sets --as-strip to the severity's state colour */
+.as-table tr.as-sev-strip td:first-child {
+  box-shadow: inset 4px 0 0 var(--as-strip, transparent);
+}
+
+/* ---------- Review progress + keyboard hints ---------- */
+.as-dmg-progress {
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1rem;
+  display: grid;
+  gap: 0.55rem;
+}
+.as-dmg-bar {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--as-neutral-soft);
+  overflow: hidden;
+}
+.as-dmg-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--as-primary);
+  transition: width 0.25s ease;
+}
+.as-dmg-progress.done .as-dmg-bar i {
+  background: var(--as-success);
+}
+.as-dmg-progress.done b {
+  color: var(--as-success);
+}
+.as-dmg-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
+  font-size: 0.75rem;
+  color: var(--as-muted);
+}
+.as-dmg-keys kbd {
+  display: inline-block;
+  min-width: 1.35rem;
+  padding: 0.05rem 0.3rem;
+  margin-right: 0.2rem;
+  border: 1px solid var(--as-line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--as-surface);
+  color: var(--as-ink-2);
+  font: 600 0.7rem var(--as-mono);
+  text-align: center;
+}
+/* The keyboard only matters with a keyboard: hide the hints on touch screens */
+@media (hover: none) {
+  .as-dmg-keys {
+    display: none;
+  }
+}
+
+/* ---------- Performance charts: small multiples (one hue) ---------- */
+.as-sm {
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.82rem;
+}
+.as-sm-row {
+  display: grid;
+  grid-template-columns: 8.5rem repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+  align-items: center;
+  padding: 0.3rem 0;
+}
+.as-sm-head {
+  align-items: end;
+  border-bottom: 1px solid var(--as-line);
+  padding-bottom: 0.5rem;
+}
+.as-sm-head b {
+  display: block;
+  color: var(--as-ink-2);
+  font-size: 0.8rem;
+}
+.as-sm-head small {
+  color: var(--as-muted);
+  font-size: 0.72rem;
+}
+.as-sm-total {
+  border-bottom: 1px solid var(--as-line-soft);
+  font-weight: 600;
+}
+.as-sm-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.as-sm-track {
+  flex: 1;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: var(--as-line-soft);
+  overflow: hidden;
+}
+.as-sm-track i {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: color-mix(in srgb, var(--as-primary) 75%, var(--as-surface));
+}
+.as-sm-track i.strong {
+  background: var(--as-primary);
+}
+.as-sm-value {
+  width: 2.6rem;
+  text-align: right;
+  color: var(--as-ink-2);
+}
+.as-sm-none {
+  color: var(--as-muted);
+  font-size: 0.75rem;
+}
+.as-sm-n {
+  width: 2.6rem;
+  color: var(--as-muted);
+  font-size: 0.7rem;
+}
+.as-sm-axis span {
+  display: flex;
+  justify-content: space-between;
+  margin-right: 6.2rem; /* the value and n columns, with their gaps */
+}
+.as-sm-axis i {
+  font-style: normal;
+  font-size: 0.68rem;
+  color: var(--as-muted);
+}
+@media (max-width: 767.98px) {
+  .as-sm-row {
+    grid-template-columns: 5.5rem repeat(3, minmax(0, 1fr));
+    gap: 0.6rem;
+  }
+  .as-sm-head small,
+  .as-sm-axis {
+    display: none;
+  }
+  .as-sm-cell {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.15rem;
+  }
+  .as-sm-value {
+    width: auto;
+    text-align: left;
+  }
+}
+
+/* ---------- Severity rule check: heatmap (one hue) ---------- */
+.as-heat {
+  display: grid;
+  gap: 4px;
+  max-width: 30rem;
+  font-size: 0.8rem;
+}
+.as-heat-row {
+  display: grid;
+  grid-template-columns: 7rem repeat(3, 1fr);
+  gap: 4px;
+  align-items: stretch;
+}
+.as-heat-corner {
+  font-size: 0.7rem;
+  color: var(--as-muted);
+  align-self: end;
+}
+.as-heat-col {
+  text-align: center;
+  font-weight: 600;
+  color: var(--as-ink-2);
+}
+.as-heat-rowh {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  color: var(--as-ink-2);
+}
+.as-heat-cell {
+  display: grid;
+  place-items: center;
+  height: 3rem;
+  border-radius: 6px;
+  background: var(--as-surface-2);
+  border: 1px solid var(--as-line-soft);
+  color: var(--as-ink-2);
+  font: 600 1rem var(--as-mono);
+}
+.as-heat-cell.dark {
+  color: var(--as-surface);
+}
+.as-heat-cell.agree {
+  outline: 2px solid var(--as-ink-2);
+  outline-offset: -2px;
+}
+
 /* ---------- Region list beside the photo ---------- */
 .as-dmg-list {
   list-style: none;
@@ -143,6 +515,9 @@
   border-radius: 10px;
   padding: 0.7rem 0.85rem;
   background: var(--as-surface);
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  scroll-margin: 5rem; /* stays clear of the fixed top bar when scrolled into view */
 }
 .as-dmg-item.on {
   border-color: var(--as-primary);
@@ -220,16 +595,61 @@
 .as-dmg-job .as-veh {
   flex: 1;
 }
-.as-dmg-shots {
+/* Guided capture: one slot per side of the vehicle */
+.as-dmg-slots {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
   gap: 0.75rem;
+}
+.as-dmg-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  min-height: 12.5rem;
+  padding: 1rem 0.75rem;
+  border: 2px dashed var(--as-line);
+  border-radius: 12px;
+  background: var(--as-surface-2);
+  color: var(--as-muted);
+  font-size: 0.8rem;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.as-dmg-slot b {
+  color: var(--as-ink-2);
+  font-size: 0.9rem;
+}
+.as-dmg-slot:hover:not(:disabled),
+.as-dmg-slot:focus-visible {
+  border-color: var(--as-primary);
+  background: var(--as-primary-soft);
+  color: var(--as-primary);
+}
+.as-dmg-slot:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.as-dmg-side {
+  width: 6.5rem;
+  height: auto;
+  margin-bottom: 0.5rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.as-dmg-side .as-dmg-side-light {
+  stroke: var(--as-brand);
 }
 .as-dmg-shot {
   border: 1px solid var(--as-line);
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
   background: var(--as-surface);
+  display: flex;
+  flex-direction: column;
 }
 .as-dmg-shot img {
   display: block;
@@ -238,28 +658,242 @@
   object-fit: cover;
   background: var(--as-neutral-soft);
 }
+.as-dmg-shot-body {
+  padding: 0.55rem 0.65rem 0.6rem;
+  display: grid;
+  gap: 0.35rem;
+}
+.as-dmg-check {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.75rem;
+  font-size: 0.72rem;
+  color: var(--as-muted);
+}
 .as-dmg-shot-foot {
   display: flex;
   gap: 0.4rem;
-  padding: 0.5rem;
 }
-.as-dmg-add {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  min-height: 11rem;
-  border: 2px dashed var(--as-line);
-  border-radius: 10px;
-  color: var(--as-muted);
-  cursor: pointer;
-  font-size: 0.85rem;
+/* After the upload: the bar is full and gently pulses while the server works */
+.as-dmg-bar.working i {
+  width: 100% !important;
+  animation: as-dmg-pulse 1.2s ease-in-out infinite;
 }
-.as-dmg-add:hover {
-  border-color: var(--as-primary);
-  color: var(--as-primary);
+@keyframes as-dmg-pulse {
+  50% {
+    opacity: 0.45;
+  }
 }
-.as-dmg-add .bi {
-  font-size: 1.6rem;
+@media (prefers-reduced-motion: reduce) {
+  .as-dmg-bar.working i {
+    animation: none;
+  }
 }
+
+/* ---------- Motion on the review screen ---------- */
+/* Opening an inspection to review: an "AI checking" sweep down the photo, then each outline traces itself in */
+.as-dmg-scan {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  overflow: hidden;
+}
+.as-dmg-scan::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 30%;
+  top: -30%;
+  background: linear-gradient(180deg, transparent, rgb(242 106 27 / 22%) 85%, rgb(242 106 27 / 70%));
+  animation: as-dmg-sweep 0.9s cubic-bezier(0.5, 0, 0.5, 1) both;
+}
+.as-dmg-scan::after {
+  content: 'AI checking the photo…';
+  position: absolute;
+  left: 0.6rem;
+  top: 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+  background: rgb(14 17 22 / 60%);
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  animation: as-dmg-gone 0.3s ease 0.9s both;
+}
+@keyframes as-dmg-sweep {
+  to { top: 100%; }
+}
+@keyframes as-dmg-gone {
+  to { opacity: 0; visibility: hidden; }
+}
+@keyframes as-dmg-fill-in {
+  from { fill-opacity: 0; }
+}
+.as-dmg-photo.as-intro .as-dmg-shape {
+  animation: as-fade 0.3s ease both;
+  animation-delay: calc(900ms + var(--i, 0) * 110ms);
+}
+.as-dmg-photo.as-intro .as-dmg-shape:not(.rejected):not(.possible) polygon {
+  stroke-dasharray: var(--len);
+  animation: as-trace 0.9s cubic-bezier(0.45, 0.05, 0.2, 1) both, as-dmg-fill-in 0.4s ease both;
+  animation-delay: calc(900ms + var(--i, 0) * 110ms), calc(1500ms + var(--i, 0) * 110ms);
+}
+.as-dmg-shape polygon {
+  transition: fill-opacity 0.25s, stroke-width 0.2s;
+}
+
+/* The region list: items come in one after another; a decision flashes, then settles into its look */
+.as-dmg-list > li {
+  animation: as-rise 0.35s var(--as-ease) both;
+}
+.as-dmg-list > li:nth-child(2) { animation-delay: 50ms; }
+.as-dmg-list > li:nth-child(3) { animation-delay: 100ms; }
+.as-dmg-list > li:nth-child(4) { animation-delay: 150ms; }
+.as-dmg-list > li:nth-child(n + 5) { animation-delay: 200ms; }
+.as-dmg-item {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.3s, opacity 0.3s;
+}
+.as-dmg-item.st-confirmed,
+.as-dmg-item.st-corrected {
+  background: linear-gradient(90deg, var(--as-success-soft), var(--as-surface) 65%);
+  border-color: rgb(15 122 82 / 28%);
+}
+.as-dmg-item.st-rejected {
+  opacity: 0.65;
+}
+.as-dmg-item.st-rejected .as-dmg-item-head b {
+  text-decoration: line-through;
+  text-decoration-color: var(--as-muted);
+}
+.as-dmg-item.on {
+  opacity: 1;
+}
+.as-dmg-item.flash-confirmed,
+.as-dmg-item.flash-corrected {
+  animation: as-dmg-flash-ok 0.7s var(--as-ease);
+}
+.as-dmg-item.flash-rejected {
+  animation: as-dmg-flash-no 0.6s var(--as-ease);
+}
+@keyframes as-dmg-flash-ok {
+  0% { box-shadow: 0 0 0 0 rgb(15 122 82 / 45%); transform: scale(1); }
+  35% { box-shadow: 0 0 0 6px rgb(15 122 82 / 18%); transform: scale(1.015); }
+  100% { box-shadow: 0 0 0 0 rgb(15 122 82 / 0%); transform: scale(1); }
+}
+@keyframes as-dmg-flash-no {
+  0% { transform: translateX(0); }
+  30% { transform: translateX(-4px); }
+  60% { transform: translateX(3px); }
+  100% { transform: translateX(0); }
+}
+.as-dmg-item .as-pill {
+  transition: background-color 0.25s, color 0.25s;
+}
+.as-dmg-bar i {
+  transition: width 0.5s var(--as-ease), background-color 0.3s;
+}
+/* Every region reviewed: the Confirm button glows to say it's ready */
+.btn.as-ready {
+  animation: as-dmg-glow 1.6s ease-in-out infinite;
+}
+@keyframes as-dmg-glow {
+  50% { box-shadow: 0 0 0 6px rgb(194 65 12 / 20%); }
+}
+
+/* Confirmed: a check mark draws itself with a small burst */
+.as-celebrate {
+  position: fixed;
+  inset: 0;
+  z-index: 1080;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(14 17 22 / 35%);
+  backdrop-filter: blur(2px);
+  animation: as-fade 0.2s ease both;
+}
+.as-celebrate-card {
+  position: relative;
+  max-width: 24rem;
+  background: var(--as-surface);
+  border-radius: 18px;
+  padding: 1.6rem 1.75rem;
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  box-shadow: var(--as-shadow-pop);
+  animation: as-pop 0.45s var(--as-ease) both;
+}
+.as-celebrate-card svg {
+  width: 76px;
+  height: 76px;
+}
+.as-celebrate-card .c1 {
+  fill: var(--as-success-soft);
+}
+.as-celebrate-card .c2 {
+  fill: none;
+  stroke: var(--as-success);
+  stroke-width: 4;
+  stroke-dasharray: 160;
+  animation: as-dmg-ring 0.6s ease 0.15s both;
+}
+.as-celebrate-card .ck {
+  fill: none;
+  stroke: var(--as-success);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 50;
+  animation: as-dmg-tick 0.4s ease 0.6s both;
+}
+.as-celebrate-card h2 {
+  font-size: 1.2rem;
+  margin: 0.3rem 0 0;
+}
+@keyframes as-dmg-ring {
+  from { stroke-dashoffset: 160; }
+}
+@keyframes as-dmg-tick {
+  from { stroke-dashoffset: 50; }
+}
+.as-burst {
+  position: absolute;
+  top: 3.5rem;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  opacity: 0;
+  animation: as-dmg-burst 0.9s var(--as-ease) 0.5s both;
+}
+.as-burst-brand { background: var(--as-brand); }
+.as-burst-success { background: var(--as-success); }
+.as-burst-info { background: var(--as-info); }
+.as-burst-warning { background: var(--as-warning); }
+@keyframes as-dmg-burst {
+  0% { opacity: 1; transform: translate(-50%, -50%) rotate(0) scale(1); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) rotate(var(--r)) scale(0.6); }
+}
+
+/* Test set vs real use: bars grow from zero, row by row; heatmap cells fade in */
+.as-sm-track i {
+  transform-origin: left;
+  animation: as-grow-x 0.7s var(--as-ease) both;
+  animation-delay: 250ms;
+}
+.as-sm-row:nth-child(3) .as-sm-track i { animation-delay: 300ms; }
+.as-sm-row:nth-child(4) .as-sm-track i { animation-delay: 350ms; }
+.as-sm-row:nth-child(5) .as-sm-track i { animation-delay: 400ms; }
+.as-sm-row:nth-child(6) .as-sm-track i { animation-delay: 450ms; }
+.as-sm-row:nth-child(7) .as-sm-track i { animation-delay: 500ms; }
+.as-sm-row:nth-child(n + 8) .as-sm-track i { animation-delay: 550ms; }
+.as-heat-cell {
+  animation: as-fade 0.5s ease both;
+  animation-delay: 300ms;
+}
+.as-heat-row:nth-child(3) .as-heat-cell { animation-delay: 400ms; }
+.as-heat-row:nth-child(n + 4) .as-heat-cell { animation-delay: 500ms; }

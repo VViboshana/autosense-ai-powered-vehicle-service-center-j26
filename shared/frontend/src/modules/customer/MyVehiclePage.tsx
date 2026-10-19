@@ -1,22 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
-import { StatusPill } from '@/components/ui/StatusPill';
-import { formatDate, formatDuration, formatTime, minutesSince } from '@/lib/format';
+import { formatDuration, formatTime, minutesSince } from '@/lib/format';
 import { useApi } from '@/lib/useApi';
 import { STAGES } from '@/modules/dashboard/stages';
-import type { MyVehicle } from './customer.types';
-import { ReportPhoto } from './ReportPhoto';
-import { SEVERITY_TONE } from './severity';
-
-const JOURNEY = ['Checked in', 'Inspected', 'Waiting for a bay', 'In service', 'Ready for pickup'];
-const LABELS: Record<string, string> = {
-  dent: 'Dent', scratch: 'Scratch', crack: 'Crack', glass_shatter: 'Broken glass', lamp_broken: 'Broken lamp', tire_flat: 'Flat tyre',
-};
-const VIEWS: Record<string, string> = { front: 'Front', rear: 'Rear', left: 'Left side', right: 'Right side', other: 'Close-up' };
+import { CarArt, PlateText } from './art';
+import type { InspectionReport, MyVehicle } from './customer.types';
+import { JOURNEY, ordinal, plural } from './customer.ui';
+import { InspectionReportView } from './InspectionReportView';
+import './customer.css';
 
 type Tab = 'status' | 'inspections' | 'maintenance' | 'safety';
+type Status = Extract<MyVehicle['sections']['status'], { available: true }>['data'];
 
 /** One of my vehicles: status, confirmed inspection reports, recommendations, safety notices (tabs the admin allows). */
 export function MyVehiclePage() {
@@ -30,7 +26,9 @@ export function MyVehiclePage() {
         ['safety', 'Safety notices'],
       ] as const).filter(([key]) => data.data!.sections[key].available)
     : [];
-  const [tab, setTab] = useState<Tab | null>(null);
+  // Opens on the report when the link asks for it (/my/vehicles/7#report), e.g. from the home page
+  const [tab, setTab] = useState<Tab | null>(() => (window.location.hash === '#report' ? 'inspections' : null));
+  const [pick, setPick] = useState<number | null>(null);
   const current = tab ?? tabs[0]?.[0] ?? null;
 
   useEffect(() => {
@@ -47,45 +45,67 @@ export function MyVehiclePage() {
   }
   if (!data.data) return <div className="p-4"><Skeleton width="40%" /></div>;
   const { vehicle, sections } = data.data;
+  const reports = sections.inspections.available ? sections.inspections.data : [];
+  const report = reports.find((r) => r.inspectionId === pick) ?? reports[0];
 
   return (
     <>
-      <Link to="/my" className="small text-decoration-none">‹ My vehicles</Link>
-      <div className="d-flex align-items-center gap-3 my-3">
-        <span className="as-vehicle-ic"><i className="bi bi-car-front" aria-hidden="true" /></span>
+      <Link to="/my" className="small text-decoration-none cp-rise">‹ My vehicles</Link>
+      <div className="cp-vhead cp-rise" style={{ '--i': 1 } as CSSProperties}>
+        {vehicle.photoUrl ? <img className="cp-vthumb" src={vehicle.photoUrl} alt="" /> : <span className="cp-vthumb"><CarArt /></span>}
+        <span className="cp-plate"><PlateText plate={vehicle.registrationNo} /></span>
         <div>
-          <h1 className="as-page-title as-plate" style={{ fontSize: '1.5rem' }}>{vehicle.registrationNo}</h1>
-          <div className="text-body-secondary small">{vehicle.description}{vehicle.colour ? ` · ${vehicle.colour}` : ''}</div>
+          <b className="fs-5">{vehicle.description.split(' · ')[0]}</b>
+          <div className="text-body-secondary small">
+            {[vehicle.description.split(' · ')[1], vehicle.colour, vehicle.fuelType && vehicle.fuelType[0]!.toUpperCase() + vehicle.fuelType.slice(1)].filter(Boolean).join(' · ')}
+          </div>
         </div>
       </div>
 
-      <Card>
+      <Card className="mb-3">
         <div className="as-tabs" role="tablist">
           {tabs.map(([key, label]) => (
-            <button key={key} type="button" role="tab" aria-selected={current === key} onClick={() => setTab(key)}>{label}</button>
+            <button key={key} type="button" role="tab" aria-selected={current === key} onClick={() => setTab(key)}>
+              {label}
+              {key === 'inspections' && reports.length > 0 && <span className="cp-tabs-count">{reports.length}</span>}
+            </button>
           ))}
         </div>
-        <div className="p-4">
-          {current === 'status' && sections.status.available && <StatusTab status={sections.status.data} />}
-          {current === 'inspections' && sections.inspections.available && <InspectionsTab inspections={sections.inspections.data} />}
-          {current === 'maintenance' && (
+        {current === 'status' && sections.status.available && (
+          <div className="p-4"><StatusTab status={sections.status.data} latest={reports[0]} onReport={() => setTab('inspections')} /></div>
+        )}
+        {current === 'inspections' && reports.length === 0 && (
+          <div className="p-4">
+            <EmptyState icon="bi-clipboard-check" title="No inspection reports yet">
+              After a technician confirms an inspection of your vehicle, the report appears here.
+            </EmptyState>
+          </div>
+        )}
+        {current === 'maintenance' && (
+          <div className="p-4">
             <EmptyState icon="bi-wrench-adjustable" title="No recommendations yet">
               Maintenance work the technician recommends for this vehicle will appear here.
             </EmptyState>
-          )}
-          {current === 'safety' && (
+          </div>
+        )}
+        {current === 'safety' && (
+          <div className="p-4">
             <EmptyState icon="bi-shield-check" title="No safety notices">
               If the service centre raises a safety check involving your vehicle, you'll see it here.
             </EmptyState>
-          )}
-          {tabs.length === 0 && <EmptyState title="Nothing to show for this vehicle yet" />}
-        </div>
+          </div>
+        )}
+        {tabs.length === 0 && <div className="p-4"><EmptyState title="Nothing to show for this vehicle yet" /></div>}
       </Card>
+
+      {current === 'inspections' && report && (
+        <InspectionReportView key={report.inspectionId} vehicle={vehicle} report={report} history={reports} onPick={setPick} />
+      )}
     </>
   );
 }
 
-function StatusTab({ status }: { status: Extract<MyVehicle['sections']['status'], { available: true }>['data'] }) {
+function StatusTab({ status, latest, onReport }: { status: Status; latest: InspectionReport | undefined; onReport: () => void }) {
   if (!status) {
     return (
       <EmptyState icon="bi-calendar-check" title="Not at the service centre">
@@ -94,103 +114,66 @@ function StatusTab({ status }: { status: Extract<MyVehicle['sections']['status']
     );
   }
   const step = STAGES[status.stage].step;
+  const headline =
+    status.stage === 'waiting_for_bay' ? 'Waiting for a free bay'
+    : status.stage === 'in_bay' ? `Being serviced${status.bay ? ` in ${status.bay}` : ''}`
+    : status.stage === 'ready' ? 'Ready for pickup'
+    : STAGES[status.stage].label;
+
   return (
     <div className="d-grid gap-4">
-      <div className="d-flex justify-content-between flex-wrap gap-2">
+      <div className="d-flex justify-content-between flex-wrap gap-2 align-items-start">
         <div>
           <div className="small text-body-secondary">{status.service} · {status.jobNo}</div>
-          <div className="fs-5 fw-semibold">{STAGES[status.stage].label}{status.bay ? ` · ${status.bay}` : ''}</div>
+          <div className="fs-4 fw-bold">{headline}</div>
         </div>
-        <StatusPill tone={STAGES[status.stage].tone}>{STAGES[status.stage].label}</StatusPill>
-      </div>
-      <ol className="as-journey" aria-label="Progress">
-        {JOURNEY.map((label, i) => (
-          <li key={label} className={`${i + 1 <= step ? 'done' : ''}${i + 1 === step ? ' now' : ''}`}>{label}</li>
-        ))}
-      </ol>
-      <dl className="row small mb-0">
-        <dt className="col-sm-4 text-body-secondary fw-normal">Checked in</dt>
-        <dd className="col-sm-8">{formatDate(status.checkedInAt)} at {formatTime(status.checkedInAt)}</dd>
         {status.queuePosition !== null && (
-          <>
-            <dt className="col-sm-4 text-body-secondary fw-normal">Place in queue</dt>
-            <dd className="col-sm-8">{status.queuePosition === 1 ? 'Next for a free bay' : `${status.queuePosition} in line for a bay`}</dd>
-          </>
+          <span className="cp-pill cp-tone-warning">{status.queuePosition === 1 ? 'Next in line' : `${ordinal(status.queuePosition)} in line`}</span>
+        )}
+      </div>
+      <ol className="cp-journey" style={{ '--p': Math.max(0, step - 1) / 4 } as CSSProperties} aria-label={`Progress, step ${step} of 5`}>
+        <li className="cp-journey-fill" aria-hidden="true" />
+        {JOURNEY.map((s, i) => {
+          const state = i + 1 < step || step === 5 ? 'done' : i + 1 === step ? 'now' : '';
+          const when = i === 0 ? formatTime(status.checkedInAt) : i === 3 && status.bayEnteredAt ? formatTime(status.bayEnteredAt) : i === 4 && status.readyAt ? formatTime(status.readyAt) : '';
+          return (
+            <li key={s.label} className={state} style={{ '--i': i } as CSSProperties} aria-current={state === 'now' ? 'step' : undefined}>
+              <span className="node"><i className={`bi ${state === 'done' ? 'bi-check-lg' : s.icon}`} aria-hidden="true" /></span>
+              <span>{s.label}<span className="when">{when || ' '}</span></span>
+            </li>
+          );
+        })}
+      </ol>
+      <div className="cp-stats">
+        <div className="cp-stat cp-rise" style={{ '--i': 3 } as CSSProperties}><div className="k">Checked in</div><div className="v">{formatTime(status.checkedInAt)}</div></div>
+        {status.queuePosition !== null && (
+          <div className="cp-stat cp-rise" style={{ '--i': 4 } as CSSProperties}>
+            <div className="k">Place in queue</div>
+            <div className="v">{status.queuePosition === 1 ? 'Next for a bay' : `${ordinal(status.queuePosition)} for a bay`}</div>
+          </div>
         )}
         {status.bayEnteredAt && (
-          <>
-            <dt className="col-sm-4 text-body-secondary fw-normal">In service for</dt>
-            <dd className="col-sm-8">{formatDuration(minutesSince(status.bayEnteredAt))}</dd>
-          </>
+          <div className="cp-stat cp-rise" style={{ '--i': 4 } as CSSProperties}><div className="k">In service for</div><div className="v">{formatDuration(minutesSince(status.bayEnteredAt))}</div></div>
         )}
-        <dt className="col-sm-4 text-body-secondary fw-normal">Estimated ready</dt>
-        <dd className="col-sm-8 text-body-secondary">{status.estimatedReadyAt ? formatTime(status.estimatedReadyAt) : 'Not available yet'}</dd>
-      </dl>
-    </div>
-  );
-}
-
-function InspectionsTab({ inspections }: { inspections: Extract<MyVehicle['sections']['inspections'], { available: true }>['data'] }) {
-  if (inspections.length === 0) {
-    return (
-      <EmptyState icon="bi-clipboard-check" title="No inspection reports yet">
-        After a technician confirms an inspection of your vehicle, the report appears here.
-      </EmptyState>
-    );
-  }
-  return (
-    <div className="d-grid gap-3">
-      {inspections.map((i) => (
-        <section key={i.inspectionNo} className="as-card p-3">
-          <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-            <b>Inspection {i.inspectionNo}</b>
-            <span className="d-flex align-items-center gap-2 small text-body-secondary">
-              Confirmed {formatDate(i.confirmedAt)}
-              {i.overallSeverity ? (
-                i.overallSeverity !== 'unavailable' && <StatusPill tone={SEVERITY_TONE[i.overallSeverity] ?? 'muted'}>Overall: {severityText(i.overallSeverity)}</StatusPill>
-              ) : (
-                <StatusPill tone="success">No damage</StatusPill>
-              )}
-            </span>
-          </div>
-          {i.notes && (
-            <p className="small mb-3"><i className="bi bi-chat-left-text me-1 text-body-secondary" aria-hidden="true" />Technician's note: {i.notes}</p>
-          )}
-          {i.findings.length === 0 ? (
-            <p className="small mb-0 text-body-secondary">No visible damage was recorded.</p>
-          ) : (
-            <div className="d-grid gap-3">
-              {i.photos.filter((p) => p.findings.length > 0).map((p) => (
-                <div key={p.imageId} className="row g-3 align-items-start">
-                  <div className="col-md-7">
-                    <ReportPhoto url={p.url} width={p.width} height={p.height} findings={p.findings} alt={`${VIEWS[p.viewAngle] ?? 'Vehicle'} photo`} />
-                  </div>
-                  <div className="col-md-5">
-                    <div className="small fw-semibold mb-2">{VIEWS[p.viewAngle] ?? 'Photo'}</div>
-                    <ol className="list-unstyled mb-0 d-grid gap-2">
-                      {p.findings.map((f) => (
-                        <li key={f.no} className="d-flex justify-content-between align-items-start gap-2 small">
-                          <span>
-                            <b className="me-1">{f.no}.</b>
-                            {LABELS[f.label] ?? f.label}
-                            {f.location && <span className="text-body-secondary"> · {f.location} of the photo</span>}
-                          </span>
-                          {f.severity && f.severity !== 'unavailable' && (
-                            <StatusPill tone={SEVERITY_TONE[f.severity] ?? 'muted'}>{severityText(f.severity)}</StatusPill>
-                          )}
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                </div>
-              ))}
+        <div className="cp-stat cp-rise" style={{ '--i': 5 } as CSSProperties}>
+          <div className="k">Estimated ready</div>
+          <div className="v">{status.estimatedReadyAt ? formatTime(status.estimatedReadyAt) : <span className="text-body-secondary fs-6 fw-normal">Not available yet</span>}</div>
+        </div>
+      </div>
+      {latest && (
+        <div className="cp-cta cp-rise" style={{ '--i': 6 } as CSSProperties}>
+          <i className="bi bi-clipboard-check fs-3" style={{ color: 'var(--as-primary)' }} aria-hidden="true" />
+          <div className="t">
+            <b>The inspection report is ready</b>
+            <div className="small text-body-secondary">
+              {latest.areas.length === 0 ? 'No damage found.' : `${plural(latest.areas.length, 'damaged area')} found in ${plural(latest.photos.length, 'photo')}, checked by a technician.`}
             </div>
-          )}
-        </section>
-      ))}
-      <p className="small text-body-secondary mb-0">Reports are checked by a technician. Severity is a guide, not a repair quote.</p>
+          </div>
+          <button type="button" className="btn btn-primary" onClick={onReport}>
+            See the report <i className="bi bi-arrow-right ms-1" aria-hidden="true" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
-
-const severityText = (s: string) => s[0]!.toUpperCase() + s.slice(1);
