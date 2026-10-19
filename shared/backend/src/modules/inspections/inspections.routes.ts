@@ -9,7 +9,7 @@ import { parse } from '../../http/validate.js';
 import { getSetting } from '../../lib/settings.js';
 import { requireScreen, signedInUser } from '../../middleware/requireScreen.js';
 import { fieldPerformance } from './inspections.performance.js';
-import { getInspection, imageStorageKey, listInspections, reviewedRegions, vehicleOptions } from './inspections.repository.js';
+import { getInspection, imageStorageKey, listInspections, reviewedRegions, testSetMetrics, vehicleOptions } from './inspections.repository.js';
 import { DAMAGE_LABELS, INSPECTION_STATUSES, REVIEW_DECISIONS, SEVERITIES, VIEW_ANGLES } from './inspections.rules.js';
 import {
   addTechnicianRegion,
@@ -128,7 +128,8 @@ export function inspectionsRoutes(deps: InspectionDeps) {
   // Before '/:id' (like vehicle-options below): how the model and the severity rules do in real use
   router.get('/performance', requireScreen('DAMAGE_SETTINGS'), async (_req, res) => {
     const { regions, sample } = await reviewedRegions(pool);
-    sendOk(res, { sample, regionsReviewed: regions.length, ...fieldPerformance(regions) });
+    const testSet = await testSetMetrics(pool, sample.modelVersions);
+    sendOk(res, { sample, regionsReviewed: regions.length, testSet, ...fieldPerformance(regions) });
   });
 
   // Before '/:id', so "vehicle-options" is not read as an inspection id

@@ -103,7 +103,10 @@ export function NewInspectionPage() {
     setUpload({ sent: 0, bytes });
     try {
       const created = await apiUpload<InspectionDetail>('/inspections', form, (sent) => setUpload({ sent, bytes }));
-      navigate(`/inspections/${created.inspectionId}`);
+      const found = created.images.flatMap((im) => im.detections).length;
+      navigate(`/inspections/${created.inspectionId}`, {
+        state: { toast: `Inspection ${created.inspectionNo} created: ${found} ${found === 1 ? 'region' : 'regions'} to check` },
+      });
     } catch (err) {
       setError(err);
       setUpload(null);
@@ -124,7 +127,8 @@ export function NewInspectionPage() {
           <form onSubmit={submit} noValidate>
             {error instanceof ApiError && <Alert>{error.message}</Alert>}
 
-            <Card icon="bi-car-front" title="1. Vehicle" subtitle="Choose the vehicle's open job.">
+            <Card className="mb-3" icon="bi-car-front" title="1. Vehicle" subtitle="Choose the vehicle's open job.">
+              <div className="as-card-body">
               {job ? (
                 <div className="as-dmg-job" aria-pressed="true">
                   <i className="bi bi-check-circle-fill text-success" aria-hidden="true" />
@@ -163,14 +167,17 @@ export function NewInspectionPage() {
                 </>
               )}
               {fields.vehicleId && <div className="text-danger small mt-2">{fields.vehicleId}</div>}
+              </div>
             </Card>
 
             <Card
+              className="mb-3"
               icon="bi-camera"
               title="2. Photos"
               subtitle={`Photograph each side that shows damage, up to ${limits.maxImagesPerInspection} photos. Stand 2–3 m back so the whole side is in the frame, in good light.`}
               actions={<span className="small text-body-secondary as-num">{taken.length} of {limits.maxImagesPerInspection}</span>}
             >
+              <div className="as-card-body">
               {problem && <Alert tone="warning">{problem}</Alert>}
               {fields.images && <Alert>{fields.images}</Alert>}
               <input
@@ -217,6 +224,7 @@ export function NewInspectionPage() {
                   ? `${warned === 1 ? 'One photo is' : `${warned} photos are`} unclear and may give less reliable results. Retake if you can; you can still analyse.`
                   : 'Each photo is checked for sharpness and light as you add it. The damage itself is assessed when you analyse.'}
               </p>
+              </div>
             </Card>
 
             {upload ? (

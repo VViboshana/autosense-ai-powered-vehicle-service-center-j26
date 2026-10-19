@@ -16,6 +16,8 @@ export type InspectionListItem = {
   vehicle: string;
   jobNo: string | null;
   imageCount: number;
+  /** The inspection's first photo, for the list's thumbnail. */
+  thumbnailUrl: string | null;
   detectionCount: number;
   pendingCount: number;
   /** Possible damage (suggestions) nobody has accepted or dismissed yet. */
@@ -46,7 +48,7 @@ export type DetectionView = {
   reviewedAt: string | null;
 };
 
-export type InspectionDetail = Omit<InspectionListItem, 'imageCount' | 'detectionCount' | 'pendingCount' | 'possibleCount' | 'vehicle'> & {
+export type InspectionDetail = Omit<InspectionListItem, 'imageCount' | 'thumbnailUrl' | 'detectionCount' | 'pendingCount' | 'possibleCount' | 'vehicle'> & {
   vehicle: { vehicleId: number; registrationNo: string; description: string };
   job: { jobId: number; jobNo: string } | null;
   severityMethod: string | null;
@@ -100,6 +102,7 @@ export async function listInspections(db: Db, f: InspectionFilter): Promise<Page
             v.registration_no, v.make || ' ' || v.model || coalesce(' · ' || v.year, '') AS vehicle, j.job_no,
             ${USER_NAME('cu')} AS created_by,
             (SELECT count(*) FROM damage.inspection_images im WHERE im.inspection_id = i.inspection_id) AS image_count,
+            (SELECT im.image_id FROM damage.inspection_images im WHERE im.inspection_id = i.inspection_id ORDER BY im.image_id LIMIT 1) AS first_image_id,
             (SELECT count(*) FROM damage.detections d JOIN damage.inspection_images im USING (image_id)
               WHERE im.inspection_id = i.inspection_id AND ${COUNTS_AS_FINDING}) AS detection_count,
             (SELECT count(*) FROM damage.detections d JOIN damage.inspection_images im USING (image_id)
@@ -121,6 +124,7 @@ export async function listInspections(db: Db, f: InspectionFilter): Promise<Page
       vehicle: r.vehicle,
       jobNo: r.job_no,
       imageCount: r.image_count,
+      thumbnailUrl: r.first_image_id ? `/api/inspections/${r.inspection_id}/images/${r.first_image_id}` : null,
       detectionCount: r.detection_count,
       pendingCount: r.pending_count,
       possibleCount: r.possible_count,
@@ -300,6 +304,29 @@ export async function reviewedRegions(db: Db) {
       modelVersions: s.model_versions as string[],
     },
   };
+}
+
+export type TestSetMetrics = {
+  version: string;
+  split: string;
+  images: number;
+  regions: number;
+  mask: { precision: number; recall: number; mAP50: number; mAP50_95: number };
+  perClassMaskMAP50_95: Partial<Record<DamageLabel, number>>;
+};
+
+/**
+ * The test-set results of the model behind the field figures (the version used most recently with metrics stored);
+ * or, before any confirmed inspection, of the newest damage model with results. Null when none are stored.
+ */
+export async function testSetMetrics(db: Db, versions: string[]): Promise<TestSetMetrics | null> {
+  const { rows } = await db.query<{ version: string; metrics: Omit<TestSetMetrics, 'version'> }>(
+    `SELECT version, metrics FROM app.model_versions
+     WHERE component = 'damage' AND metrics ? 'mask' AND (cardinality($1::text[]) = 0 OR version = ANY($1))
+     ORDER BY registered_at DESC LIMIT 1`,
+    [versions],
+  );
+  return rows[0] ? { version: rows[0].version, ...rows[0].metrics } : null;
 }
 
 /** The vehicle an inspection is for: from the job when one is given (and it must match vehicleId if both are). */
