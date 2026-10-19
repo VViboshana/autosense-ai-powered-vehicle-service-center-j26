@@ -1,12 +1,16 @@
 import type { JobStage } from '@/modules/dashboard/dashboard.types';
 
+export type ViewAngle = 'front' | 'rear' | 'left' | 'right' | 'other';
+
 /** Shapes returned by /api/my/* (see backend/src/modules/my). */
 export type MyVehicles = {
   vehicles: {
     vehicleId: number;
     registrationNo: string;
     description: string;
-    visit: { stage: JobStage; checkedInAt: string; bay: string | null } | null;
+    photoUrl: string | null;
+    visit: { stage: JobStage; checkedInAt: string; bay: string | null; queuePosition: number | null } | null;
+    latestInspection: { inspectionNo: string; confirmedAt: string; overallSeverity: string | null; areas: number } | null;
   }[];
   requests: {
     claimId: number;
@@ -16,34 +20,51 @@ export type MyVehicles = {
     reviewNote: string | null;
     requestedAt: string;
     reviewedAt: string | null;
+    photoUrl: string | null;
   }[];
 };
 
-/** One region a technician confirmed, numbered across the report (the same number on the photo and in the list). */
-export type ReportFinding = {
+/**
+ * One damaged area a technician checked: overlapping regions of the same damage on a photo are joined into one
+ * (backend reportAreas.ts). Numbered across the report: the same number on the photo, the map and the list.
+ */
+export type ReportArea = {
   no: number;
   label: string;
   severity: string | null;
-  location: string | null;
-  bbox: number[];
-  polygon: number[][] | null;
+  /** Where on the car, e.g. "Left headlight", "Rear bumper, right side" */
+  where: string;
+  /** The area's centre across and down its photo, 0 to 1 */
+  x: number;
+  y: number;
+  bbox: [number, number, number, number];
+  outlines: number[][][];
+  marks: number;
+  addedByTechnician: boolean;
 };
 
-/** A confirmed inspection, as the customer sees it: checked regions only, no model confidence. */
+/** A confirmed inspection, as the customer sees it: checked areas only, no model confidence. */
 export type InspectionReport = {
   inspectionId: number;
   inspectionNo: string;
   confirmedAt: string;
   overallSeverity: string | null;
   notes: string | null;
-  photos: { imageId: number; viewAngle: string; width: number | null; height: number | null; url: string; findings: ReportFinding[] }[];
-  findings: (ReportFinding & { viewAngle: string })[];
+  photos: { imageId: number; viewAngle: ViewAngle; width: number; height: number; url: string; areas: ReportArea[] }[];
+  areas: (ReportArea & { viewAngle: ViewAngle; imageId: number })[];
 };
 
-type Section<T> ={ available: false } | { available: true; connected?: boolean; data: T };
+type Section<T> = { available: false } | { available: true; connected?: boolean; data: T };
 
 export type MyVehicle = {
-  vehicle: { vehicleId: number; registrationNo: string; description: string; colour: string | null; fuelType: string | null };
+  vehicle: {
+    vehicleId: number;
+    registrationNo: string;
+    description: string;
+    colour: string | null;
+    fuelType: string | null;
+    photoUrl: string | null;
+  };
   sections: {
     status: Section<{
       jobNo: string;
