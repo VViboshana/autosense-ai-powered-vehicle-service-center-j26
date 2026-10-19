@@ -52,8 +52,9 @@ export async function startVideoJob(deps: OccupancyDeps, input: { cameraId: numb
     return videoJobId;
   });
 
+  let started: OccupancyJob;
   try {
-    await startOnService(deps.serviceUrl, {
+    started = await startOnService(deps.serviceUrl, {
       jobId: serviceJobId(id),
       source: camera.sourceUrl,
       bays: bays.map((b) => ({ id: String(b.bayId), polygon: b.polygon })),
@@ -64,6 +65,8 @@ export async function startVideoJob(deps: OccupancyDeps, input: { cameraId: numb
     await repo.updateVideoJob(deps.pool, id, { status: 'failed', framesProcessed: 0, totalFrames: null, error: err instanceof Error ? err.message.slice(0, 500) : 'Could not start.' });
     throw err;
   }
+  // The service decides masking from its model (OCC_ROI_MASK); store what it reported so results can be interpreted
+  await repo.setVideoJobMask(deps.pool, id, started.roiMask ?? null);
   return id;
 }
 

@@ -7,7 +7,8 @@ import { BusinessRuleError, ServiceUnavailableError } from '../../http/errors.js
  * against a schema, so a changed service shows up as a clear error instead of bad rows. Never invent a result.
  */
 const state = z.enum(['free', 'occupied', 'uncertain']);
-const modelInfo = z.object({ version: z.string(), placeholder: z.boolean(), imgsz: z.number().int().optional() });
+const roiMask = z.object({ setting: z.string(), default: z.boolean(), marginPx: z.number().int() });
+const modelInfo = z.object({ version: z.string(), placeholder: z.boolean(), imgsz: z.number().int().optional(), roiMask: roiMask.optional() });
 const transition = z.object({
   bayId: z.string(),
   fromState: state,
@@ -21,6 +22,8 @@ const job = z.object({
   jobId: z.string(),
   status: z.enum(['queued', 'running', 'completed', 'failed', 'cancelled']),
   error: z.string().nullable(),
+  /** Frames greyed out outside the bays before detection; missing from service versions without masking. */
+  roiMask: z.boolean().nullable().optional(),
   framesProcessed: z.number().int(),
   totalFrames: z.number().int().nullable(),
   streamSeconds: z.number(),

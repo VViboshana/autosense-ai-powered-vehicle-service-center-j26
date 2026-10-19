@@ -40,6 +40,8 @@ export type VideoJob = {
   totalFrames: number | null;
   error: string | null;
   modelVersion: string | null;
+  /** Frames greyed out outside the bays before detection; null = not recorded (older jobs). */
+  roiMask: boolean | null;
   createdBy: string | null;
   createdAt: string;
   startedAt: string | null;

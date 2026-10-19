@@ -41,6 +41,8 @@ export type VideoJob = {
   totalFrames: number | null;
   error: string | null;
   modelVersion: string | null;
+  /** Whether the service masked outside the bays (null = not reported, e.g. jobs from before migration 0010). */
+  roiMask: boolean | null;
   createdBy: string | null;
   createdAt: string;
   startedAt: string | null;
@@ -189,7 +191,7 @@ export async function bayEvents(db: Db, bayId: number, page: PageRequest): Promi
 const JOB_SELECT = `
   SELECT j.video_job_id AS "videoJobId", j.camera_id AS "cameraId", c.name AS "cameraName", j.source_path AS "sourcePath",
          j.sample_fps AS "sampleFps", j.status, j.frames_processed AS "framesProcessed", j.total_frames AS "totalFrames",
-         j.error, mv.version AS "modelVersion", u.first_name || ' ' || u.last_name AS "createdBy", j.created_at AS "createdAt",
+         j.error, mv.version AS "modelVersion", j.roi_mask AS "roiMask", u.first_name || ' ' || u.last_name AS "createdBy", j.created_at AS "createdAt",
          j.started_at AS "startedAt", j.finished_at AS "finishedAt",
          (SELECT count(*) FROM occupancy.bay_state_events e WHERE e.video_job_id = j.video_job_id)::int AS transitions
   FROM occupancy.video_jobs j
@@ -219,6 +221,11 @@ export async function insertVideoJob(
     [j.cameraId, j.sourcePath, j.sampleFps, j.modelVersionId, j.userId],
   );
   return rows[0]!.id;
+}
+
+/** What the service reported when it accepted the job: whether it masks outside the bays. */
+export async function setVideoJobMask(db: Db, id: number, roiMask: boolean | null): Promise<void> {
+  await db.query('UPDATE occupancy.video_jobs SET roi_mask = $2 WHERE video_job_id = $1', [id, roiMask]);
 }
 
 /**

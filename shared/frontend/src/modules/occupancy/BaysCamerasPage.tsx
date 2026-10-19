@@ -306,7 +306,11 @@ function VideoJobs({ camera, canManage, canStart, onFinished }: { camera: Camera
                       ) : <span className="small">{j.framesProcessed} frames</span>}
                     </td>
                     <td>{j.transitions}</td>
-                    <td className="small">{j.modelVersion ?? '—'}{j.modelVersion?.includes('placeholder') && <div><StatusPill tone="warning">Not fine-tuned</StatusPill></div>}</td>
+                    <td className="small">
+                      {j.modelVersion ?? '—'}
+                      {j.roiMask !== null && <div className="text-body-secondary">{j.roiMask ? 'Bays only (outside masked)' : 'Full frame'}</div>}
+                      {j.modelVersion?.includes('placeholder') && <div><StatusPill tone="warning">Not fine-tuned</StatusPill></div>}
+                    </td>
                     <td className="text-end">
                       {canManage && (j.status === 'queued' || j.status === 'running') && (
                         <button type="button" className="btn btn-light btn-sm" disabled={busy} onClick={() => void run(`/occupancy/video-jobs/${j.videoJobId}/cancel`)}>Stop</button>

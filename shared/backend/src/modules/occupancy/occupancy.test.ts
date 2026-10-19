@@ -87,6 +87,14 @@ describe('occupancy service client', () => {
     await expect(fetchVideoJob('http://svc:8002', 'VJ-9', 0)).rejects.toMatchObject({ code: 'OCCUPANCY_SERVICE_BAD_RESPONSE' });
   });
 
+  it('reads whether the service masked outside the bays, and accepts services that do not say', async () => {
+    const request = { jobId: 'VJ-1', source: 'a.mp4', bays: [], rules: {}, sampleFps: 2 };
+    vi.stubGlobal('fetch', reply(202, { ...report, roiMask: true }));
+    expect((await startVideoJob('http://svc:8002', request)).roiMask).toBe(true);
+    vi.stubGlobal('fetch', reply(202, report));
+    expect((await startVideoJob('http://svc:8002', request)).roiMask).toBeUndefined();
+  });
+
   it("passes on the service's reason when it refuses a job, and 503 when it is down or not set up", async () => {
     const request = { jobId: 'VJ-1', source: 'a.mp4', bays: [], rules: {}, sampleFps: 2 };
     vi.stubGlobal('fetch', reply(404, { detail: 'Video not found in the video folder: a.mp4' }));
