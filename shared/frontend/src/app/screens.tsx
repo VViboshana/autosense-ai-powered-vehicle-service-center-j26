@@ -17,6 +17,7 @@ import { AlertRulesPage } from '@/modules/security/AlertRulesPage';
 import { AlertsPage } from '@/modules/security/AlertsPage';
 import { CamerasPage } from '@/modules/security/CamerasPage';
 import { BaysCamerasPage } from '@/modules/occupancy/BaysCamerasPage';
+import { OccupancySettingsPage } from '@/modules/occupancy/OccupancySettingsPage';
 /**
  * Built staff screens: path -> page, guarded by the screen code from app.screens (database/reference/010_screens.sql).
  * The path must equal the url in app.screens so the menu link opens it.
@@ -43,6 +44,7 @@ export const SCREENS: ScreenRoute[] = [
   { code: 'AUDIT_LOG', path: '/admin/audit', element: <AuditLogPage /> },
   { code: 'BAY_MONITOR', path: '/floor/bays', element: <BayMonitorPage /> },
   { code: 'BAYS_CAMERAS', path: '/setup/bays', element: <BaysCamerasPage /> },
+  { code: 'OCCUPANCY_SETTINGS', path: '/setup/occupancy', element: <OccupancySettingsPage /> },
   { code: 'INSPECTION_CREATE', path: '/inspections/new', element: <NewInspectionPage /> },
   { code: 'INSPECTION_REVIEW', path: '/inspections/review', element: <InspectionListPage mode="review" /> },
   { code: 'INSPECTION_HISTORY', path: '/inspections', element: <InspectionListPage mode="history" /> },

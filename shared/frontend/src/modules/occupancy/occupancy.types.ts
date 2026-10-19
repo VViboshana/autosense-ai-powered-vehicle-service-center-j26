@@ -48,3 +48,24 @@ export type VideoJob = {
   finishedAt: string | null;
   transitions: number;
 };
+
+/** The occupancy.rules setting (GET/PUT /api/occupancy/rules). Optional values: the service uses its default. */
+export type OccupancyRules = {
+  overlapThreshold: number;
+  releaseThreshold?: number;
+  confirmOccupiedSeconds: number;
+  confirmFreeSeconds: number;
+  toleranceSeconds?: number;
+  minSupport?: number;
+  staleAfterSeconds?: number;
+  sampleFps: number;
+};
+
+/** GET /api/occupancy/service: the model the occupancy service runs. */
+export type OccupancyServiceInfo = {
+  version: string;
+  placeholder: boolean;
+  imgsz?: number;
+  /** Missing when the service is a version without ROI masking. */
+  roiMask?: { setting: string; default: boolean; marginPx: number };
+};

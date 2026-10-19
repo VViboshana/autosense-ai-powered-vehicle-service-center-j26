@@ -137,3 +137,32 @@
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
 }
+
+/* Occupancy settings */
+.as-occ-group {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--as-muted);
+  margin: 0.25rem 0 0.75rem;
+}
+.as-occ-summary {
+  border-left: 3px solid var(--as-brand);
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+  background: var(--as-surface-2);
+}
+.as-occ-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem 1rem;
+  margin: 0;
+}
+.as-occ-facts dt {
+  font-weight: 500;
+  color: var(--as-muted);
+}
+.as-occ-facts dd {
+  margin: 0;
+}
