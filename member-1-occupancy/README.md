@@ -59,6 +59,24 @@ Privacy: masking reduces processing of areas outside the bays before detection. 
 people inside the bays, and `/snapshot` still returns the full, unmasked frame for drawing bays. The service stores
 no frames, only bay states (through the API). NFR-11 (blurring retained footage) is **not met yet**.
 
+## In the web app
+- **Bay monitor** (`/floor/bays`): live bay states; pick a bay to see its history (state band over the last 100
+  changes and a paged list with evidence). Time between two video jobs is shown as "No reading", not as a state.
+- **Camera suggestions** on the Bay monitor: when a bay is occupied and no job is in it, the next vehicle in the queue
+  (waiting for a bay, then inspected, then checked in; oldest first) is suggested. Staff with `BAY_JOB_CONFIRM` pick
+  the vehicle that is really there and confirm; the job moves to `in_bay` (stage history and audit log). Nothing
+  moves without that confirmation.
+- **Bays & cameras** (`/setup/bays`): cameras, bay outlines, video jobs (with "Bays only (outside masked)").
+- **Occupancy settings** (`/setup/occupancy`): the `occupancy.rules` setting and the model the service runs.
+
+## Test data on the shared database
+Camera `TEST-PKL04` (the PKLot UFPR04 time-lapse) and its bays `T06`-`T27` are test data, named "[TEST] ...". A camera
+whose code starts with `TEST-` is never used for camera suggestions, and its bays cannot be linked to real jobs.
+They stay on for the PP1 demo; afterwards switch them off (nothing is deleted, their history is evaluation evidence):
+```powershell
+node member-1-occupancy/scripts/test_data.mjs status    # or: label | off | on
+```
+
 ## Set up (once)
 ```powershell
 cd member-1-occupancy

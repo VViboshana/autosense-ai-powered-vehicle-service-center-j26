@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchVideoJob, occupancyModel, startVideoJob } from '../../integrations/ml/occupancyService.js';
-import { area, bayBody, cameraBody, polygonSchema, rulesBody, sourceSchema } from './occupancy.routes.js';
-import { serviceJobId, transitionRows } from './occupancy.service.js';
+import { area, bayBody, cameraBody, confirmBayBody, polygonSchema, rulesBody, sourceSchema } from './occupancy.routes.js';
+import { pairBaysWithQueue, serviceJobId, transitionRows } from './occupancy.service.js';
 
 const SQUARE: [number, number][] = [[0.1, 0.1], [0.4, 0.1], [0.4, 0.5], [0.1, 0.5]];
 
@@ -120,5 +120,25 @@ describe('occupancy service client', () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('fetch failed'); }));
     await expect(startVideoJob('http://svc:8002', request)).rejects.toMatchObject({ status: 503, code: 'OCCUPANCY_SERVICE_UNAVAILABLE' });
     await expect(startVideoJob(undefined, request)).rejects.toMatchObject({ code: 'OCCUPANCY_SERVICE_NOT_CONFIGURED' });
+  });
+});
+
+describe('suggesting which waiting vehicle is in an occupied bay', () => {
+  const bay = (bayId: number) => ({ bayId, code: `B${bayId}`, name: `Bay ${bayId}`, since: null, overlap: 0.8 });
+  const job = (jobId: number) => ({
+    jobId, jobNo: `JOB-${jobId}`, registrationNo: 'WP CAB-0001', vehicle: 'Toyota Aqua', service: 'Full service',
+    stage: 'waiting_for_bay' as const, checkedInAt: '2026-10-20T03:00:00Z',
+  });
+
+  it('gives the longest-occupied bay the first vehicle in the queue, and no vehicle when the queue runs out', () => {
+    expect(pairBaysWithQueue([bay(3), bay(1)], [job(10)]).map((b) => [b.bayId, b.suggestedJobId])).toEqual([[3, 10], [1, null]]);
+    expect(pairBaysWithQueue([], [job(10)])).toEqual([]);
+  });
+
+  it('needs both a bay and a vehicle to confirm', () => {
+    expect(confirmBayBody.parse({ bayId: 3, jobId: 10 })).toEqual({ bayId: 3, jobId: 10 });
+    const r = confirmBayBody.safeParse({ bayId: 3 });
+    expect(r.success).toBe(false);
+    expect(r.error!.issues[0]!.message).toBe('Pick the vehicle that is in the bay.');
   });
 });

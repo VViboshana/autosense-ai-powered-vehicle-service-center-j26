@@ -24,6 +24,7 @@ INSERT INTO app.screens (screen_code, name, url, parent_code, icon, display_orde
     ('BAY_MONITOR',           'Bay monitor',               '/floor/bays',              'SERVICE_FLOOR',  'bi-p-square',           11,  true,  false, 'occupancy',   'use',    'staff'),
     ('JOBS',                  'Vehicles & jobs',           '/floor/jobs',              'SERVICE_FLOOR',  'bi-car-front',          12,  true,  false, 'shared',      'use',    'staff'),
     ('JOB_CHECK_IN',          'Check in vehicles',         NULL,                       'SERVICE_FLOOR',  'bi-box-arrow-in-right', 13,  false, false, 'shared',      'use',    'staff'),
+    ('BAY_JOB_CONFIRM',       'Confirm vehicles in bays',  NULL,                       'SERVICE_FLOOR',  'bi-box-arrow-in-down',  16,  false, false, 'occupancy',   'use',    'staff'),
     ('VEHICLE_CLAIMS',        'Customer vehicle requests', '/floor/vehicle-requests',  'SERVICE_FLOOR',  'bi-person-check',       14,  true,  false, 'shared',      'use',    'staff'),
     ('BOOKINGS',              'Service bookings',          '/floor/bookings',          'SERVICE_FLOOR',  'bi-calendar-check',     15,  true,  false, 'shared',      'use',    'staff'),
 

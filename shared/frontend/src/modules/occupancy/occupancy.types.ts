@@ -82,3 +82,16 @@ export type BayEvent = {
   evidence: string | null;
   videoJobId: number | null;
 };
+
+/** GET /api/occupancy/bay-suggestions: occupied bays with no job, each with the next vehicle in the queue. */
+export type QueuedJob = {
+  jobId: number;
+  jobNo: string;
+  registrationNo: string;
+  vehicle: string;
+  service: string;
+  stage: 'waiting_for_bay' | 'inspected' | 'checked_in';
+  checkedInAt: string;
+};
+export type BaySuggestion = { bayId: number; code: string; name: string; since: string | null; overlap: number | null; suggestedJobId: number | null };
+export type BaySuggestions = { suggestions: BaySuggestion[]; queue: QueuedJob[] };

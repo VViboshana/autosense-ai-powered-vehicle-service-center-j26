@@ -129,3 +129,41 @@ export async function syncOpenJobs(deps: OccupancyDeps): Promise<void> {
     });
   }
 }
+
+/**
+ * Camera suggestions for the Bay monitor: each occupied bay without a job is paired with the next vehicle in the queue
+ * (the bay occupied longest gets the first one). Only a suggestion: staff confirm it, or pick another vehicle.
+ */
+export function pairBaysWithQueue(bays: repo.UnlinkedBay[], queue: repo.QueuedJob[]) {
+  return bays.map((bay, i) => ({ ...bay, suggestedJobId: queue[i]?.jobId ?? null }));
+}
+
+export async function baySuggestions(pool: pg.Pool) {
+  const [bays, queue] = await Promise.all([repo.occupiedBaysWithoutJob(pool), repo.jobsReadyForBay(pool)]);
+  return { suggestions: pairBaysWithQueue(bays, queue), queue };
+}
+
+/** Staff confirmed that this job's vehicle is the one in the bay: the job moves to in_bay. */
+export async function confirmJobInBay(pool: pg.Pool, input: { bayId: number; jobId: number; userId: number }) {
+  return withTransaction(pool, async (client) => {
+    // Lock the bay row first, so two people confirming at once cannot put two vehicles in one bay
+    await repo.lockBay(client, input.bayId);
+    const bay = await repo.getBay(client, input.bayId);
+    if (!bay || !bay.isActive) throw new NotFoundError('That bay does not exist or is switched off.');
+    const camera = bay.cameraId ? await repo.getCamera(client, bay.cameraId) : null;
+    if (camera?.code.startsWith(repo.TEST_CAMERA_PREFIX)) {
+      throw new BusinessRuleError('TEST_BAY', `${bay.name} is on a test camera (${camera.code}); real vehicles cannot be put in it.`);
+    }
+    if (await repo.bayHasJob(client, input.bayId)) {
+      throw new BusinessRuleError('BAY_HAS_JOB', `${bay.name} already has a vehicle linked to it. Refresh to see it.`);
+    }
+    const moved = await repo.moveJobIntoBay(client, {
+      jobId: input.jobId,
+      bayId: input.bayId,
+      userId: input.userId,
+      note: `Confirmed on the Bay monitor: the camera saw ${bay.name} occupied`,
+    });
+    if (!moved) throw new BusinessRuleError('JOB_NOT_WAITING', 'That job is no longer waiting for a bay. Refresh and pick another vehicle.');
+    await audit(client, { table: 'workshop.jobs', recordId: input.jobId, action: 'move_to_bay', snapshot: { bayId: input.bayId, source: 'occupancy_suggestion' }, userId: input.userId });
+  });
+}

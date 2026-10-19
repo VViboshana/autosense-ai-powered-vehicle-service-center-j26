@@ -7,12 +7,14 @@ import { formatDuration, formatTime, minutesSince } from '@/lib/format';
 import { useApi } from '@/lib/useApi';
 import type { BayBoardData, BayCard } from '@/modules/dashboard/dashboard.types';
 import { BayHistory } from './BayHistory';
+import { BaySuggestions } from './BaySuggestions';
 
 /**
  * Service floor › Bay monitor (screen BAY_MONITOR, component 1: bay occupancy).
  * Live state of every service bay, refreshed every 15 seconds from GET /api/dashboard/bays.
  * Bay states come from the occupancy service: free, occupied, or uncertain (shown as "Confirming").
- * Pick a bay to see its history of confirmed changes below (BayHistory).
+ * Pick a bay to see its history of confirmed changes below (BayHistory). When the camera sees a bay occupied with no
+ * job in it, BaySuggestions proposes the waiting vehicle for staff to confirm.
  */
 const STATE = {
   occupied: { label: 'Occupied', tone: 'brand' },
@@ -124,6 +126,8 @@ export function BayMonitorPage() {
                 </div>
               </section>
             )}
+
+            <BaySuggestions onConfirmed={reload} />
 
             <Card icon="bi-p-square" title="Bays now" labelledBy="bays-now" subtitle="Refreshes every 15 seconds · pick a bay to see its history">
               {error && !data ? (
