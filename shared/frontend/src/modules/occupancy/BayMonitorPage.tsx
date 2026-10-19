@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 import { StatusPill } from '@/components/ui/StatusPill';
@@ -5,11 +6,13 @@ import { PageHeader } from '@/layout/PageHeader';
 import { formatDuration, formatTime, minutesSince } from '@/lib/format';
 import { useApi } from '@/lib/useApi';
 import type { BayBoardData, BayCard } from '@/modules/dashboard/dashboard.types';
+import { BayHistory } from './BayHistory';
 
 /**
  * Service floor › Bay monitor (screen BAY_MONITOR, component 1: bay occupancy).
  * Live state of every service bay, refreshed every 15 seconds from GET /api/dashboard/bays.
  * Bay states come from the occupancy service: free, occupied, or uncertain (shown as "Confirming").
+ * Pick a bay to see its history of confirmed changes below (BayHistory).
  */
 const STATE = {
   occupied: { label: 'Occupied', tone: 'brand' },
@@ -18,13 +21,18 @@ const STATE = {
   unknown: { label: 'No reading', tone: 'muted' },
 } as const;
 
-function BayTile({ bay }: { bay: BayCard }) {
+function BayTile({ bay, selected, onSelect }: { bay: BayCard; selected: boolean; onSelect: () => void }) {
   const state = STATE[bay.state];
   const inBay = bay.job?.bayEnteredAt ? minutesSince(bay.job.bayEnteredAt) : null;
   const forecast = bay.job?.estimatedMinutes ?? null;
 
   return (
-    <div className={`as-bay${bay.state === 'free' ? ' free' : ''}`}>
+    <button
+      type="button"
+      className={`as-bay as-bay-pick${bay.state === 'free' ? ' free' : ''}${selected ? ' on' : ''}`}
+      aria-pressed={selected}
+      onClick={onSelect}
+    >
       <div className="as-bay-top">
         <span className="as-bay-name">{bay.name}</span>
         <StatusPill tone={state.tone}>{state.label}</StatusPill>
@@ -56,7 +64,7 @@ function BayTile({ bay }: { bay: BayCard }) {
         <span>{bay.since ? `${state.label} for ${formatDuration(minutesSince(bay.since))}` : '—'}</span>
         {bay.overlap !== null && <span>overlap {Math.round(bay.overlap * 100)}%</span>}
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -65,6 +73,8 @@ export function BayMonitorPage() {
 
   const count = (s: BayCard['state']) => data?.bays.filter((b) => b.state === s).length ?? 0;
   const camera = data?.camera;
+  const [picked, setPicked] = useState<number | null>(null);
+  const selected = data?.bays.find((b) => b.bayId === picked) ?? data?.bays[0] ?? null;
 
   return (
     <>
@@ -115,7 +125,7 @@ export function BayMonitorPage() {
               </section>
             )}
 
-            <Card icon="bi-p-square" title="Bays now" labelledBy="bays-now" subtitle="Refreshes every 15 seconds">
+            <Card icon="bi-p-square" title="Bays now" labelledBy="bays-now" subtitle="Refreshes every 15 seconds · pick a bay to see its history">
               {error && !data ? (
                 <ErrorState inline error={error} onRetry={reload} title="Bays couldn't be loaded" />
               ) : loading || !data ? (
@@ -135,11 +145,13 @@ export function BayMonitorPage() {
               ) : (
                 <div className="as-bays">
                   {data.bays.map((bay) => (
-                    <BayTile key={bay.bayId} bay={bay} />
+                    <BayTile key={bay.bayId} bay={bay} selected={bay.bayId === selected?.bayId} onSelect={() => setPicked(bay.bayId)} />
                   ))}
                 </div>
               )}
             </Card>
+
+            {selected && <BayHistory key={selected.bayId} bayId={selected.bayId} bayName={selected.name} />}
           </div>
         </div>
       </div>

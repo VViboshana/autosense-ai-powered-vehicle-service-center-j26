@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from app import config, main
+from app import config, main, roi
 from test_pipeline import BAY, BlobDetector, make_video
 
 
@@ -50,6 +50,33 @@ def test_analyze_scores_each_bay(client):
     assert bay['id'] == 'B1' and bay['present'] and bay['score'] > 0.6
     r = client.post('/analyze', files={'image': ('f.jpg', jpeg(False), 'image/jpeg')}, data={'bays': BAYS})
     assert r.json()['bays'][0] == {'id': 'B1', 'score': 0.0, 'present': False, 'vehicle': None}
+
+
+def test_health_reports_the_mask_default(client):
+    model = client.get('/health').json()['model']
+    assert model['roiMask'] == {'setting': config.ROI_MASK, 'default': roi.mask_default(model['placeholder']),
+                                'marginPx': config.ROI_MARGIN_PX}
+
+
+def test_analyze_masks_outside_the_bays_when_asked(client):
+    img = np.zeros((180, 320, 3), np.uint8)
+    img[50:130, 85:155] = 255     # in B1
+    img[50:130, 250:320] = 255    # outside every bay
+    files = {'image': ('f.png', cv2.imencode('.png', img)[1].tobytes(), 'image/png')}
+    plain = client.post('/analyze', files=files, data={'bays': BAYS}, params={'mask': False}).json()
+    masked = client.post('/analyze', files=files, data={'bays': BAYS}, params={'mask': True}).json()
+    assert len(plain['vehicles']) == 2 and plain['roiMask'] == {'applied': False, 'marginPx': 0}
+    assert len(masked['vehicles']) == 1 and masked['roiMask']['applied']
+    assert masked['bays'][0]['present'] and masked['bays'][0]['score'] == plain['bays'][0]['score']
+
+
+def test_video_job_reports_whether_it_was_masked(client, monkeypatch):
+    body = {'jobId': 'J4', 'source': 'park.avi', 'bays': [{'id': 'B1', 'polygon': BAY.polygon}], 'mask': True}
+    assert client.post('/video-jobs', json=body).json()['roiMask'] is True
+    monkeypatch.setitem(main.state, 'mask', False)    # the service default is used when the request does not say
+    body = {**body, 'jobId': 'J5'}
+    del body['mask']
+    assert client.post('/video-jobs', json=body).json()['roiMask'] is False
 
 
 def test_analyze_rejects_bad_input(client):

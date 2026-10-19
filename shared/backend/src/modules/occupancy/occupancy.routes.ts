@@ -4,7 +4,7 @@ import { sendOk } from '../../http/envelope.js';
 import { ConflictError, NotFoundError } from '../../http/errors.js';
 import { pageQuery } from '../../http/pagination.js';
 import { parse } from '../../http/validate.js';
-import { fetchSnapshot } from '../../integrations/ml/occupancyService.js';
+import { fetchSnapshot, occupancyModel } from '../../integrations/ml/occupancyService.js';
 import { audit } from '../../lib/audit.js';
 import { clearSettingsCache, getSetting } from '../../lib/settings.js';
 import { requireScreen, signedInUser } from '../../middleware/requireScreen.js';
@@ -62,17 +62,24 @@ export const bayBody = z.object({
   isActive: z.boolean().optional(),
 });
 
-/** occupancy.rules; the same limits as the service accepts. */
+/** A number between `min` and `max`, with a message staff can act on (`exclusive`: min itself is not allowed). */
+const between = (min: number, max: number, exclusive = false) => {
+  const message = exclusive ? `Enter a number above ${min} and up to ${max}.` : `Enter a number from ${min} to ${max}.`;
+  const n = z.number({ error: 'Enter a number.' });
+  return (exclusive ? n.gt(min, message) : n.min(min, message)).max(max, message);
+};
+
+/** occupancy.rules; the same limits as the service accepts (member-1-occupancy/backend/app/main.py, RulesIn). */
 export const rulesBody = z
   .object({
-    overlapThreshold: z.number().min(0.05).max(0.95),
-    releaseThreshold: z.number().min(0).max(0.95).optional(),
-    confirmOccupiedSeconds: z.number().gt(0).max(120),
-    confirmFreeSeconds: z.number().gt(0).max(120),
-    toleranceSeconds: z.number().min(0).max(30).optional(),
-    minSupport: z.number().gt(0.5).max(1).optional(),
-    staleAfterSeconds: z.number().gt(0).max(600).optional(),
-    sampleFps: z.number().gt(0).max(15),
+    overlapThreshold: between(0.05, 0.95),
+    releaseThreshold: between(0, 0.95).optional(),
+    confirmOccupiedSeconds: between(0, 120, true),
+    confirmFreeSeconds: between(0, 120, true),
+    toleranceSeconds: between(0, 30).optional(),
+    minSupport: between(0.5, 1, true).optional(),
+    staleAfterSeconds: between(0, 600, true).optional(),
+    sampleFps: between(0, 15, true),
   })
   .refine((r) => r.releaseThreshold === undefined || r.releaseThreshold <= r.overlapThreshold, {
     message: 'The release threshold must not be above the overlap threshold.',
@@ -97,6 +104,7 @@ const jobBody = z.object({ cameraId: z.number().int().positive(), sampleFps: z.n
  *   GET   /api/occupancy/video-jobs                list (paged)   GET /api/occupancy/video-jobs/:id  one
  *   POST  /api/occupancy/video-jobs                process the camera's video   POST /api/occupancy/video-jobs/:id/cancel
  *   GET   /api/occupancy/rules                     PUT /api/occupancy/rules (setting occupancy.rules)
+ *   GET   /api/occupancy/service                   the model the occupancy service runs, and whether it masks frames
  */
 export function occupancyRoutes(deps: OccupancyDeps) {
   const router = Router();
@@ -206,6 +214,11 @@ export function occupancyRoutes(deps: OccupancyDeps) {
   // ---- rules (setting occupancy.rules)
   router.get('/rules', requireScreen(...VIEW), async (_req, res) => {
     sendOk(res, await getSetting<OccupancyRules>(pool, 'occupancy.rules', DEFAULT_RULES));
+  });
+
+  // ---- the occupancy service's model (for the settings screen); 503 when the service is not running
+  router.get('/service', requireScreen(...VIEW), async (_req, res) => {
+    sendOk(res, await occupancyModel(deps.serviceUrl));
   });
 
   router.put('/rules', requireScreen('OCCUPANCY_SETTINGS'), async (req, res) => {

@@ -25,6 +25,11 @@ export function formatTime(value: string | Date) {
   return part(new Date(value), { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 }
 
+/** 09:54:07 (24-hour, with seconds: for events that can be seconds apart, e.g. bay changes) */
+export function formatTimeSeconds(value: string | Date) {
+  return part(new Date(value), { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+}
+
 /** Hour of the day (0-23) in the service centre's time zone. */
 export function localHour(value: Date = new Date()) {
   return Number(part(value, { hour: '2-digit', hourCycle: 'h23' }));

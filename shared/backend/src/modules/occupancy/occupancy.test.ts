@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchVideoJob, startVideoJob } from '../../integrations/ml/occupancyService.js';
+import { fetchVideoJob, occupancyModel, startVideoJob } from '../../integrations/ml/occupancyService.js';
 import { area, bayBody, cameraBody, polygonSchema, rulesBody, sourceSchema } from './occupancy.routes.js';
 import { serviceJobId, transitionRows } from './occupancy.service.js';
 
@@ -47,6 +47,16 @@ describe('occupancy rules', () => {
   it('rejects a release threshold above the overlap threshold', () => {
     expect(rulesBody.safeParse({ ...base, releaseThreshold: 0.5 }).success).toBe(false);
   });
+  it('explains out-of-range values in words staff can act on', () => {
+    const r = rulesBody.safeParse({ ...base, overlapThreshold: 2, confirmFreeSeconds: 0, sampleFps: 'x' });
+    expect(r.success).toBe(false);
+    const messages = Object.fromEntries(r.error!.issues.map((i) => [i.path.join('.'), i.message]));
+    expect(messages).toEqual({
+      overlapThreshold: 'Enter a number from 0.05 to 0.95.',
+      confirmFreeSeconds: 'Enter a number above 0 and up to 120.',
+      sampleFps: 'Enter a number.',
+    });
+  });
 });
 
 const report = {
@@ -85,6 +95,22 @@ describe('occupancy service client', () => {
     expect(await fetchVideoJob('http://svc:8002', 'VJ-9', 0)).toBeNull();
     vi.stubGlobal('fetch', reply(200, { status: 'running' }));
     await expect(fetchVideoJob('http://svc:8002', 'VJ-9', 0)).rejects.toMatchObject({ code: 'OCCUPANCY_SERVICE_BAD_RESPONSE' });
+  });
+
+  it('reads whether the service masked outside the bays, and accepts services that do not say', async () => {
+    const request = { jobId: 'VJ-1', source: 'a.mp4', bays: [], rules: {}, sampleFps: 2 };
+    vi.stubGlobal('fetch', reply(202, { ...report, roiMask: true }));
+    expect((await startVideoJob('http://svc:8002', request)).roiMask).toBe(true);
+    vi.stubGlobal('fetch', reply(202, report));
+    expect((await startVideoJob('http://svc:8002', request)).roiMask).toBeUndefined();
+  });
+
+  it('reports the model and its masking default, for the settings screen', async () => {
+    const model = { version: 'pklot_yolo11s_1280', placeholder: false, imgsz: 1280, roiMask: { setting: 'auto', default: true, marginPx: 12 } };
+    vi.stubGlobal('fetch', reply(200, { status: 'up', model, jobsRunning: 0 }));
+    expect(await occupancyModel('http://svc:8002')).toEqual(model);
+    vi.stubGlobal('fetch', reply(503, {}));
+    await expect(occupancyModel('http://svc:8002')).rejects.toMatchObject({ status: 503 });
   });
 
   it("passes on the service's reason when it refuses a job, and 503 when it is down or not set up", async () => {

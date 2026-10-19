@@ -40,9 +40,45 @@ export type VideoJob = {
   totalFrames: number | null;
   error: string | null;
   modelVersion: string | null;
+  /** Frames greyed out outside the bays before detection; null = not recorded (older jobs). */
+  roiMask: boolean | null;
   createdBy: string | null;
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
   transitions: number;
+};
+
+/** The occupancy.rules setting (GET/PUT /api/occupancy/rules). Optional values: the service uses its default. */
+export type OccupancyRules = {
+  overlapThreshold: number;
+  releaseThreshold?: number;
+  confirmOccupiedSeconds: number;
+  confirmFreeSeconds: number;
+  toleranceSeconds?: number;
+  minSupport?: number;
+  staleAfterSeconds?: number;
+  sampleFps: number;
+};
+
+/** GET /api/occupancy/service: the model the occupancy service runs. */
+export type OccupancyServiceInfo = {
+  version: string;
+  placeholder: boolean;
+  imgsz?: number;
+  /** Missing when the service is a version without ROI masking. */
+  roiMask?: { setting: string; default: boolean; marginPx: number };
+};
+
+/** GET /api/occupancy/bays/:id/events: one confirmed change of a bay's state (newest first). */
+export type BayEvent = {
+  eventId: number;
+  fromState: 'free' | 'occupied' | 'uncertain' | null;
+  toState: 'free' | 'occupied' | 'uncertain';
+  at: string;
+  trackId: number | null;
+  /** Share of the bay the vehicle covered when the change was confirmed. */
+  overlap: number | null;
+  evidence: string | null;
+  videoJobId: number | null;
 };
