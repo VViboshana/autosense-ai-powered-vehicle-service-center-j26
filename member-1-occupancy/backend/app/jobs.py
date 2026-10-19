@@ -24,6 +24,7 @@ class Job:
     bays: list[BayConfig]
     rules: Rules
     sample_fps: float
+    mask: bool = False          # frames greyed out outside the bays before detection (roi.py)
     status: Status = 'queued'
     progress: Progress = field(default_factory=Progress)
     transitions: list[Transition] = field(default_factory=list)
@@ -36,7 +37,7 @@ class Job:
     def view(self, since: int = 0) -> dict:
         """JSON for GET /video-jobs/{id}. `since` returns only transitions after that index (for polling)."""
         return {
-            'jobId': self.job_id, 'status': self.status, 'error': self.error,
+            'jobId': self.job_id, 'status': self.status, 'error': self.error, 'roiMask': self.mask,
             'framesProcessed': self.progress.frames_processed, 'totalFrames': self.progress.total_frames,
             'streamSeconds': self.progress.stream_s, 'bays': self.progress.states,
             'transitions': [_transition_json(t) for t in self.transitions[since:]],
@@ -78,7 +79,7 @@ class JobManager:
         try:
             def on_progress(p: Progress) -> None:
                 job.progress = p
-            process_video(job.source, job.bays, self.detector, job.rules, job.sample_fps,
+            process_video(job.source, job.bays, self.detector, job.rules, job.sample_fps, mask=job.mask,
                           on_transition=job.transitions.append, on_progress=on_progress, stop=job.stop)
             job.status = 'cancelled' if job.stop.is_set() else 'completed'
         except Exception as e:   # reported to the API; the service keeps running

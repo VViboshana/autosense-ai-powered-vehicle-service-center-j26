@@ -9,6 +9,8 @@ AutoSense bay occupancy service (component 1). Called only by the AutoSense API,
   GET  /snapshot?source=&at=       one JPEG frame of a video, for drawing bay outlines
 
 Bay outlines are normalised [[x, y], ...] (0..1), as stored in occupancy.bays.polygon.
+Frames are greyed out outside the bays before detection when masking is on (roi.py): by default for the fine-tuned
+model (OCC_ROI_MASK=auto), or per request with `mask`. /health and every result say whether it was used.
 
 Run (from member-1-occupancy/backend):  ..\\.venv\\Scripts\\python -m uvicorn app.main:app --port 8002
 """
@@ -25,7 +27,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from . import config
+from . import config, roi
 from .association import associate
 from .detector import Detector
 from .jobs import Job, JobManager
@@ -41,6 +43,7 @@ async def lifespan(_app: FastAPI):
     state['placeholder'] = not config.MODEL_PATH.exists()
     state['detector'] = Detector(config.COCO_MODEL_PATH if state['placeholder'] else config.MODEL_PATH)
     state['version'] = 'coco-yolo11s-placeholder' if state['placeholder'] else config.MODEL_VERSION
+    state['mask'] = roi.mask_default(state['placeholder'])
     state['jobs'] = JobManager(state['detector'])
     yield
     state['jobs'].shutdown()
@@ -50,7 +53,12 @@ app = FastAPI(title='AutoSense occupancy service', version='0.1.0', lifespan=lif
 
 
 def model_info() -> dict:
-    return {'version': state['version'], 'placeholder': state['placeholder'], 'imgsz': config.IMGSZ}
+    return {'version': state['version'], 'placeholder': state['placeholder'], 'imgsz': config.IMGSZ,
+            'roiMask': {'setting': config.ROI_MASK, 'default': state['mask'], 'marginPx': config.ROI_MARGIN_PX}}
+
+
+def use_mask(requested: bool | None) -> bool:
+    return state['mask'] if requested is None else requested
 
 
 # ---------------------------------------------------------------- request bodies
@@ -90,6 +98,7 @@ class VideoJobIn(BaseModel):
     bays: list[Bay] = Field(min_length=1, max_length=32)
     rules: RulesIn = RulesIn()
     sampleFps: float = Field(2.0, gt=0, le=15)
+    mask: bool | None = Field(None, description='grey out outside the bays before detection; omitted = service default')
 
 
 def resolve_source(source: str) -> str:
@@ -119,6 +128,7 @@ def analyze(
     method: Literal['coverage', 'iou', 'bottom_center'] = Query('coverage'),
     threshold: float = Query(0.4, ge=0.05, le=0.95),
     confidence: float = Query(config.CONFIDENCE, ge=0.05, le=0.95),
+    mask: bool | None = Query(None, description='grey out outside the bays first; omitted = service default'),
 ):
     started = time.perf_counter()
     try:
@@ -132,6 +142,9 @@ def analyze(
     if bgr is None:
         raise HTTPException(400, 'The file is not a readable image (use JPEG or PNG).')
     h, w = bgr.shape[:2]
+    masked = use_mask(mask)
+    if masked:
+        bgr = roi.apply_mask(bgr, roi.bay_mask([b.polygon for b in bay_list], w, h))
     vehicles = state['detector'].detect(bgr, confidence)
     polys = {b.id: scale_polygon(b.polygon, w, h) for b in bay_list}
     matches = associate([v.bbox for v in vehicles], polys, method, threshold)
@@ -139,6 +152,7 @@ def analyze(
         'model': model_info(),
         'image': {'width': w, 'height': h},
         'method': method, 'threshold': threshold,
+        'roiMask': {'applied': masked, 'marginPx': roi.margin_for(w, h) if masked else 0},
         'vehicles': [{'bbox': list(v.bbox), 'confidence': v.confidence} for v in vehicles],
         'bays': [{'id': m.bay_id, 'score': round(m.score, 3), 'present': m.present, 'vehicle': m.detection}
                  for m in matches],
@@ -149,7 +163,7 @@ def analyze(
 @app.post('/video-jobs', status_code=202)
 def create_video_job(body: VideoJobIn):
     job = Job(body.jobId, resolve_source(body.source), [BayConfig(b.id, b.polygon) for b in body.bays],
-              body.rules.to_rules(), body.sampleFps)
+              body.rules.to_rules(), body.sampleFps, use_mask(body.mask))
     try:
         state['jobs'].submit(job)
     except ValueError as e:

@@ -4,6 +4,9 @@ Bay polygons arrive normalised to 0..1 (as stored in occupancy.bays.polygon) and
 size once. Frames are sampled at `sample_fps` (default 2): occupancy changes over seconds, so analysing every
 frame would only cost time. Stream time (frame index / video fps) drives the state machine, so a recorded video
 gives the same result however fast the computer processes it.
+
+With `mask=True` every sampled frame is greyed out outside the bays (plus a margin) before detection, as the
+fine-tuned model was trained (see roi.py).
 """
 from __future__ import annotations
 
@@ -16,6 +19,7 @@ import numpy as np
 
 from .association import Method, associate, to_polygon
 from .detector import Vehicle
+from .roi import apply_mask, bay_mask
 from .state_machine import BayTracker, Rules, Transition
 
 
@@ -48,6 +52,7 @@ def process_video(
     rules: Rules = Rules(),
     sample_fps: float = 2.0,
     method: Method = 'coverage',
+    mask: bool = False,
     on_transition: Callable[[Transition], None] = lambda t: None,
     on_progress: Callable[[Progress], None] = lambda p: None,
     stop: threading.Event | None = None,
@@ -64,6 +69,7 @@ def process_video(
         trackers = {b.bay_id: BayTracker(b.bay_id, rules) for b in bays}
         progress = Progress(total_frames=(n + step - 1) // step if n else None)
         index, first = 0, True
+        roi = None   # built from the first frame's real size (some streams report no size before decoding)
         while not (stop and stop.is_set()):
             if not cap.grab():
                 break
@@ -71,6 +77,10 @@ def process_video(
                 ok, frame = cap.retrieve()
                 if not ok:
                     break
+                if mask:
+                    if roi is None or roi.shape != frame.shape[:2]:
+                        roi = bay_mask([b.polygon for b in bays], frame.shape[1], frame.shape[0])
+                    frame = apply_mask(frame, roi)
                 t = index / fps
                 vehicles = detector.track(frame, reset=first)
                 first = False

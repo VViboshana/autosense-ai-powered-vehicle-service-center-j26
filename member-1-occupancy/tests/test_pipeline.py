@@ -52,6 +52,36 @@ def test_car_driving_through_does_not_occupy_the_bay(tmp_path):
     assert [t.to_state for t in seen] == ['free']
 
 
+class SeenDetector(BlobDetector):
+    """Remembers how many vehicles it was shown in each frame."""
+    def __init__(self):
+        self.counts = []
+
+    def track(self, image, confidence=0.25, reset=False):
+        vehicles = super().track(image, confidence, reset)
+        self.counts.append(len(vehicles))
+        return vehicles
+
+
+def test_masking_hides_vehicles_outside_the_bays_only(tmp_path):
+    # one car parked in B1 (x 85-155) the whole time, another outside every bay (x 250-320)
+    out = cv2.VideoWriter(str(tmp_path / 'two.avi'), cv2.VideoWriter_fourcc(*'MJPG'), FPS, (W, H))
+    for _ in range(8 * FPS):
+        frame = np.zeros((H, W, 3), np.uint8)
+        frame[50:130, 85:155] = 255
+        frame[50:130, 250:320] = 255
+        out.write(frame)
+    out.release()
+    results = {}
+    for mask in (False, True):
+        seen, detector = [], SeenDetector()
+        process_video(str(tmp_path / 'two.avi'), [BAY], detector, Rules(), sample_fps=2, mask=mask,
+                      on_transition=seen.append)
+        results[mask] = ([(t.to_state, t.at) for t in seen], set(detector.counts))
+    assert results[False][1] == {2} and results[True][1] == {1}   # the outside car is no longer seen
+    assert results[True][0] == results[False][0] == [('occupied', 3.0)]   # the bay's result is unchanged
+
+
 def test_stop_event_ends_processing_early(tmp_path):
     import threading
     video = make_video(tmp_path / 'long.avi', 10, lambda t: None)
