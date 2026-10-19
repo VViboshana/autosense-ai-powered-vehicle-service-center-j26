@@ -2,6 +2,7 @@ import { createApp } from './app.js';
 import { loadEnv } from './config/env.js';
 import { createPool } from './db/pool.js';
 import { logger, setLogLevel } from './lib/logger.js';
+import { startOccupancySync } from './modules/occupancy/occupancy.sync.js';
 import { APP_VERSION } from './version.js';
 
 let env;
@@ -16,15 +17,19 @@ setLogLevel(env.LOG_LEVEL);
 const pool = createPool(env.DATABASE_URL, env.DATABASE_POOL_MAX);
 pool.on('error', (err) => logger.error('idle database connection failed', { error: err.message }));
 
-const server = createApp(pool, env).listen(env.PORT, () => {
-  logger.info(`AutoSense API ${APP_VERSION} listening on http://localhost:${env.PORT}`, {
+const server = createApp(pool, env).listen(env.PORT, '127.0.0.1', () => {
+  logger.info(`AutoSense API ${APP_VERSION} listening on http://127.0.0.1:${env.PORT}`, {
     environment: env.NODE_ENV,
     allowedOrigins: env.ALLOWED_ORIGINS,
   });
 });
 
+// Stores bay changes from running video jobs (occupancy service -> database)
+const stopOccupancySync = startOccupancySync({ pool, serviceUrl: env.ML_OCCUPANCY_URL });
+
 function shutdown(signal: string) {
   logger.info(`${signal} received, shutting down`);
+  stopOccupancySync();
   server.close(() => {
     pool.end().finally(() => process.exit(0));
   });

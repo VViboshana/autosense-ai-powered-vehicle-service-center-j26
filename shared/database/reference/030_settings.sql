@@ -8,7 +8,7 @@ INSERT INTO app.settings (setting_key, value, description, is_public) VALUES
     ('app.date_format', '"dd/MM/yyyy"',   'How dates are shown', true),
     ('app.currency',    '"LKR"',          'Currency for estimates and invoices', true),
     ('damage.upload',
-     '{"maxImageMb": 10, "maxImagesPerInspection": 3, "allowedTypes": ["image/jpeg", "image/png", "image/webp"]}',
+     '{"maxImageMb": 10, "maxImagesPerInspection": 5, "allowedTypes": ["image/jpeg", "image/png", "image/webp"]}',
      'Photo limits for a damage inspection', true),
     ('damage.severity',
      '{"method": "rule-v0", "validated": false}',
@@ -22,6 +22,9 @@ INSERT INTO app.settings (setting_key, value, description, is_public) VALUES
     ('auth.sessions',
      '{"maxHours": 12, "idleMinutes": 120}',
      'Sign-in lasts at most maxHours, and ends after idleMinutes without activity', false),
+    ('bookings.rules',
+     '{"slots": ["08:00", "09:30", "11:00", "13:30", "15:00"], "perSlot": 3, "daysAhead": 30, "minHoursAhead": 2, "closedWeekdays": [0]}',
+     'Online bookings: the start times customers can choose, vehicles per time, how far ahead they can book, the least notice in hours, and closed weekdays (0 = Sunday)', true),
     ('occupancy.rules',
      '{"overlapThreshold": 0.4, "confirmOccupiedSeconds": 3, "confirmFreeSeconds": 5, "sampleFps": 2}',
      'When a bay counts as occupied or free (used by the occupancy service)', false)

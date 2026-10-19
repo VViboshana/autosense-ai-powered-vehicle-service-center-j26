@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
     resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
     server: {
       port: Number(env.WEB_PORT ?? 5173),
-      proxy: { '/api': { target: env.API_PROXY_TARGET ?? 'http://localhost:5000', changeOrigin: true } },
+      proxy: { '/api': { target: env.API_PROXY_TARGET ?? 'http://127.0.0.1:5000', changeOrigin: true } },
     },
   };
 });

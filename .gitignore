@@ -217,7 +217,14 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Model weights: never committed (large files; trained on CarDD, which can't be shared)
+# Model weights are not committed (large files). Deliberate exception: the damage service's two small weights,
+# member-2-damage-assessment/model/best.pt and yolo11n-seg.pt (~6 MB each), are tracked so the team can run it
+# without retraining. The CarDD images themselves are never committed (their licence forbids sharing).
 *.pt
 *.onnx
+*.pkl
+*.joblib
 
+
+# Occupancy test videos (large, may show people/number plates): never committed
+member-1-occupancy/videos/

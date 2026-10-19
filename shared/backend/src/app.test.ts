@@ -41,6 +41,14 @@ describe('API envelope and protection', () => {
     expect(res.body.error.code).toBe('UNAUTHENTICATED');
   });
 
+  it('asks for sign-in on the booking, history and notification routes', async () => {
+    const app = createApp(fakePool(true), env);
+    for (const path of ['/api/my/bookings', '/api/my/bookings/options', '/api/my/history', '/api/my/notifications', '/api/bookings']) {
+      const res = await request(app).get(path);
+      expect(res.status, path).toBe(401);
+    }
+  });
+
   it('refuses changes posted from another website', async () => {
     const res = await request(createApp(fakePool(true), env))
       .post('/api/auth/login')

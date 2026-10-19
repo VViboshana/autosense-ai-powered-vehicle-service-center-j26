@@ -25,7 +25,7 @@ cd shared
 npm install                                                   # installs frontend and backend together
 Copy-Item backend/.env.local.example backend/.env.local       # then paste the connection string into DATABASE_URL
 npm run db:migrate                                            # creates or updates the tables (safe to run any time)
-npm run db:seed                                               # sample vehicles, bays and today's jobs (development only)
+npm run db:seed                                               # the workshop's cameras and bays (development only)
 npm run dev                                                   # API on :5000 and web app on http://localhost:5173
 ```
 
@@ -54,8 +54,8 @@ Five wrong passwords lock an account; an administrator unlocks it in Administrat
 | `npm run dev` | API and web app with live reload |
 | `npm run check` | Typecheck, lint and test everything. **Run before every pull request.** |
 | `npm run db:migrate` | Apply new migrations, refresh screens/roles/settings |
-| `npm run db:seed` | Sample vehicles, jobs, bays and inspections (no accounts). Re-run on a new day to make the dashboard look live again |
-| `npm run db:reset -- --yes` | Drop and rebuild the database with sample data (development databases only) |
+| `npm run db:seed` | The workshop's cameras and six bays. No accounts, customers, vehicles, jobs or inspections: those are added through the app |
+| `npm run db:reset -- --yes` | Drop and rebuild the database with the cameras and bays (development databases only) |
 | `npm run db:status -w backend` | Which migrations are applied |
 | `npm run build` | Production build of both |
 | `npm run format` | Format code with Prettier |
@@ -64,7 +64,7 @@ Five wrong passwords lock an account; an administrator unlocks it in Administrat
 
 | Where | What |
 |---|---|
-| `backend/.env` (**committed**) | The team's shared API settings: `PORT`, `ALLOWED_ORIGINS`, AI service URLs, `LOG_LEVEL`, pool size. No secrets. Checked at startup; a bad value stops the API with a message naming it. |
+| `backend/.env` (**committed**) | The team's shared API settings: `PORT`, `ALLOWED_ORIGINS`, AI service URLs including `MAINTENANCE_ML_SERVICE_URL=http://127.0.0.1:8003`, `LOG_LEVEL`, pool size. No secrets. Checked at startup; a bad value stops the API with a message naming it. |
 | `backend/.env.local` (**not committed**) | Your secrets and overrides: `DATABASE_URL` (always), `SETUP_KEY` (servers), or e.g. `PORT=5001`. Wins over `.env`. Template: `backend/.env.local.example`. |
 | `frontend/.env` (**committed**) / `frontend/.env.local` | `API_PROXY_TARGET`, `WEB_PORT` for the dev server; personal overrides in `.env.local`. |
 | `app.settings` table | Business settings: time zone (Asia/Colombo), date format, currency, photo limits, bay rules, password rules (`auth.password_policy`), lockout (`auth.lockout`), session length (`auth.sessions`). Defaults in `database/reference/030_settings.sql`. Public ones reach the browser via `GET /api/app-config`. |
