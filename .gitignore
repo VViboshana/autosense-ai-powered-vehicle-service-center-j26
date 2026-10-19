@@ -223,3 +223,6 @@ __marimo__/
 *.pt
 *.onnx
 
+
+# Occupancy test videos (large, may show people/number plates): never committed
+member-1-occupancy/videos/

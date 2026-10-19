@@ -1,0 +1,98 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fetchVideoJob, startVideoJob } from '../../integrations/ml/occupancyService.js';
+import { area, bayBody, cameraBody, polygonSchema, rulesBody, sourceSchema } from './occupancy.routes.js';
+import { serviceJobId, transitionRows } from './occupancy.service.js';
+
+const SQUARE: [number, number][] = [[0.1, 0.1], [0.4, 0.1], [0.4, 0.5], [0.1, 0.5]];
+
+describe('bay outlines', () => {
+  it('accepts normalised points and rejects points outside the frame', () => {
+    expect(polygonSchema.safeParse(SQUARE).success).toBe(true);
+    expect(polygonSchema.safeParse([[0, 0], [1.2, 0], [0, 1]]).success).toBe(false);
+  });
+
+  it('rejects outlines with too few points or no area', () => {
+    expect(polygonSchema.safeParse(SQUARE.slice(0, 2)).success).toBe(false);
+    expect(polygonSchema.safeParse([[0.1, 0.1], [0.2, 0.2], [0.3, 0.3]]).success).toBe(false); // a line
+    expect(Math.abs(area(SQUARE))).toBeCloseTo(0.12);
+  });
+
+  it('validates bay fields, with readable messages', () => {
+    expect(bayBody.parse({ code: 'B7', name: 'Bay 7', polygon: SQUARE }).code).toBe('B7');
+    const bad = bayBody.safeParse({ code: 'B 7!', name: '' });
+    expect(bad.success).toBe(false);
+    expect(bad.error!.issues.map((i) => i.path.join('.'))).toEqual(expect.arrayContaining(['code', 'name']));
+  });
+});
+
+describe('camera sources', () => {
+  it('allows rtsp addresses and plain video file names only', () => {
+    expect(sourceSchema.safeParse('rtsp://10.0.0.5/stream1').success).toBe(true);
+    expect(sourceSchema.safeParse('workshop-a.mp4').success).toBe(true);
+    for (const s of ['../secret.mp4', 'C:\\videos\\a.mp4', 'http://x/a.mp4', 'notes.txt']) {
+      expect(sourceSchema.safeParse(s).success).toBe(false);
+    }
+  });
+
+  it('treats an empty source as "none"', () => {
+    expect(cameraBody.parse({ code: 'CAM-B', name: 'Workshop B', sourceUrl: '' }).sourceUrl).toBeNull();
+  });
+});
+
+describe('occupancy rules', () => {
+  const base = { overlapThreshold: 0.4, confirmOccupiedSeconds: 3, confirmFreeSeconds: 5, sampleFps: 2 };
+  it('accepts the shipped defaults', () => {
+    expect(rulesBody.parse(base)).toEqual(base);
+  });
+  it('rejects a release threshold above the overlap threshold', () => {
+    expect(rulesBody.safeParse({ ...base, releaseThreshold: 0.5 }).success).toBe(false);
+  });
+});
+
+const report = {
+  jobId: 'VJ-9', status: 'running' as const, error: null, framesProcessed: 30, totalFrames: 100, streamSeconds: 15,
+  bays: {}, transitionCount: 2,
+  transitions: [
+    { bayId: '4', fromState: 'uncertain' as const, toState: 'occupied' as const, atSeconds: 5.5, trackId: 3, overlap: 0.82, evidence: 'present 7/7 samples over 3.0s' },
+    { bayId: 'x', fromState: 'free' as const, toState: 'occupied' as const, atSeconds: 6, trackId: null, overlap: null, evidence: '' },
+  ],
+};
+
+describe('storing what the service reports', () => {
+  it('turns video seconds into times from the job start and skips unknown bays', () => {
+    const rows = transitionRows(report, 9, new Date('2026-10-19T08:00:00Z'));
+    expect(rows).toEqual([{
+      bayId: 4, fromState: 'uncertain', toState: 'occupied', at: new Date('2026-10-19T08:00:05.500Z'),
+      trackId: 3, overlap: 0.82, evidence: 'present 7/7 samples over 3.0s', videoJobId: 9,
+    }]);
+    expect(serviceJobId(9)).toBe('VJ-9');
+  });
+});
+
+describe('occupancy service client', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const reply = (status: number, body: unknown) => vi.fn(async () => new Response(JSON.stringify(body), { status }));
+
+  it('asks only for transitions not stored yet and checks the response', async () => {
+    const fetch = reply(200, report);
+    vi.stubGlobal('fetch', fetch);
+    expect((await fetchVideoJob('http://svc:8002', 'VJ-9', 1))?.framesProcessed).toBe(30);
+    expect(String((fetch.mock.calls[0] as unknown[])[0])).toBe('http://svc:8002/video-jobs/VJ-9?since=1');
+  });
+
+  it('reports a job the service no longer knows as null, and a malformed answer as an error', async () => {
+    vi.stubGlobal('fetch', reply(404, { detail: 'No such video job' }));
+    expect(await fetchVideoJob('http://svc:8002', 'VJ-9', 0)).toBeNull();
+    vi.stubGlobal('fetch', reply(200, { status: 'running' }));
+    await expect(fetchVideoJob('http://svc:8002', 'VJ-9', 0)).rejects.toMatchObject({ code: 'OCCUPANCY_SERVICE_BAD_RESPONSE' });
+  });
+
+  it("passes on the service's reason when it refuses a job, and 503 when it is down or not set up", async () => {
+    const request = { jobId: 'VJ-1', source: 'a.mp4', bays: [], rules: {}, sampleFps: 2 };
+    vi.stubGlobal('fetch', reply(404, { detail: 'Video not found in the video folder: a.mp4' }));
+    await expect(startVideoJob('http://svc:8002', request)).rejects.toMatchObject({ status: 422, message: 'Video not found in the video folder: a.mp4' });
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('fetch failed'); }));
+    await expect(startVideoJob('http://svc:8002', request)).rejects.toMatchObject({ status: 503, code: 'OCCUPANCY_SERVICE_UNAVAILABLE' });
+    await expect(startVideoJob(undefined, request)).rejects.toMatchObject({ code: 'OCCUPANCY_SERVICE_NOT_CONFIGURED' });
+  });
+});
