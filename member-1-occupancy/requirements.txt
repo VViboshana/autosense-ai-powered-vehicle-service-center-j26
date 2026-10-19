@@ -1,0 +1,10 @@
+ultralytics==8.4.178
+fastapi>=0.115
+uvicorn[standard]>=0.32
+python-multipart>=0.0.20
+opencv-python-headless>=4.10
+numpy>=1.26
+pandas>=2.2
+shapely>=2.0
+scikit-learn>=1.5
+matplotlib>=3.9

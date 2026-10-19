@@ -25,7 +25,7 @@ cd shared
 npm install                                                   # installs frontend and backend together
 Copy-Item backend/.env.local.example backend/.env.local       # then paste the connection string into DATABASE_URL
 npm run db:migrate                                            # creates or updates the tables (safe to run any time)
-npm run db:seed                                               # sample vehicles, bays and today's jobs (development only)
+npm run db:seed                                               # the workshop's cameras and bays (development only)
 npm run dev                                                   # API on :5000 and web app on http://localhost:5173
 ```
 
@@ -54,8 +54,8 @@ Five wrong passwords lock an account; an administrator unlocks it in Administrat
 | `npm run dev` | API and web app with live reload |
 | `npm run check` | Typecheck, lint and test everything. **Run before every pull request.** |
 | `npm run db:migrate` | Apply new migrations, refresh screens/roles/settings |
-| `npm run db:seed` | Sample vehicles, jobs, bays and inspections (no accounts). Re-run on a new day to make the dashboard look live again |
-| `npm run db:reset -- --yes` | Drop and rebuild the database with sample data (development databases only) |
+| `npm run db:seed` | The workshop's cameras and six bays. No accounts, customers, vehicles, jobs or inspections: those are added through the app |
+| `npm run db:reset -- --yes` | Drop and rebuild the database with the cameras and bays (development databases only) |
 | `npm run db:status -w backend` | Which migrations are applied |
 | `npm run build` | Production build of both |
 | `npm run format` | Format code with Prettier |

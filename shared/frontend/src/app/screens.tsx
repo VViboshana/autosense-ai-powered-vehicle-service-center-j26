@@ -4,12 +4,19 @@ import { RolePermissionsPage } from '@/modules/admin/RolePermissionsPage';
 import { RolesPage } from '@/modules/admin/RolesPage';
 import { UsersPage } from '@/modules/admin/UsersPage';
 import { DashboardPage } from '@/modules/dashboard/DashboardPage';
+import { BookingsPage } from '@/modules/floor/BookingsPage';
 import { VehicleRequestsPage } from '@/modules/floor/VehicleRequestsPage';
+import { DamagePerformancePage } from '@/modules/inspections/DamagePerformancePage';
 import { InspectionDetailPage } from '@/modules/inspections/InspectionDetailPage';
 import { InspectionListPage } from '@/modules/inspections/InspectionListPage';
 import { NewInspectionPage } from '@/modules/inspections/NewInspectionPage';
 import { BayMonitorPage } from '@/modules/occupancy/BayMonitorPage';
 import { ForecastDetailPage, ForecastsPage, NewForecastPage, ServiceHistoryDetailPage, ServiceHistoryPage } from '@/modules/maintenance/MaintenancePages';
+import { AlertDetailPage } from '@/modules/security/AlertDetailPage';
+import { AlertRulesPage } from '@/modules/security/AlertRulesPage';
+import { AlertsPage } from '@/modules/security/AlertsPage';
+import { CamerasPage } from '@/modules/security/CamerasPage';
+import { BaysCamerasPage } from '@/modules/occupancy/BaysCamerasPage';
 /**
  * Built staff screens: path -> page, guarded by the screen code from app.screens (database/reference/010_screens.sql).
  * The path must equal the url in app.screens so the menu link opens it.
@@ -29,11 +36,13 @@ export type ScreenRoute = {
 export const SCREENS: ScreenRoute[] = [
   { code: 'DASHBOARD', path: '/', element: <DashboardPage /> },
   { code: 'VEHICLE_CLAIMS', path: '/floor/vehicle-requests', element: <VehicleRequestsPage /> },
+  { code: 'BOOKINGS', path: '/floor/bookings', element: <BookingsPage /> },
   { code: 'USERS', path: '/admin/users', element: <UsersPage /> },
   { code: 'ROLES', path: '/admin/roles', element: <RolesPage /> },
   { code: 'ROLE_PERMISSIONS', path: '/admin/role-permissions', element: <RolePermissionsPage /> },
   { code: 'AUDIT_LOG', path: '/admin/audit', element: <AuditLogPage /> },
   { code: 'BAY_MONITOR', path: '/floor/bays', element: <BayMonitorPage /> },
+  { code: 'BAYS_CAMERAS', path: '/setup/bays', element: <BaysCamerasPage /> },
   { code: 'INSPECTION_CREATE', path: '/inspections/new', element: <NewInspectionPage /> },
   { code: 'INSPECTION_REVIEW', path: '/inspections/review', element: <InspectionListPage mode="review" /> },
   { code: 'INSPECTION_HISTORY', path: '/inspections', element: <InspectionListPage mode="history" /> },
@@ -48,4 +57,9 @@ export const SCREENS: ScreenRoute[] = [
   { code: 'MAINTENANCE_FORECASTS', path: '/maintenance/forecasts/:id', element: <ForecastDetailPage /> },
   { code: 'SERVICE_HISTORY', path: '/maintenance/history', element: <ServiceHistoryPage /> },
   { code: 'SERVICE_HISTORY', path: '/maintenance/history/:id', element: <ServiceHistoryDetailPage /> },
+  { code: 'SAFETY_ALERTS', path: '/safety/alerts', element: <AlertsPage /> },
+  { code: 'SAFETY_ALERTS', path: '/safety/alerts/:id', element: <AlertDetailPage /> },
+  { code: 'CAMERAS', path: '/safety/cameras', element: <CamerasPage /> },
+  { code: 'ALERT_RULES', path: '/setup/alert-rules', element: <AlertRulesPage /> },
+  { code: 'DAMAGE_SETTINGS', path: '/setup/damage', element: <DamagePerformancePage /> },
 ];

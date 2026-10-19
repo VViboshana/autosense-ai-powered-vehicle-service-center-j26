@@ -13,6 +13,7 @@ const detection = z.object({
   polygon: z.array(z.array(z.number()).length(2)),
   areaPx: z.number(),
   onVehicle: z.boolean().default(true),
+  possible: z.boolean().default(false), // weaker region, for the technician to accept or dismiss
   areaRatioVehicle: z.number().nullable().default(null),
   location: z.string().nullable().default(null),
   severity: z.string().nullable().default(null),
