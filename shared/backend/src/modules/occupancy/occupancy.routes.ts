@@ -9,7 +9,7 @@ import { audit } from '../../lib/audit.js';
 import { clearSettingsCache, getSetting } from '../../lib/settings.js';
 import { requireScreen, signedInUser } from '../../middleware/requireScreen.js';
 import * as repo from './occupancy.repository.js';
-import { cancelVideoJob, DEFAULT_RULES, startVideoJob, type OccupancyDeps, type OccupancyRules } from './occupancy.service.js';
+import { baySuggestions, cancelVideoJob, confirmJobInBay, DEFAULT_RULES, startVideoJob, type OccupancyDeps, type OccupancyRules } from './occupancy.service.js';
 
 const VIEW = ['BAY_MONITOR', 'BAYS_CAMERAS', 'OCCUPANCY_SETTINGS'] as const;
 const SETUP = 'BAYS_CAMERAS';
@@ -89,6 +89,10 @@ export const rulesBody = z
 const idParam = z.object({ id: z.coerce.number().int().positive() });
 const baysQuery = z.object({ cameraId: z.coerce.number().int().positive().optional() });
 const snapshotQuery = z.object({ at: z.coerce.number().min(0).max(86_400).default(0) });
+export const confirmBayBody = z.object({
+  bayId: z.number({ error: 'Pick a bay.' }).int().positive(),
+  jobId: z.number({ error: 'Pick the vehicle that is in the bay.' }).int().positive(),
+});
 const jobBody = z.object({ cameraId: z.number().int().positive(), sampleFps: z.number().gt(0).max(15).optional() });
 
 /**
@@ -105,6 +109,8 @@ const jobBody = z.object({ cameraId: z.number().int().positive(), sampleFps: z.n
  *   POST  /api/occupancy/video-jobs                process the camera's video   POST /api/occupancy/video-jobs/:id/cancel
  *   GET   /api/occupancy/rules                     PUT /api/occupancy/rules (setting occupancy.rules)
  *   GET   /api/occupancy/service                   the model the occupancy service runs, and whether it masks frames
+ *   GET   /api/occupancy/bay-suggestions           occupied bays without a job, each with the next vehicle in the queue
+ *   POST  /api/occupancy/bay-suggestions/confirm   staff confirm which vehicle is in the bay: the job moves to in_bay
  */
 export function occupancyRoutes(deps: OccupancyDeps) {
   const router = Router();
@@ -219,6 +225,18 @@ export function occupancyRoutes(deps: OccupancyDeps) {
   // ---- the occupancy service's model (for the settings screen); 503 when the service is not running
   router.get('/service', requireScreen(...VIEW), async (_req, res) => {
     sendOk(res, await occupancyModel(deps.serviceUrl));
+  });
+
+  // ---- camera suggestions: which waiting vehicle is in an occupied bay (staff confirm)
+  router.get('/bay-suggestions', requireScreen('BAY_MONITOR'), async (_req, res) => {
+    sendOk(res, await baySuggestions(pool));
+  });
+
+  router.post('/bay-suggestions/confirm', requireScreen('BAY_JOB_CONFIRM'), async (req, res) => {
+    const me = signedInUser(req);
+    const body = parse(confirmBayBody, req.body);
+    await confirmJobInBay(pool, { ...body, userId: me.userId });
+    sendOk(res, await baySuggestions(pool));
   });
 
   router.put('/rules', requireScreen('OCCUPANCY_SETTINGS'), async (req, res) => {

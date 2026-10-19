@@ -298,3 +298,79 @@ export async function modelVersionId(db: Db, version: string, placeholder: boole
   );
   return rows[0]!.model_version_id;
 }
+
+// ---------------------------------------------------------------- bay -> job suggestions (staff confirm)
+
+/** Stages a job can move into a bay from, in queue order (waiting for a bay first). */
+export const BAY_READY_STAGES = ['waiting_for_bay', 'inspected', 'checked_in'] as const;
+
+export type UnlinkedBay = { bayId: number; code: string; name: string; since: string | null; overlap: number | null };
+export type QueuedJob = {
+  jobId: number;
+  jobNo: string;
+  registrationNo: string;
+  vehicle: string;
+  service: string;
+  stage: (typeof BAY_READY_STAGES)[number];
+  checkedInAt: string;
+};
+
+/** A camera whose code starts with this shows test footage (e.g. TEST-PKL04, a PKLot time-lapse): never real vehicles. */
+export const TEST_CAMERA_PREFIX = 'TEST-';
+
+/**
+ * Active bays the camera reports as occupied that have no job in them, longest occupied first. Bays on a test camera
+ * are left out: the vehicles in test footage are not in the service centre.
+ */
+export async function occupiedBaysWithoutJob(db: Db): Promise<UnlinkedBay[]> {
+  const { rows } = await db.query<UnlinkedBay>(
+    `SELECT b.bay_id AS "bayId", b.code, b.name, s.since, s.overlap
+     FROM occupancy.bays b JOIN occupancy.bay_status s ON s.bay_id = b.bay_id
+     LEFT JOIN occupancy.cameras c ON c.camera_id = b.camera_id
+     WHERE b.is_active AND s.state = 'occupied'
+       AND (c.code IS NULL OR c.code NOT LIKE $1 || '%')
+       AND NOT EXISTS (SELECT 1 FROM workshop.jobs j WHERE j.bay_id = b.bay_id AND j.stage = 'in_bay')
+     ORDER BY s.since NULLS LAST, b.display_order, b.code`,
+    [TEST_CAMERA_PREFIX],
+  );
+  return rows;
+}
+
+/** Open jobs not yet in a bay, in queue order: waiting for a bay first, then inspected, then checked in; oldest first. */
+export async function jobsReadyForBay(db: Db, limit = 20): Promise<QueuedJob[]> {
+  const { rows } = await db.query<QueuedJob>(
+    `SELECT j.job_id AS "jobId", j.job_no AS "jobNo", v.registration_no AS "registrationNo",
+            v.make || ' ' || v.model AS vehicle, st.name AS service, j.stage, j.checked_in_at AS "checkedInAt"
+     FROM workshop.jobs j
+     JOIN workshop.vehicles v ON v.vehicle_id = j.vehicle_id
+     JOIN workshop.service_types st ON st.service_type_id = j.service_type_id
+     WHERE j.stage = ANY($1::varchar[])
+     ORDER BY array_position($1::varchar[], j.stage::varchar), j.checked_in_at
+     LIMIT $2`,
+    [BAY_READY_STAGES, limit],
+  );
+  return rows;
+}
+
+/** Holds the bay row until the transaction ends (serialises confirmations for one bay). */
+export async function lockBay(db: Db, bayId: number): Promise<void> {
+  await db.query('SELECT 1 FROM occupancy.bays WHERE bay_id = $1 FOR UPDATE', [bayId]);
+}
+
+/** Whether a job is already in this bay (only one at a time). */
+export async function bayHasJob(db: Db, bayId: number): Promise<boolean> {
+  const { rows } = await db.query(`SELECT 1 FROM workshop.jobs WHERE bay_id = $1 AND stage = 'in_bay' LIMIT 1`, [bayId]);
+  return rows.length > 0;
+}
+
+/** Moves a waiting job into a bay, with its stage history. False when the job is not (or no longer) waiting. */
+export async function moveJobIntoBay(db: Db, m: { jobId: number; bayId: number; userId: number; note: string }): Promise<boolean> {
+  const { rowCount } = await db.query(
+    `UPDATE workshop.jobs SET stage = 'in_bay', bay_id = $2, bay_entered_at = now(), updated_at = now()
+     WHERE job_id = $1 AND stage = ANY($3::varchar[])`,
+    [m.jobId, m.bayId, BAY_READY_STAGES],
+  );
+  if (!rowCount) return false;
+  await db.query(`INSERT INTO workshop.job_stage_history (job_id, stage, user_id, note) VALUES ($1, 'in_bay', $2, $3)`, [m.jobId, m.userId, m.note]);
+  return true;
+}
