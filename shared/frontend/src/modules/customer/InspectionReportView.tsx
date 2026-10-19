@@ -6,7 +6,7 @@ import type { InspectionReport, MyVehicle } from './customer.types';
 import { DAMAGE_NAMES, plural, SEVERITIES, severityName, severityOf, severityTone, VIEW_NAMES, VIEW_ORDER } from './customer.ui';
 import { DamageMap } from './DamageMap';
 import { ReportPhoto } from './ReportPhoto';
-import { useCountUp } from './useCountUp';
+import { useCountUp } from '@/lib/useCountUp';
 
 /**
  * One confirmed inspection, told in order: what was found overall (ring and counts), where on the car (map), the

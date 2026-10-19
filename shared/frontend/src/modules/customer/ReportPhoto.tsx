@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import type { InspectionReport } from './customer.types';
 import { DAMAGE_NAMES, severityName, severityTone } from './customer.ui';
-import { useTraceLengths } from './useTraceLengths';
+import { useTraceLengths } from '@/lib/useTraceLengths';
 
 type Photo = InspectionReport['photos'][number];
 

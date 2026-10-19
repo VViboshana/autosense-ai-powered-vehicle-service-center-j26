@@ -425,3 +425,24 @@ a.as-vehicle-card:hover {
   color: var(--as-ink);
   font-weight: 600;
 }
+
+/* Sign-in: the form rises in; the brand panel's bays light up one after another */
+.as-auth-form {
+  animation: as-rise 0.5s var(--as-ease) both;
+}
+.as-auth-bays span {
+  animation: as-fade 0.4s ease both;
+  animation-delay: calc(200ms + var(--n, 0) * 90ms);
+}
+.as-auth-bays span:nth-child(1) { --n: 0; }
+.as-auth-bays span:nth-child(2) { --n: 1; }
+.as-auth-bays span:nth-child(3) { --n: 2; }
+.as-auth-bays span:nth-child(4) { --n: 3; }
+.as-auth-bays span:nth-child(n + 5) { --n: 4; }
+.as-auth-bays span.on {
+  animation: as-fade 0.4s ease both, as-auth-glow 2.4s ease-in-out 1s infinite;
+  animation-delay: calc(200ms + var(--n, 0) * 90ms), 1s;
+}
+@keyframes as-auth-glow {
+  50% { box-shadow: 0 0 0 3px rgb(242 106 27 / 18%); }
+}
