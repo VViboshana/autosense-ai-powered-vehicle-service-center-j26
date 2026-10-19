@@ -166,3 +166,63 @@
 .as-occ-facts dd {
   margin: 0;
 }
+
+/* Bay monitor: pick a bay to see its history */
+.as-bay-pick {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.as-bay-pick:hover {
+  border-color: var(--as-primary);
+}
+.as-bay-pick.on {
+  border-color: var(--as-primary);
+  box-shadow: inset 3px 0 0 var(--as-brand);
+}
+
+/* Bay history: one band per state between consecutive changes */
+.as-hist-strip {
+  display: flex;
+  height: 1.6rem;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--as-line);
+  transform-origin: left;
+  animation: as-grow-x 0.6s var(--as-ease) both;
+}
+.as-hist-strip > span {
+  min-width: 2px;
+}
+.as-hist-occupied { background: var(--as-brand); }
+.as-hist-free { background: var(--as-success); }
+.as-hist-uncertain { background: var(--as-info); }
+.as-hist-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.74rem;
+  color: var(--as-muted);
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.3rem;
+}
+.as-hist-shares {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+}
+.as-hist-shares i {
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 2px;
+  margin-right: 0.35rem;
+  vertical-align: -1px;
+}
+.as-hist-gap {
+  background: repeating-linear-gradient(135deg, var(--as-surface-2) 0 4px, var(--as-line) 4px 6px);
+}

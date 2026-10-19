@@ -69,3 +69,16 @@ export type OccupancyServiceInfo = {
   /** Missing when the service is a version without ROI masking. */
   roiMask?: { setting: string; default: boolean; marginPx: number };
 };
+
+/** GET /api/occupancy/bays/:id/events: one confirmed change of a bay's state (newest first). */
+export type BayEvent = {
+  eventId: number;
+  fromState: 'free' | 'occupied' | 'uncertain' | null;
+  toState: 'free' | 'occupied' | 'uncertain';
+  at: string;
+  trackId: number | null;
+  /** Share of the bay the vehicle covered when the change was confirmed. */
+  overlap: number | null;
+  evidence: string | null;
+  videoJobId: number | null;
+};
