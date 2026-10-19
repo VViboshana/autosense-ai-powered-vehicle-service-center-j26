@@ -8,7 +8,9 @@ import { audit } from '../../lib/audit.js';
 import { photoUrl, receiveVehiclePhoto, saveVehiclePhoto, sendStoredPhoto } from '../../lib/vehiclePhotos.js';
 import { requireCustomer, signedInUser } from '../../middleware/requireScreen.js';
 import { PLATE_KEY } from '../claims/claims.routes.js';
-import { groupRegions, type Region, type ViewAngle } from './reportAreas.js';
+import { groupRegions, type Region, type ViewAngle } from '../inspections/inspections.areas.js';
+import { repairFor, repairPlan } from '../inspections/inspections.repair.js';
+import { withServiceNames } from '../inspections/inspections.repository.js';
 
 const claimBody = z.object({
   registrationNo: z
@@ -60,8 +62,8 @@ export function myRoutes(pool: pg.Pool, uploadDir: string) {
   /**
    * A vehicle's confirmed inspection reports, as the customer sees them: the technician-checked regions only (never
    * rejected ones, possible damage nobody accepted, or the model's confidence), with the technician's corrections,
-   * joined into damaged areas (reportAreas.ts) and numbered across the report, the photos, the overall severity and
-   * the technician's note.
+   * joined into damaged areas (inspections/inspections.areas.ts) and numbered across the report, the photos, the overall severity,
+   * the technician's note, and the repair guide (priority, services, rough effort; inspections/inspections.repair.ts).
    */
   async function confirmedInspections(vehicleId: number, limit = 20) {
     const heads = await pool.query(
@@ -84,7 +86,7 @@ export function myRoutes(pool: pg.Pool, uploadDir: string) {
        ORDER BY d.detection_id`,
       [ids],
     );
-    return heads.rows.map((h) => {
+    return Promise.all(heads.rows.map(async (h) => {
       let no = 0; // numbered across the report's photos: the same number on the photo, the map and the list
       const photos = images.rows
         .filter((im) => im.inspection_id === h.inspection_id)
@@ -98,7 +100,7 @@ export function myRoutes(pool: pg.Pool, uploadDir: string) {
             width,
             height,
             url: `/api/my/vehicles/${vehicleId}/inspections/${h.inspection_id}/photos/${im.image_id}`,
-            areas: groupRegions(mine, im.view_angle, width, height).map((a) => ({ no: ++no, ...a })),
+            areas: groupRegions(mine, im.view_angle, width, height).map((a) => ({ no: ++no, ...a, repair: repairFor(a.label, a.severity) })),
           };
         });
       return {
@@ -109,8 +111,9 @@ export function myRoutes(pool: pg.Pool, uploadDir: string) {
         notes: h.review_notes,
         photos,
         areas: photos.flatMap((p) => p.areas.map((a) => ({ ...a, viewAngle: p.viewAngle, imageId: p.imageId }))),
+        repair: await withServiceNames(pool, repairPlan(photos.flatMap((p) => p.areas))),
       };
-    });
+    }));
   }
 
   /**
@@ -199,7 +202,13 @@ export function myRoutes(pool: pg.Pool, uploadDir: string) {
           photoUrl: photoUrl(`/api/my/vehicles/${r.vehicle_id}/photo`, r.photo_key),
           visit: r.stage ? { stage: r.stage, checkedInAt: r.checked_in_at, bay: r.bay, queuePosition: r.queue_position === null ? null : Number(r.queue_position) } : null,
           latestInspection: latest
-            ? { inspectionNo: latest.inspectionNo, confirmedAt: latest.confirmedAt, overallSeverity: latest.overallSeverity, areas: latest.areas.length }
+            ? {
+                inspectionNo: latest.inspectionNo,
+                confirmedAt: latest.confirmedAt,
+                overallSeverity: latest.overallSeverity,
+                areas: latest.areas.length,
+                priority: latest.repair.priority,
+              }
             : null,
         };
       }),
