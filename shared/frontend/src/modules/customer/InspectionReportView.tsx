@@ -3,7 +3,7 @@ import { formatDate } from '@/lib/format';
 import { VehicleSide } from '@/modules/inspections/VehicleSide';
 import { DamageIcon } from './art';
 import type { InspectionReport, MyVehicle } from './customer.types';
-import { DAMAGE_NAMES, plural, SEVERITIES, severityName, severityOf, severityTone, VIEW_NAMES, VIEW_ORDER } from './customer.ui';
+import { DAMAGE_NAMES, plural, PRIORITY_INFO, roughTime, SEVERITIES, severityName, severityOf, severityTone, VIEW_NAMES, VIEW_ORDER } from './customer.ui';
 import { DamageMap } from './DamageMap';
 import { ReportPhoto } from './ReportPhoto';
 import { useCountUp } from '@/lib/useCountUp';
@@ -81,6 +81,7 @@ export function InspectionReportView({ vehicle, report, history, onPick }: {
         {report.notes && (
           <p className="cp-note cp-rise" style={{ '--i': 5 } as CSSProperties}><b>Technician's note:</b> {report.notes}</p>
         )}
+        {report.repair.priority && <WhatNeedsDoing plan={report.repair} />}
       </div>
 
       {report.areas.length > 0 && (
@@ -174,6 +175,40 @@ export function InspectionReportView({ vehicle, report, history, onPick }: {
       )}
       <p className="small text-body-secondary mb-0">Reports are checked by a technician. Severity is a guide, not a repair quote.</p>
     </section>
+  );
+}
+
+/**
+ * What needs doing, in customer words: the most urgent priority with advice, then each service with how many areas and
+ * a rough time (never exact hours or a price). A guide from the inspection; the service centre confirms the work.
+ */
+function WhatNeedsDoing({ plan }: { plan: InspectionReport['repair'] }) {
+  const top = PRIORITY_INFO[plan.priority!];
+  return (
+    <div className={`cp-todo cp-tone-${top.tone} cp-rise`} style={{ '--i': 6 } as CSSProperties}>
+      <div className="cp-todo-head">
+        <span className="cp-todo-ic"><i className={`bi ${top.icon}`} aria-hidden="true" /></span>
+        <div>
+          <div className="cp-eyebrow">What needs doing</div>
+          <b>{top.name}</b>
+          <div className="small">{top.advice}</div>
+        </div>
+      </div>
+      <ul className="cp-todo-list">
+        {plan.services.map((s, i) => (
+          <li key={s.code} style={{ '--i': i } as CSSProperties}>
+            <span className={`cp-dot cp-tone-${PRIORITY_INFO[s.priority].tone}`} aria-hidden="true" />
+            <b>{s.name}</b>
+            <span className="text-body-secondary">{plural(s.areas, 'area')}</span>
+            <span className="cp-todo-time">{roughTime(s.effortHours)}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="cp-todo-note">
+        {plan.effortHours && <>Altogether about <b>{roughTime(plan.effortHours).toLowerCase()}</b> of workshop time. </>}
+        A guide from the inspection, not a quote: the service centre confirms the work and the cost with you.
+      </p>
+    </div>
   );
 }
 
@@ -279,12 +314,13 @@ function AreaList({ report, active, onSelect, onHover }: {
                   <span className="t">
                     <b>{DAMAGE_NAMES[a.label] ?? a.label}</b>
                     <span>{a.where}</span>
-                    {(a.marks > 1 || a.addedByTechnician) && (
-                      <span className="cp-tags">
-                        {a.marks > 1 && <span className="cp-tag">{a.marks} marks joined into one</span>}
-                        {a.addedByTechnician && <span className="cp-tag">Added by the technician</span>}
+                    <span className="cp-tags">
+                      <span className={`cp-tag cp-tag-prio cp-tone-${PRIORITY_INFO[a.repair.priority].tone}`} title={a.repair.why}>
+                        <i className={`bi ${PRIORITY_INFO[a.repair.priority].icon}`} aria-hidden="true" />{PRIORITY_INFO[a.repair.priority].name}
                       </span>
-                    )}
+                      {a.marks > 1 && <span className="cp-tag">{a.marks} marks joined into one</span>}
+                      {a.addedByTechnician && <span className="cp-tag">Added by the technician</span>}
+                    </span>
                   </span>
                   <span className="cp-sev">
                     <span className="cp-meter" aria-hidden="true">

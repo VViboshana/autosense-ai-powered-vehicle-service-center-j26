@@ -1,5 +1,5 @@
 import type { Tone } from '@/components/ui/StatusPill';
-import type { DamageLabel, Detection, InspectionStatus, SeverityValue, ViewAngle } from './inspections.types';
+import type { DamageLabel, Detection, Hours, InspectionStatus, Priority, SeverityValue, ViewAngle } from './inspections.types';
 
 export const DAMAGE_LABELS: Record<DamageLabel, string> = {
   dent: 'Dent',
@@ -57,3 +57,20 @@ export const isFinding = (d: Detection) => !d.suggestion || d.reviewStatus === '
 
 /** 0.873 -> "87%" */
 export const percent = (v: number | null | undefined, digits = 0) => (v == null ? '—' : `${(v * 100).toFixed(digits)}%`);
+
+/** Repair priority, most urgent first: the safety-critical one is red, like severe damage. */
+export const PRIORITY: Record<Priority, { label: string; tone: Tone; icon: string }> = {
+  before_driving: { label: 'Fix before driving', tone: 'danger', icon: 'bi-sign-stop' },
+  soon: { label: 'Fix soon', tone: 'warning', icon: 'bi-exclamation-triangle' },
+  planned: { label: 'Can be planned', tone: 'info', icon: 'bi-calendar-check' },
+  cosmetic: { label: 'Cosmetic', tone: 'muted', icon: 'bi-brush' },
+};
+
+/** [1.5, 3] -> "1.5–3 h"; [0.3, 0.75] -> "20–45 min" */
+export function hours(range: Hours | null | undefined) {
+  if (!range) return '—';
+  const [a, b] = range;
+  if (b < 1) return `${Math.round(a * 60)}–${Math.round(b * 60)} min`;
+  const h = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
+  return `${h(a)}–${h(b)} h`;
+}
