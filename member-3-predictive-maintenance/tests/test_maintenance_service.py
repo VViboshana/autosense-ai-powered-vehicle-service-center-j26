@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import pytest
+import pandas as pd
 from fastapi.testclient import TestClient
 
 import backend.maintenance_service.main as service_main
 from backend.maintenance_service.main import app, runtime
-from backend.maintenance_service.model_loader import ModelBundle, VariantArtifacts
+from backend.maintenance_service.model_loader import DurationArtifacts, ModelBundle, VariantArtifacts
 from backend.maintenance_service.predictor import information_sources, select_model_variant
 from backend.maintenance_service.schemas import ForecastRequest
 
@@ -25,6 +26,11 @@ class FakeModel:
 
     def predict_proba(self, frame):
         return [[0.05, 0.7, 0.1, 0.1, 0.05]]
+
+
+class FakeDurationModel:
+    def predict(self, frame):
+        return [0.5]
 
 
 def payload(**overrides):
@@ -50,7 +56,10 @@ def fake_models(monkeypatch):
 
 def test_health_and_model_info():
     with TestClient(app) as client:
-        assert client.get("/health").json() == {"status": "ok", "service": "maintenance-prediction", "modelsLoaded": True}
+        health = client.get("/health").json()
+        assert health["status"] == "degraded"
+        assert health["categoryModel"] == "ready"
+        assert health["taskCatalogue"] == "unavailable"
         info = client.get("/v1/model").json()
         assert info["primaryModel"] == "XGBoost"
         assert all(item["available"] for item in info["variants"])
@@ -88,7 +97,8 @@ def test_forecast_shape_and_information_sources():
     assert set(body["prediction"]["categoryScores"]) == set(FakeEncoder.classes_)
     assert body["maintenanceRequired"]["status"] == "not_evaluated"
     assert body["engineCondition"]["status"] == "not_run"
-    assert body["duration"]["status"] == "model_pending"
+    assert body["duration"]["status"] == "task_catalog_unavailable"
+    assert body["taskSelection"]["status"] == "unavailable"
     assert all(body["informationSources"].values())
 
 
@@ -100,3 +110,33 @@ def test_unavailable_selected_model_returns_503(monkeypatch):
     with TestClient(app) as client:
         response = client.post("/v1/forecast", json=payload())
     assert response.status_code == 503
+
+
+def test_task_catalogue_and_duration_endpoints(monkeypatch):
+    catalog = pd.DataFrame([{
+        "fix_title": "Replace brake pedal switch",
+        "final_category": "Brakes",
+        "difficulty_level": "Moderate DIY",
+        "probability_rank": 1,
+        "est_parts_cost_min_usd": 3.0,
+        "est_parts_cost_max_usd": 15.0,
+        "parts_cost_mid_usd": 9.0,
+        "parts_cost_range_usd": 12.0,
+    }])
+    bundle = ModelBundle(
+        basic=VariantArtifacts(FakeModel(), FakeEncoder(), True),
+        enriched=VariantArtifacts(FakeModel(), FakeEncoder(), True),
+        duration=DurationArtifacts(primary=FakeDurationModel(), primary_available=True),
+        task_catalog=catalog,
+    )
+    monkeypatch.setattr(service_main, "load_models", lambda: bundle)
+    with TestClient(app) as client:
+        tasks_response = client.get("/v1/tasks/Brakes")
+        duration_response = client.post("/v1/duration", json={"fixTitle": "Replace brake pedal switch"})
+    assert tasks_response.status_code == 200
+    assert tasks_response.json()["candidateTasks"][0]["fixTitle"] == "Replace brake pedal switch"
+    assert duration_response.status_code == 200
+    body = duration_response.json()
+    assert body["status"] == "evaluated"
+    assert body["model"]["variant"] == "task_plus_cost"
+    assert body["benchmark"] is True
