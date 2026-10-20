@@ -71,6 +71,8 @@ class StatusResponse(APIModel):
     label: Optional[str] = None
     reason: Optional[str] = None
     minutes: Optional[int] = None
+    estimated_hours: Optional[float] = Field(default=None, alias="estimatedHours")
+    estimated_minutes: Optional[int] = Field(default=None, alias="estimatedMinutes")
 
 
 class CategoryPrediction(APIModel):
@@ -86,4 +88,44 @@ class ForecastResponse(APIModel):
     engine_condition: StatusResponse = Field(alias="engineCondition")
     duration: StatusResponse
     information_sources: dict[str, bool] = Field(alias="informationSources")
+    task_selection: "TaskSelection" = Field(alias="taskSelection")
+
+
+class TaskCandidate(APIModel):
+    fix_title: str = Field(alias="fixTitle")
+    difficulty_level: str = Field(alias="difficultyLevel")
+    probability_rank: int = Field(alias="probabilityRank")
+    parts_cost_min_usd: Optional[float] = Field(default=None, alias="partsCostMinUsd")
+    parts_cost_max_usd: Optional[float] = Field(default=None, alias="partsCostMaxUsd")
+
+
+class TaskSelection(APIModel):
+    status: str
+    required: bool = True
+    candidate_tasks: list[TaskCandidate] = Field(default_factory=list, alias="candidateTasks")
+
+
+class DurationPredictionRequest(APIModel):
+    fix_title: str = Field(alias="fixTitle", min_length=1)
+
+
+class DurationTaskInfo(APIModel):
+    fix_title: str = Field(alias="fixTitle")
+    category: str
+    difficulty_level: str = Field(alias="difficultyLevel")
+    probability_rank: int = Field(alias="probabilityRank")
+
+
+class DurationEstimate(APIModel):
+    estimated_hours: float = Field(alias="estimatedHours")
+    estimated_minutes: int = Field(alias="estimatedMinutes")
+
+
+class DurationPredictionResponse(APIModel):
+    status: str
+    task: DurationTaskInfo
+    duration: DurationEstimate
+    model: dict[str, str]
+    benchmark: bool
+    target_type: str = Field(alias="targetType")
 

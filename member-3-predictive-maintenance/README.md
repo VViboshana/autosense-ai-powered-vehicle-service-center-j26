@@ -40,7 +40,18 @@ $env:AUTOSENSE_MODEL_DIR = (Resolve-Path .\model).Path
 
 Swagger: `http://localhost:8003/docs`
 
-Endpoints: `GET /health`, `GET /v1/model`, and `POST /v1/forecast`.
+Endpoints: `GET /health`, `GET /v1/model`, `POST /v1/forecast`, `GET /v1/tasks/{category}`, and `POST /v1/duration`.
+
+Duration integration artifacts are resolved from `AUTOSENSE_MODEL_DIR` unless explicit paths are set:
+
+```text
+service_duration_random_forest_final.pkl
+service_duration_random_forest_task_only_fallback.pkl
+service_duration_model_metadata.json
+maintenance_task_catalog_app.csv
+```
+
+The catalogue provides candidate tasks after category prediction. A technician must select a task before `/v1/duration` runs. Duration output is benchmark estimated labor time (`targetType: estimated_labor_hours`), not a guaranteed workshop completion time.
 
 ### Example request
 
@@ -61,6 +72,6 @@ The response contains `assessmentType`, `prediction.category`, `prediction.model
 ### Limitations
 
 - Maintenance-required and engine-condition models are not integrated into `/v1/forecast`.
-- Duration regression is pending.
+- Duration regression is available when its external model artifacts and task catalogue are present; the API reports a degraded optional subsystem when they are missing.
 - FastAPI has no persistence and is a decision-support service, not a replacement for technician judgment.
 - Results reflect the current research dataset and are not guaranteed real-world accuracy.
