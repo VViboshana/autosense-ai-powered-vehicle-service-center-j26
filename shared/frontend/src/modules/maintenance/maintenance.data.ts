@@ -24,5 +24,5 @@ export const SAMPLE_FORECASTS: MaintenanceForecast[] = [
 ];
 
 export const EMPTY_DRAFT: ForecastDraft = {
-  registrationNo: '', make: '', model: '', year: '', mileage: '', customer: '', problemDescription: '', firstNoticed: '', warningLight: '', severity: '', notes: '', ecuCode: '', technicianDiagnosis: '', engineCondition: '', technicianNotes: '', brakeCondition: 'Unknown', batteryCondition: 'Unknown', tireCondition: 'Unknown', inspectionLinked: false,
+  registrationNo: '', make: '', model: '', year: '', mileage: '', customer: '', problemDescription: '', firstNoticed: '', warningLight: '', severity: '', notes: '', ecuCode: '', technicianDiagnosis: '', engineCondition: '', technicianNotes: '', serviceHistoryAvailable: false, serviceHistorySummary: '', inspectionId: '', brakeCondition: 'Unknown', batteryCondition: 'Unknown', tireCondition: 'Unknown', inspectionLinked: false,
 };
