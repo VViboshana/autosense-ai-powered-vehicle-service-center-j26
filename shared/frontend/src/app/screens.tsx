@@ -11,7 +11,8 @@ import { InspectionDetailPage } from '@/modules/inspections/InspectionDetailPage
 import { InspectionListPage } from '@/modules/inspections/InspectionListPage';
 import { NewInspectionPage } from '@/modules/inspections/NewInspectionPage';
 import { BayMonitorPage } from '@/modules/occupancy/BayMonitorPage';
-import { ForecastDetailPage, ForecastsPage, NewForecastPage, ServiceHistoryDetailPage, ServiceHistoryPage } from '@/modules/maintenance/MaintenancePages';
+import { ForecastsPage, NewForecastPage, ServiceHistoryDetailPage, ServiceHistoryPage } from '@/modules/maintenance/MaintenancePages';
+import { LiveForecastDetailPage } from '@/modules/maintenance/LiveForecastDetailPage';
 import { AlertDetailPage } from '@/modules/security/AlertDetailPage';
 import { AlertRulesPage } from '@/modules/security/AlertRulesPage';
 import { AlertsPage } from '@/modules/security/AlertsPage';
@@ -54,7 +55,7 @@ export const SCREENS: ScreenRoute[] = [
   },
   { code: 'MAINTENANCE_FORECASTS', path: '/maintenance/forecasts', element: <ForecastsPage /> },
   { code: 'MAINTENANCE_FORECASTS', path: '/maintenance/forecasts/new', element: <NewForecastPage /> },
-  { code: 'MAINTENANCE_FORECASTS', path: '/maintenance/forecasts/:id', element: <ForecastDetailPage /> },
+  { code: 'MAINTENANCE_FORECASTS', path: '/maintenance/forecasts/:id', element: <LiveForecastDetailPage /> },
   { code: 'SERVICE_HISTORY', path: '/maintenance/history', element: <ServiceHistoryPage /> },
   { code: 'SERVICE_HISTORY', path: '/maintenance/history/:id', element: <ServiceHistoryDetailPage /> },
   { code: 'SAFETY_ALERTS', path: '/safety/alerts', element: <AlertsPage /> },
