@@ -8,11 +8,19 @@ import { pageQuery } from '../../http/pagination.js';
 import { parse } from '../../http/validate.js';
 import { getSetting } from '../../lib/settings.js';
 import { requireScreen, signedInUser } from '../../middleware/requireScreen.js';
-import { getInspection, imageStorageKey, listInspections, vehicleOptions } from './inspections.repository.js';
+import { fieldPerformance } from './inspections.performance.js';
+import { getInspection, imageStorageKey, listInspections, reviewedRegions, testSetMetrics, vehicleOptions } from './inspections.repository.js';
 import { DAMAGE_LABELS, INSPECTION_STATUSES, REVIEW_DECISIONS, SEVERITIES, VIEW_ANGLES } from './inspections.rules.js';
-import { confirmInspection, createInspection, reviewDetection, type InspectionDeps } from './inspections.service.js';
+import {
+  addTechnicianRegion,
+  confirmInspection,
+  createInspection,
+  removeTechnicianRegion,
+  reviewDetection,
+  type InspectionDeps,
+} from './inspections.service.js';
 
-const DEFAULT_UPLOAD = { maxImageMb: 10, maxImagesPerInspection: 3, allowedTypes: ['image/jpeg', 'image/png', 'image/webp'] };
+const DEFAULT_UPLOAD = { maxImageMb: 10, maxImagesPerInspection: 5, allowedTypes: ['image/jpeg', 'image/png', 'image/webp'] };
 
 /** Form fields arrive as text: an empty field means "not given". */
 const optionalId = z.preprocess((v) => (v === '' || v == null ? undefined : v), z.coerce.number().int().positive().optional());
@@ -43,7 +51,15 @@ const reviewBody = z
     message: 'Give the correct damage type or severity.',
     path: ['label'],
   });
-const confirmBody = z.object({ notes: z.string().trim().max(1000).optional().transform((s) => s || null) });
+export const regionBody = z.object({
+  label: z.enum(DAMAGE_LABELS),
+  severity: z.enum(SEVERITIES),
+  // [x1, y1, x2, y2] in the photo's pixels; at least 8 px each way so a stray click is not a region
+  bbox: z
+    .tuple([z.number().min(0), z.number().min(0), z.number().min(0), z.number().min(0)])
+    .refine(([x1, y1, x2, y2]) => x2 - x1 >= 8 && y2 - y1 >= 8, { message: 'Draw a larger box around the damage.' }),
+});
+const confirmBody =z.object({ notes: z.string().trim().max(1000).optional().transform((s) => s || null) });
 
 /** Reads the photos of a multipart form into memory, with the limits from the damage.upload setting. */
 async function receivePhotos(req: Request, res: Response, limits: typeof DEFAULT_UPLOAD) {
@@ -81,9 +97,12 @@ async function receivePhotos(req: Request, res: Response, limits: typeof DEFAULT
  *   POST  /api/inspections                                   new inspection (multipart: images, viewAngles, jobId | vehicleId)
  *   GET   /api/inspections?status=&search=&page=&pageSize=    list (review queue: status=awaiting_review)
  *   GET   /api/inspections/vehicle-options?search=            open jobs to start an inspection for
+ *   GET   /api/inspections/performance                        field figures: model per damage type + severity rule check
  *   GET   /api/inspections/:id                               detail with photos and damage regions
  *   GET   /api/inspections/:id/images/:imageId                the photo itself
  *   PATCH /api/inspections/:id/detections/:detectionId        review one region (confirmed | corrected | rejected)
+ *   POST  /api/inspections/:id/images/:imageId/detections     technician adds damage the model missed (box + type + severity)
+ *   DELETE /api/inspections/:id/detections/:detectionId       remove a region a technician added
  *   POST  /api/inspections/:id/confirm                       make it final
  */
 export function inspectionsRoutes(deps: InspectionDeps) {
@@ -104,6 +123,13 @@ export function inspectionsRoutes(deps: InspectionDeps) {
 
   router.get('/', requireScreen('INSPECTION_HISTORY', 'INSPECTION_REVIEW'), async (req, res) => {
     sendOk(res, await listInspections(pool, parse(listQuery, req.query)));
+  });
+
+  // Before '/:id' (like vehicle-options below): how the model and the severity rules do in real use
+  router.get('/performance', requireScreen('DAMAGE_SETTINGS'), async (_req, res) => {
+    const { regions, sample } = await reviewedRegions(pool);
+    const testSet = await testSetMetrics(pool, sample.modelVersions);
+    sendOk(res, { sample, regionsReviewed: regions.length, testSet, ...fieldPerformance(regions) });
   });
 
   // Before '/:id', so "vehicle-options" is not read as an inspection id
@@ -137,6 +163,21 @@ export function inspectionsRoutes(deps: InspectionDeps) {
     const { id, detectionId } = parse(detectionParams, req.params);
     const body = parse(reviewBody, req.body);
     await reviewDetection(pool, { inspectionId: id, detectionId, ...body, userId: me.userId });
+    sendOk(res, await getInspection(pool, id));
+  });
+
+  router.post('/:id/images/:imageId/detections', requireScreen('INSPECTION_REVIEW'), async (req, res) => {
+    const me = signedInUser(req);
+    const { id, imageId } = parse(imageParams, req.params);
+    const body = parse(regionBody, req.body);
+    await addTechnicianRegion(pool, { inspectionId: id, imageId, ...body, userId: me.userId });
+    sendOk(res, await getInspection(pool, id), 201);
+  });
+
+  router.delete('/:id/detections/:detectionId', requireScreen('INSPECTION_REVIEW'), async (req, res) => {
+    const me = signedInUser(req);
+    const { id, detectionId } = parse(detectionParams, req.params);
+    await removeTechnicianRegion(pool, { inspectionId: id, detectionId, userId: me.userId });
     sendOk(res, await getInspection(pool, id));
   });
 

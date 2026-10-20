@@ -15,8 +15,10 @@ export type InspectionListItem = {
   vehicle: string;
   jobNo: string | null;
   imageCount: number;
+  thumbnailUrl: string | null;
   detectionCount: number;
   pendingCount: number;
+  possibleCount: number;
   createdBy: string | null;
   createdAt: string;
   reviewedAt: string | null;
@@ -34,6 +36,8 @@ export type Detection = {
   severity: SeverityValue;
   severityReason: string | null;
   source: 'model' | 'technician';
+  /** Possible damage: the model was less sure (confidence below the normal threshold). */
+  suggestion: boolean;
   reviewStatus: ReviewStatus;
   correctedLabel: DamageLabel | null;
   correctedSeverity: Severity | null;

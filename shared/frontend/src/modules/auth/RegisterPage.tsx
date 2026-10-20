@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { passwordPolicy, useAuth } from '@/app/session';
 import { Alert, Field, PasswordField, PasswordRules } from '@/components/ui/Form';
 import { ApiError, apiSend, fieldErrors, fieldMessages } from '@/lib/api';
@@ -10,6 +10,9 @@ export function RegisterPage() {
   const { refresh, config } = useAuth();
   const navigate = useNavigate();
   const policy = passwordPolicy(config);
+  // Where to go after signing up, e.g. the booking form from "Book this service" (portal addresses only)
+  const nextParam = useSearchParams()[0].get('next');
+  const next = nextParam?.startsWith('/my') ? nextParam : '/my';
 
   const [form, setForm] = useState({ fullName: '', mobile: '', email: '', password: '', confirm: '' });
   const [error, setError] = useState<unknown>(null);
@@ -26,7 +29,7 @@ export function RegisterPage() {
     try {
       await apiSend('POST', '/auth/register', { fullName: form.fullName, mobile: form.mobile, email: form.email, password: form.password });
       await refresh();
-      navigate('/my', { replace: true });
+      navigate(next, { replace: true });
     } catch (err) {
       setError(err);
       setBusy(false);
@@ -67,12 +70,15 @@ export function RegisterPage() {
           error={mismatch ? "The passwords don't match." : undefined}
           autoComplete="new-password"
         />
+        <p className="small text-body-secondary">
+          By creating an account you agree to our <Link to="/terms">terms of use</Link> and <Link to="/privacy">privacy notice</Link>.
+        </p>
         <button type="submit" className="btn btn-primary w-100" disabled={busy || !form.fullName || !form.mobile || !form.password || mismatch}>
           {busy ? 'Creating your account…' : 'Create account'}
         </button>
       </form>
       <p className="mt-4 mb-0 small text-body-secondary">
-        Already have an account? <Link to="/login">Sign in</Link>
+        Already have an account? <Link to={nextParam ? `/login?next=${encodeURIComponent(next)}` : '/login'}>Sign in</Link>
       </p>
     </AuthShell>
   );

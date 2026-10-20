@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { useSession } from '@/app/session';
 import { Card } from '@/components/ui/Card';
@@ -62,7 +63,7 @@ export function ActionList() {
         </div>
       ) : (
         <ul className="as-actions">
-          {visible.map((a) => {
+          {visible.map((a, i) => {
             const m = META[a.key];
             if (!a.connected) {
               return (
@@ -81,7 +82,7 @@ export function ActionList() {
             }
             return (
               <li key={a.key}>
-                <Link to={m.url}>
+                <Link to={m.url} className={a.count > 0 ? 'hot' : undefined} style={{ '--i': i } as CSSProperties}>
                   <span className={`as-act-ic as-tone-${m.tone}`}>
                     <i className={`bi ${m.icon}`} aria-hidden="true" />
                   </span>

@@ -14,7 +14,10 @@ COCO_MODEL_PATH = MODEL_DIR / 'yolo11n-seg.pt'
 VEHICLE_CONFIDENCE = 0.4
 
 IMGSZ = int(os.getenv('DAMAGE_IMGSZ', '640'))                    # must match the training imgsz
-CONFIDENCE = float(os.getenv('DAMAGE_CONFIDENCE', '0.25'))       # detections below this are dropped
+CONFIDENCE = float(os.getenv('DAMAGE_CONFIDENCE', '0.25'))       # detections from here up are findings
+# Between this and CONFIDENCE: "possible damage" the technician can accept or dismiss (helps recall on subtle damage)
+POSSIBLE_CONFIDENCE = float(os.getenv('DAMAGE_POSSIBLE_CONFIDENCE', '0.10'))
+MAX_POSSIBLE_PER_PHOTO = int(os.getenv('DAMAGE_MAX_POSSIBLE', '5'))
 MAX_UPLOAD_MB = int(os.getenv('DAMAGE_MAX_UPLOAD_MB', '15'))
 
 # Photo quality limits (see quality.py)

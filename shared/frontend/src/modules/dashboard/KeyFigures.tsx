@@ -1,17 +1,20 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useSession } from '@/app/session';
+import { CountUp } from '@/components/ui/CountUp';
 import { ErrorState, Skeleton } from '@/components/ui/States';
 import type { ApiState } from '@/lib/useApi';
 import { formatDuration, minutesSince } from '@/lib/format';
 import type { DashboardSummary } from './dashboard.types';
 
-function Kpi({ icon, label, to, className = '', value, note }: {
+function Kpi({ icon, label, to, className = '', value, extra, note }: {
   icon: string;
   label: string;
   to?: string;
   className?: string;
   value: ReactNode;
+  /** A small picture under the value, e.g. the bays as slots */
+  extra?: ReactNode;
   note: ReactNode;
 }) {
   const body = (
@@ -21,6 +24,7 @@ function Kpi({ icon, label, to, className = '', value, note }: {
         {label}
       </span>
       <span className="as-kpi-value">{value}</span>
+      {extra}
       <span className="as-kpi-note">{note}</span>
     </>
   );
@@ -30,6 +34,20 @@ function Kpi({ icon, label, to, className = '', value, note }: {
     </Link>
   ) : (
     <div className={`as-kpi ${className}`}>{body}</div>
+  );
+}
+
+/** Every bay as a small slot that fills in: occupied, confirming, then free (bays with no reading stay empty). */
+function BaySlots({ bays }: { bays: DashboardSummary['bays'] }) {
+  const slots = [
+    ...Array<string>(bays.occupied).fill('occupied'),
+    ...Array<string>(bays.uncertain).fill('uncertain'),
+    ...Array<string>(Math.max(0, bays.total - bays.occupied - bays.uncertain)).fill(''),
+  ];
+  return (
+    <span className="as-kpi-slots" aria-hidden="true">
+      {slots.map((s, i) => <i key={i} className={s} style={{ '--i': i } as CSSProperties} />)}
+    </span>
   );
 }
 
@@ -69,7 +87,7 @@ export function KeyFigures({ summary }: { summary: ApiState<DashboardSummary> })
         icon="bi-car-front"
         label="Vehicles today"
         to={link('JOBS', '/floor/jobs')}
-        value={data.vehiclesToday}
+        value={<CountUp value={data.vehiclesToday} />}
         note={
           data.vehiclesSameTimeLastWeek > 0 ? (
             <>
@@ -88,10 +106,11 @@ export function KeyFigures({ summary }: { summary: ApiState<DashboardSummary> })
         to={link('BAY_MONITOR', '/floor/bays')}
         value={
           <>
-            {data.bays.occupied}
+            <CountUp value={data.bays.occupied} />
             <small>of {data.bays.total}</small>
           </>
         }
+        extra={data.bays.total > 0 && <BaySlots bays={data.bays} />}
         note={
           data.bays.total === 0
             ? 'No bays set up yet'
@@ -102,7 +121,8 @@ export function KeyFigures({ summary }: { summary: ApiState<DashboardSummary> })
         icon="bi-clipboard-check"
         label="Awaiting review"
         to={link('INSPECTION_REVIEW', '/inspections/review')}
-        value={data.awaitingReview.count}
+        value={<CountUp value={data.awaitingReview.count} />}
+        className={data.awaitingReview.count > 0 ? 'urgent' : ''}
         note={
           data.awaitingReview.oldestAt
             ? `Oldest waiting ${formatDuration(minutesSince(data.awaitingReview.oldestAt))}`
@@ -125,7 +145,7 @@ export function KeyFigures({ summary }: { summary: ApiState<DashboardSummary> })
           label="Open safety alerts"
           to={link('SAFETY_ALERTS', '/safety/alerts')}
           className={data.safety.openAlerts > 0 ? 'alert-cell' : ''}
-          value={data.safety.openAlerts}
+          value={<CountUp value={data.safety.openAlerts} />}
           note={data.safety.openAlerts > 0 ? 'Needs attention' : 'All clear'}
         />
       ) : (

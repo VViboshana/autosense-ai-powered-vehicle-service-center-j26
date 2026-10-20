@@ -25,6 +25,7 @@ INSERT INTO app.screens (screen_code, name, url, parent_code, icon, display_orde
     ('JOBS',                  'Vehicles & jobs',           '/floor/jobs',              'SERVICE_FLOOR',  'bi-car-front',          12,  true,  false, 'shared',      'use',    'staff'),
     ('JOB_CHECK_IN',          'Check in vehicles',         NULL,                       'SERVICE_FLOOR',  'bi-box-arrow-in-right', 13,  false, false, 'shared',      'use',    'staff'),
     ('VEHICLE_CLAIMS',        'Customer vehicle requests', '/floor/vehicle-requests',  'SERVICE_FLOOR',  'bi-person-check',       14,  true,  false, 'shared',      'use',    'staff'),
+    ('BOOKINGS',              'Service bookings',          '/floor/bookings',          'SERVICE_FLOOR',  'bi-calendar-check',     15,  true,  false, 'shared',      'use',    'staff'),
 
     ('INSPECTIONS',           'Inspections',               NULL,                       NULL,             'bi-clipboard-check',    20,  true,  false, 'damage',      'use',    'staff'),
     ('INSPECTION_CREATE',     'New inspection',            '/inspections/new',         'INSPECTIONS',    'bi-camera',             21,  true,  false, 'damage',      'use',    'staff'),
@@ -59,8 +60,11 @@ INSERT INTO app.screens (screen_code, name, url, parent_code, icon, display_orde
     ('AUDIT_LOG',             'Audit log',                 '/admin/audit',             'ADMINISTRATION', 'bi-clock-history',      105, true,  false, 'shared',      'admin',  'staff'),
 
     -- Customer pages (/my). The vehicle page's tabs are grantable, so the admin can switch one off for customers.
-    ('MY_VEHICLES',           'My vehicles',               '/my',                      NULL,             'bi-car-front',          200, true,  true,  'shared',      'use',    'customer'),
+    ('MY_HOME',               'Home',                      '/my',                      NULL,             'bi-house',              199, true,  true,  'shared',      'use',    'customer'),
+    ('MY_VEHICLES',           'My vehicles',               '/my/vehicles',             NULL,             'bi-car-front',          200, true,  true,  'shared',      'use',    'customer'),
     ('MY_ACCOUNT',            'My account',                '/my/account',              NULL,             'bi-person',             201, true,  true,  'shared',      'use',    'customer'),
+    ('MY_BOOKINGS',           'Bookings',                  '/my/bookings',             NULL,             'bi-calendar-check',     202, true,  true,  'shared',      'use',    'customer'),
+    ('MY_HISTORY',            'Service history',           '/my/history',              NULL,             'bi-journal-text',       203, true,  true,  'shared',      'use',    'customer'),
     ('MY_VEHICLE_STATUS',     'Vehicle status & queue',    NULL,                       NULL,             'bi-p-square',           210, false, false, 'occupancy',   'use',    'customer'),
     ('MY_INSPECTIONS',        'Inspection reports',        NULL,                       NULL,             'bi-clipboard-check',    211, false, false, 'damage',      'use',    'customer'),
     ('MY_MAINTENANCE',        'Recommendations & history', NULL,                       NULL,             'bi-wrench-adjustable',  212, false, false, 'maintenance', 'use',    'customer'),

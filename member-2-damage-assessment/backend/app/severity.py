@@ -84,7 +84,8 @@ def assess(detections: list[dict], vehicle: dict | None, rules: dict = RULES) ->
         if size_based and ratio is not None and vehicle.get('cropped'):
             d['severityReason'] += ' Only part of the vehicle is in the photo, so the share may be overstated.'
 
-    on = [d for d in detections if d['onVehicle']]
+    # Possible damage is graded (so it is ready if the technician accepts it) but does not count until then
+    on = [d for d in detections if d['onVehicle'] and not d.get('possible')]
     known = [d['severity'] for d in on if d['severity'] in ORDER]
     if known:
         overall = max(known, key=ORDER.index)
