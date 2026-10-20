@@ -140,3 +140,56 @@ def test_task_catalogue_and_duration_endpoints(monkeypatch):
     assert body["status"] == "evaluated"
     assert body["model"]["variant"] == "task_plus_cost"
     assert body["benchmark"] is True
+
+
+def test_forecast_waits_for_task_selection_when_catalogue_is_available(monkeypatch):
+    catalog = pd.DataFrame([{
+        "fix_title": "Replace brake pedal switch",
+        "final_category": "Brakes",
+        "difficulty_level": "Moderate DIY",
+        "probability_rank": 1,
+        "est_parts_cost_min_usd": 3.0,
+        "est_parts_cost_max_usd": 15.0,
+        "parts_cost_mid_usd": 9.0,
+        "parts_cost_range_usd": 12.0,
+    }])
+    bundle = ModelBundle(
+        basic=VariantArtifacts(FakeModel(), FakeEncoder(), True),
+        enriched=VariantArtifacts(FakeModel(), FakeEncoder(), True),
+        task_catalog=catalog,
+    )
+    monkeypatch.setattr(service_main, "load_models", lambda: bundle)
+    with TestClient(app) as client:
+        response = client.post("/v1/forecast", json=payload())
+    assert response.status_code == 200
+    body = response.json()
+    assert body["taskSelection"]["required"] is True
+    assert body["taskSelection"]["status"] == "available"
+    assert body["duration"]["status"] == "awaiting_task_selection"
+    assert body["duration"]["estimatedMinutes"] is None
+
+
+def test_fallback_and_unknown_task_are_explicit(monkeypatch):
+    catalog = pd.DataFrame([{
+        "fix_title": "Inspect brake connector",
+        "final_category": "Brakes",
+        "difficulty_level": "Easy DIY",
+        "probability_rank": 2,
+        "est_parts_cost_min_usd": None,
+        "est_parts_cost_max_usd": None,
+        "parts_cost_mid_usd": None,
+        "parts_cost_range_usd": None,
+    }])
+    bundle = ModelBundle(
+        basic=VariantArtifacts(FakeModel(), FakeEncoder(), True),
+        enriched=VariantArtifacts(FakeModel(), FakeEncoder(), True),
+        duration=DurationArtifacts(fallback=FakeDurationModel(), fallback_available=True),
+        task_catalog=catalog,
+    )
+    monkeypatch.setattr(service_main, "load_models", lambda: bundle)
+    with TestClient(app) as client:
+        fallback = client.post("/v1/duration", json={"fixTitle": "Inspect brake connector"})
+        unknown = client.post("/v1/duration", json={"fixTitle": "Made Up Repair Task XYZ"})
+    assert fallback.status_code == 200
+    assert fallback.json()["model"]["variant"] == "task_only_fallback"
+    assert unknown.status_code == 404

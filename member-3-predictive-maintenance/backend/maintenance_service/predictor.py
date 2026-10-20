@@ -78,11 +78,15 @@ def predict_category(request: ForecastRequest, bundle: ModelBundle) -> tuple[str
     artifacts: VariantArtifacts = getattr(bundle, variant)
     if not artifacts.available:
         raise RuntimeError(f"{variant} model is unavailable")
-
     frame = feature_frame(request, variant)
-    encoded_prediction = int(artifacts.model.predict(frame)[0])
+    model_frame = frame
+    if artifacts.preprocessor is not None:
+        model_frame = artifacts.preprocessor.transform(frame)
+        if model_frame.shape[1] != 169:
+            raise RuntimeError(f"enriched preprocessor produced {model_frame.shape[1]} features; expected 169")
+    encoded_prediction = int(artifacts.model.predict(model_frame)[0])
     label = str(artifacts.encoder.inverse_transform([encoded_prediction])[0])
-    probabilities = artifacts.model.predict_proba(frame)[0]
+    probabilities = artifacts.model.predict_proba(model_frame)[0]
     classes = [str(value) for value in artifacts.encoder.classes_]
     model_classes = getattr(artifacts.model, "classes_", range(len(probabilities)))
     scores = {str(artifacts.encoder.inverse_transform([int(class_id)])[0]): float(probability) for class_id, probability in zip(model_classes, probabilities)}

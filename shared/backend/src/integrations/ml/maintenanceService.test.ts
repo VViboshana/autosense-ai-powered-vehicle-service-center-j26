@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { maintenanceHealth, maintenanceModel, predictMaintenance } from './maintenanceService.js';
+import { maintenanceDuration, maintenanceHealth, maintenanceModel, maintenanceTasks, predictMaintenance } from './maintenanceService.js';
 
 const basicRequest = {
   vehicle: { registration: 'TEST-001', make: 'Toyota', model: 'Corolla', year: 2018, mileage: 85000 },
@@ -19,7 +19,8 @@ const result = (assessmentType: 'basic' | 'enriched') => ({
   prediction: { category: 'Battery', modelScore: 0.37, categoryScores: { Battery: 0.37, Brakes: 0.18, Electrical: 0.1, Engine: 0.17, Transmission: 0.18 } },
   maintenanceRequired: { status: 'not_evaluated', reason: 'not integrated' },
   engineCondition: { status: 'not_run', reason: 'not integrated' },
-  duration: { status: 'model_pending' },
+  duration: { status: 'awaiting_task_selection', estimatedHours: null, estimatedMinutes: null },
+  taskSelection: { status: 'available', required: true, candidateTasks: [{ fixTitle: 'Replace brake pedal switch', difficultyLevel: 'Moderate DIY', probabilityRank: 3, partsCostMinUsd: 15, partsCostMaxUsd: 60 }] },
   informationSources: { customerReport: true, vehicleDetails: true, serviceHistory: assessmentType === 'enriched', ecuDiagnostics: false, technicianDiagnosis: assessmentType === 'enriched', inspectionReport: assessmentType === 'enriched' },
 });
 
@@ -33,7 +34,7 @@ describe('maintenance prediction client', () => {
     expect(out.assessmentType).toBe(_name);
     expect(out.maintenanceCategory.predicted).toBe('Battery');
     expect(out.maintenanceRequired.status).toBe('not_evaluated');
-    expect(out.duration.status).toBe('model_pending');
+    expect(out.duration.status).toBe('awaiting_task_selection');
     expect(fetchMock).toHaveBeenCalledWith(expect.any(URL), expect.objectContaining({ method: 'POST' }));
   });
 
@@ -67,5 +68,19 @@ describe('maintenance prediction client', () => {
     await expect(maintenanceHealth('http://127.0.0.1:8003')).resolves.toMatchObject({ status: 'ok', modelsLoaded: true });
     vi.stubGlobal('fetch', response(200, { service: 'maintenance-prediction', task: 'maintenance-category-classification', primaryModel: 'XGBoost', variants: [{ name: 'basic', available: true }, { name: 'enriched', available: true }], classes: ['Battery', 'Brakes'], durationModel: 'not_available' }));
     await expect(maintenanceModel('http://127.0.0.1:8003')).resolves.toMatchObject({ primaryModel: 'XGBoost' });
+  });
+
+  it('proxies catalogue tasks and duration without client model features', async () => {
+    const fetchMock = response(200, { category: 'Brakes', count: 1, taskSelectionRequired: true, candidateTasks: [{ fixTitle: 'Replace brake pedal switch', difficultyLevel: 'Moderate DIY', probabilityRank: 3, partsCostMinUsd: 15, partsCostMaxUsd: 60 }] });
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(maintenanceTasks('http://127.0.0.1:8003', 'Brakes', 5)).resolves.toMatchObject({ count: 1 });
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ status: 'evaluated', task: { fixTitle: 'Replace brake pedal switch', category: 'Brakes', difficultyLevel: 'Moderate DIY', probabilityRank: 3 }, duration: { estimatedHours: 0.6, estimatedMinutes: 36 }, model: { algorithm: 'RandomForestRegressor', variant: 'task_plus_cost' }, benchmark: true, targetType: 'estimated_labor_hours' }), { status: 200 }));
+    await expect(maintenanceDuration('http://127.0.0.1:8003', { fixTitle: 'Replace brake pedal switch', partsCostMidUsd: 1 })).resolves.toMatchObject({ status: 'evaluated' });
+    expect(fetchMock).toHaveBeenLastCalledWith(expect.any(URL), expect.objectContaining({ body: JSON.stringify({ fixTitle: 'Replace brake pedal switch' }) }));
+  });
+
+  it('forwards unknown duration tasks as 404', async () => {
+    vi.stubGlobal('fetch', response(404, { detail: 'Specific repair task not found.' }));
+    await expect(maintenanceDuration('http://127.0.0.1:8003', { fixTitle: 'Made Up Repair Task XYZ' })).rejects.toMatchObject({ status: 404 });
   });
 });

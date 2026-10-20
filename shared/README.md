@@ -66,6 +66,18 @@ Five wrong passwords lock an account; an administrator unlocks it in Administrat
 |---|---|
 | `backend/.env` (**committed**) | The team's shared API settings: `PORT`, `ALLOWED_ORIGINS`, AI service URLs including `MAINTENANCE_ML_SERVICE_URL=http://127.0.0.1:8003`, `LOG_LEVEL`, pool size. No secrets. Checked at startup; a bad value stops the API with a message naming it. |
 | `backend/.env.local` (**not committed**) | Your secrets and overrides: `DATABASE_URL` (always), `SETUP_KEY` (servers), or e.g. `PORT=5001`. Wins over `.env`. Template: `backend/.env.local.example`. |
+
+### Maintenance ML proxy
+
+The Express backend is the only browser-facing interface to Component 3. Set `MAINTENANCE_ML_SERVICE_URL=http://127.0.0.1:8003` in `backend/.env` or an override, start FastAPI first, then start Express. Protected routes are:
+
+- `GET /api/maintenance/health`
+- `GET /api/maintenance/model`
+- `POST /api/maintenance/forecasts`
+- `GET /api/maintenance/tasks/:category?limit=5`
+- `POST /api/maintenance/duration` with `{ "fixTitle": "..." }`
+
+Forecasting returns XGBoost category results and catalogue candidate tasks. A technician must explicitly select a task before the Random Forest benchmark labor-duration estimate is requested. The duration target is `estimated_labor_hours`, not observed workshop elapsed time.
 | `frontend/.env` (**committed**) / `frontend/.env.local` | `API_PROXY_TARGET`, `WEB_PORT` for the dev server; personal overrides in `.env.local`. |
 | `app.settings` table | Business settings: time zone (Asia/Colombo), date format, currency, photo limits, bay rules, password rules (`auth.password_policy`), lockout (`auth.lockout`), session length (`auth.sessions`). Defaults in `database/reference/030_settings.sql`. Public ones reach the browser via `GET /api/app-config`. |
 
