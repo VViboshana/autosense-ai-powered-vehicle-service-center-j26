@@ -333,3 +333,133 @@
   color: var(--as-warning);
   flex: none;
 }
+
+/* Bay monitor: the live feed, one tile per bay (picture first) */
+.as-feed {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 0.9rem;
+}
+.as-feed-tile {
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  padding: 0.55rem;
+  border: 1px solid var(--as-line);
+  border-radius: 12px;
+  background: var(--as-surface);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  min-width: 0;
+}
+.as-feed-tile:hover {
+  border-color: var(--as-primary);
+}
+.as-feed-tile.on {
+  border-color: var(--as-primary);
+  box-shadow: 0 0 0 2px var(--as-primary-soft), inset 3px 0 0 var(--as-brand);
+}
+.as-feed-off {
+  display: grid;
+  place-items: center;
+  color: var(--as-sidebar-text);
+  font-size: 0.8rem;
+}
+.as-feed-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.15rem;
+}
+.as-feed-job {
+  font-size: 0.85rem;
+  padding: 0 0.15rem;
+  min-height: 2.6em;
+}
+.as-feed-foot {
+  font-size: 0.75rem;
+  color: var(--as-muted);
+  font-variant-numeric: tabular-nums;
+  padding: 0 0.15rem;
+}
+
+/* Camera suggestions: small pop-ups in the bottom-right corner, never over the page's content flow */
+.as-toasts {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 1040;
+  width: min(360px, calc(100vw - 2rem));
+  display: grid;
+  gap: 0.5rem;
+  animation: as-rise 0.3s var(--as-ease) both;
+}
+.as-toasts-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  border: 1px solid var(--as-line);
+  border-radius: 999px;
+  background: var(--as-surface);
+  color: var(--as-ink);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.4rem 0.8rem;
+  box-shadow: var(--as-shadow-pop);
+}
+.as-toasts-head .bi-lightbulb {
+  color: var(--as-info);
+}
+.as-toasts-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: var(--as-info-soft);
+  color: var(--as-info);
+}
+.as-toasts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.as-toasts-list .as-sugg {
+  background: var(--as-surface);
+  box-shadow: var(--as-shadow-pop);
+  font-size: 0.85rem;
+  padding: 0.6rem 0.75rem;
+  animation: as-rise 0.3s var(--as-ease) both;
+}
+.as-toasts-list .as-sugg-act select {
+  flex-basis: 100%;
+}
+.as-toasts-more {
+  justify-self: end;
+  background: var(--as-surface);
+  border-radius: 999px;
+}
+.as-toast {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--as-line);
+  border-left: 3px solid var(--as-danger);
+  border-radius: 0.5rem;
+  background: var(--as-surface);
+  box-shadow: var(--as-shadow-pop);
+  padding: 0.55rem 0.75rem;
+  font-size: 0.85rem;
+}

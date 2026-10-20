@@ -4,9 +4,10 @@ import './occupancy.css';
 /**
  * The live picture of one bay (GET /api/occupancy/bays/:id/live.jpg), refreshed about once a second while its camera
  * is live. Each new picture is loaded off screen first and only then swapped in, so the tile never flickers blank.
- * The footage is labelled: today the only live source is a recorded video replayed as a camera (sample footage).
+ * The footage is always labelled with where it comes from (`tag`): today the live sources are recorded videos replayed
+ * as a camera (the simulated service bays, the PKLot time-lapse), never a real camera.
  */
-export function LiveBayPicture({ bayId, label, everyMs = 1000 }: { bayId: number; label: string; everyMs?: number }) {
+export function LiveBayPicture({ bayId, label, tag, everyMs = 1000 }: { bayId: number; label: string; tag: string; everyMs?: number }) {
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -41,7 +42,7 @@ export function LiveBayPicture({ bayId, label, everyMs = 1000 }: { bayId: number
       {src ? <img src={src} alt={`Live camera picture of ${label}`} /> : (
         <div className="as-bay-live-wait">{failed ? 'Waiting for the camera picture…' : 'Connecting…'}</div>
       )}
-      <span className="as-bay-live-tag"><i aria-hidden="true" />Live · sample footage</span>
+      <span className="as-bay-live-tag"><i aria-hidden="true" />{tag}</span>
     </div>
   );
 }

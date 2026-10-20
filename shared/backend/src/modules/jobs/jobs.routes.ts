@@ -38,6 +38,7 @@ export const actionBody = z.object({
  *   GET  /api/jobs/service-types                                                             (JOB_CHECK_IN)
  *   POST /api/jobs/check-in                     { bookingId } or { vehicleId, serviceTypeId }  (JOB_CHECK_IN)
  *   POST /api/jobs/:id/send-to-inspection       in a bay -> damage inspection                (BAY_JOB_CONFIRM)
+ *   POST /api/jobs/:id/back-to-queue            in a bay -> waiting again (wrong vehicle)    (BAY_JOB_CONFIRM)
  *   POST /api/jobs/:id/work-done                in a bay -> ready ({ anyway } skips the inspection warning)
  *                                                                              (BAY_JOB_CONFIRM or INSPECTION_CONFIRM)
  *   POST /api/jobs/:id/collected                ready -> completed                           (JOB_CHECK_IN)
@@ -76,6 +77,7 @@ export function jobsRoutes(pool: pg.Pool) {
       sendOk(res, await changeStage(pool, { jobId: id, action: name, note: body.note, anyway: body.anyway, userId: me.userId }));
     });
   action('send_to_inspection', 'BAY_JOB_CONFIRM');
+  action('back_to_queue', 'BAY_JOB_CONFIRM');
   action('work_done', 'BAY_JOB_CONFIRM', 'INSPECTION_CONFIRM');
   action('collected', 'JOB_CHECK_IN');
   action('cancel', 'JOB_CHECK_IN');

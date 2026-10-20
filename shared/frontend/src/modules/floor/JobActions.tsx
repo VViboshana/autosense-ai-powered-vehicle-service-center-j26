@@ -9,7 +9,7 @@ import type { JobStage } from '@/modules/dashboard/dashboard.types';
 /**
  * The buttons that move a job along the service flow (POST /api/jobs/:id/<action>), for the job list and the Bay
  * monitor. Each shows only in the stages it applies to and only to staff who may do it:
- *   in a bay           -> Send to damage inspection (BAY_JOB_CONFIRM)
+ *   in a bay           -> Send to damage inspection; Not this vehicle (back to the queue) (BAY_JOB_CONFIRM)
  *   damage inspection  -> Start inspection (opens New inspection with the vehicle chosen; INSPECTION_CREATE)
  *   in a bay .. inspected -> Work done (BAY_JOB_CONFIRM or INSPECTION_CONFIRM); asks first if no inspection is confirmed
  *   ready              -> Customer collected (JOB_CHECK_IN)
@@ -31,7 +31,7 @@ export function JobActions({ job, onDone, size = 'sm', showCancel = true }: {
   const [note, setNote] = useState('');
   const btn = `btn btn-${size === 'sm' ? 'sm ' : ''}`;
 
-  async function run(action: 'send-to-inspection' | 'work-done' | 'collected' | 'cancel', body: Record<string, unknown> = {}) {
+  async function run(action: 'send-to-inspection' | 'back-to-queue' | 'work-done' | 'collected' | 'cancel', body: Record<string, unknown> = {}) {
     setBusy(true);
     setError(null);
     try {
@@ -57,6 +57,12 @@ export function JobActions({ job, onDone, size = 'sm', showCancel = true }: {
         {job.stage === 'in_bay' && canBay && (
           <button type="button" className={`${btn}btn-primary`} disabled={busy} onClick={() => void run('send-to-inspection')}>
             <i className="bi bi-clipboard-check me-1" aria-hidden="true" />Send to damage inspection
+          </button>
+        )}
+        {job.stage === 'in_bay' && canBay && (
+          <button type="button" className={`${btn}btn-light`} disabled={busy} onClick={() => void run('back-to-queue')}
+            title="The camera's match was wrong: put this vehicle back in the queue (its place stays its check-in time)">
+            <i className="bi bi-arrow-counterclockwise me-1" aria-hidden="true" />Not this vehicle
           </button>
         )}
         {job.stage === 'inspecting' && can('INSPECTION_CREATE') && (

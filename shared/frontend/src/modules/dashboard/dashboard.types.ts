@@ -12,6 +12,8 @@ export type BayCard = {
   bayId: number;
   code: string;
   name: string;
+  /** The camera that watches this bay (null when none is set) */
+  camera: { cameraId: number; code: string; name: string } | null;
   state: 'free' | 'occupied' | 'uncertain' | 'unknown';
   since: string | null;
   overlap: number | null;

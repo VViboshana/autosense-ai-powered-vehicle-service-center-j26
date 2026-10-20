@@ -26,6 +26,7 @@ describe('the service flow', () => {
 
   it('only moves jobs forward along the agreed steps', () => {
     expect(ACTIONS.send_to_inspection).toMatchObject({ from: ['in_bay'], to: 'inspecting' });
+    expect(ACTIONS.back_to_queue).toMatchObject({ from: ['in_bay'], to: 'waiting_for_bay' });
     expect(ACTIONS.work_done.from).toEqual(IN_BAY_STAGES);
     expect(ACTIONS.work_done.to).toBe('ready');
     expect(ACTIONS.collected).toMatchObject({ from: ['ready'], to: 'completed' });

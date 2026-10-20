@@ -16,7 +16,7 @@ function greeting() {
 
 /** The home screen: one layout for every role; widgets and buttons the user may not use are left out. */
 export function DashboardPage() {
-  const { me, can, config } = useSession();
+  const { me, can } = useSession();
   const summary = useApi<DashboardSummary>('/dashboard/summary', undefined, { refreshMs: 30_000 });
   const firstName = me.displayName.split(' ')[0] ?? me.displayName;
   const now = new Date();
@@ -35,7 +35,6 @@ export function DashboardPage() {
             ) : (
               <span className="as-live">Live · updated {formatTime(now)}</span>
             )}
-            {config.environment !== 'production' && <span className="as-sample">Sample data</span>}
           </>
         }
         actions={

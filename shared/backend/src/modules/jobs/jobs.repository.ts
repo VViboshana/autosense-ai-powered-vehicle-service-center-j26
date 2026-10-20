@@ -213,7 +213,9 @@ export async function moveStage(
   db: Db,
   m: { jobId: number; from: readonly JobStage[]; to: JobStage; userId: number; note: string | null },
 ): Promise<string | null> {
-  const stamp = m.to === 'ready' ? ', ready_at = now()' : m.to === 'completed' ? ', completed_at = now()' : '';
+  // Back in the queue: no bay any more (its place in the queue is still its check-in time)
+  const stamp = m.to === 'ready' ? ', ready_at = now()' : m.to === 'completed' ? ', completed_at = now()'
+    : m.to === 'waiting_for_bay' ? ', bay_id = NULL, bay_entered_at = NULL' : '';
   const { rows } = await db.query<{ job_no: string }>(
     `UPDATE workshop.jobs SET stage = $2, updated_at = now()${stamp}
      WHERE job_id = $1 AND stage = ANY($3::varchar[]) RETURNING job_no`,

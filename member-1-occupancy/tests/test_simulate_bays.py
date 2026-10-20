@@ -20,3 +20,10 @@ def test_each_bay_cycles_empty_arrive_parked_leave():
     assert order[:5] == [0, None, 1, None, 0]                  # empty -> moving -> parked -> moving -> empty
     assert all(n >= 20 * FPS for s, n in runs[1:-1] if s == 0)  # holds long enough for the 3 s / 5 s confirmations
     assert all(n >= 30 * FPS for s, n in runs[:-1] if s == 1)
+
+
+def test_first_car_can_be_made_to_arrive_soon():
+    frames = [np.zeros((36, 64, 3), np.uint8)] * 120
+    _, states = timeline(frames, 24, 120, seed=3, first_s=(10, 20))
+    first_moving = next(i for i, s in enumerate(states) if s is None)
+    assert 10 * FPS <= first_moving < 20 * FPS

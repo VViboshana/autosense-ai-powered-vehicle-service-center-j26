@@ -80,6 +80,7 @@ export const rulesBody = z
     minSupport: between(0.5, 1, true).optional(),
     staleAfterSeconds: between(0, 600, true).optional(),
     sampleFps: between(0, 15, true),
+    autoConfirm: z.boolean().optional(),
   })
   .refine((r) => r.releaseThreshold === undefined || r.releaseThreshold <= r.overlapThreshold, {
     message: 'The release threshold must not be above the overlap threshold.',

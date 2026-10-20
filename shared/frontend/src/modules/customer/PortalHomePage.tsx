@@ -18,6 +18,7 @@ import { shrinkPhoto } from './customer.ui';
 import { BOOKING_STATUS, dayParts, usePortal } from './portal';
 import { VehicleHero } from './VehicleHero';
 import '@/modules/inspections/inspections.css';
+import { ServiceCentreNow } from './ServiceCentreNow';
 
 const greeting = (h: number) => (h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening');
 const rise = (i: number) => ({ '--i': i }) as CSSProperties;
@@ -123,6 +124,8 @@ export function PortalHomePage() {
               <CarArt />
             </section>
           )}
+
+          <ServiceCentreNow style={rise(3)} />
 
           <nav className="pt-quick cp-rise" style={rise(3)} aria-label="Quick actions">
             <Link to="/my/bookings/new"><i className="bi bi-calendar-plus" aria-hidden="true" />Book a service</Link>

@@ -61,6 +61,8 @@ export type OccupancyRules = {
   minSupport?: number;
   staleAfterSeconds?: number;
   sampleFps: number;
+  /** Move the only waiting vehicle into the only newly occupied bay without asking staff (off unless switched on). */
+  autoConfirm?: boolean;
 };
 
 /** GET /api/occupancy/service: the model the occupancy service runs. */

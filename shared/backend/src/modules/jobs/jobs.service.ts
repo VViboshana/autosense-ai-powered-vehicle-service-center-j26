@@ -17,6 +17,7 @@ import { IN_BAY_STAGES, type JobStage } from './jobs.repository.js';
 /** The stage actions staff take on a job: where each may start from and where it goes. */
 export const ACTIONS = {
   send_to_inspection: { from: ['in_bay'], to: 'inspecting', note: 'Sent for damage inspection' },
+  back_to_queue: { from: ['in_bay'], to: 'waiting_for_bay', note: 'Not the vehicle in the bay: back in the queue' },
   work_done: { from: IN_BAY_STAGES, to: 'ready', note: 'Work done' },
   collected: { from: ['ready'], to: 'completed', note: 'Collected by the customer' },
   cancel: { from: ['checked_in', 'waiting_for_bay', 'in_bay', 'inspecting', 'inspected', 'ready'], to: 'cancelled', note: 'Cancelled' },

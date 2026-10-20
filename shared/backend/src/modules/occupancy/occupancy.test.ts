@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchJobFrame, fetchVideoJob, occupancyModel, startVideoJob } from '../../integrations/ml/occupancyService.js';
 import { area, bayBody, cameraBody, confirmBayBody, polygonSchema, rulesBody, sourceSchema } from './occupancy.routes.js';
-import { pairBaysWithQueue, serviceJobId, transitionRows } from './occupancy.service.js';
+import { autoConfirmChoice, pairBaysWithQueue, serviceJobId, transitionRows } from './occupancy.service.js';
 
 const SQUARE: [number, number][] = [[0.1, 0.1], [0.4, 0.1], [0.4, 0.5], [0.1, 0.5]];
 
@@ -159,5 +159,31 @@ describe('which cameras may have jobs in their bays', () => {
     expect(cameraTakesJobs(null)).toBe(true);
     expect(cameraTakesJobs('TEST-SIM')).toBe(true);
     expect(cameraTakesJobs('TEST-PKL04')).toBe(false);
+  });
+});
+
+describe('auto-confirm', () => {
+  const bay = (bayId: number) => ({ bayId, code: `B${bayId}`, name: `Bay ${bayId}`, since: null, overlap: 0.9 });
+  const job = (jobId: number) => ({
+    jobId, jobNo: `JOB-${jobId}`, registrationNo: 'WP CAB-0001', vehicle: 'Toyota Aqua', service: 'Full service',
+    stage: 'waiting_for_bay' as const, checkedInAt: '2026-10-20T03:00:00Z',
+  });
+
+  it('moves the only waiting vehicle into the only newly occupied bay', () => {
+    expect(autoConfirmChoice(true, 3, [bay(3)], [job(10)])).toBe(10);
+  });
+
+  it('leaves everything with any doubt to staff', () => {
+    expect(autoConfirmChoice(false, 3, [bay(3)], [job(10)])).toBeNull();              // switched off
+    expect(autoConfirmChoice(true, 3, [bay(3), bay(4)], [job(10)])).toBeNull();       // two cars without a job
+    expect(autoConfirmChoice(true, 3, [bay(3)], [job(10), job(11)])).toBeNull();      // several waiting
+    expect(autoConfirmChoice(true, 3, [bay(3)], [])).toBeNull();                      // nobody waiting
+    expect(autoConfirmChoice(true, 3, [bay(4)], [job(10)])).toBeNull();               // another bay is the unlinked one
+  });
+
+  it('is a setting staff can switch on and off', () => {
+    const base = { overlapThreshold: 0.4, confirmOccupiedSeconds: 3, confirmFreeSeconds: 5, sampleFps: 2 };
+    expect(rulesBody.parse({ ...base, autoConfirm: true }).autoConfirm).toBe(true);
+    expect(rulesBody.parse(base).autoConfirm).toBeUndefined();
   });
 });
