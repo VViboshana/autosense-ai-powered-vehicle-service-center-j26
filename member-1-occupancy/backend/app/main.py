@@ -41,7 +41,7 @@ state: dict = {}
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # Loaded once at startup, reused for every request
-    state['placeholder'] = not config.MODEL_PATH.exists()
+    state['placeholder'] = config.MODEL_CHOICE == 'pretrained' or not config.MODEL_PATH.exists()
     state['detector'] = Detector(config.COCO_MODEL_PATH if state['placeholder'] else config.MODEL_PATH)
     state['version'] = 'coco-yolo11s-placeholder' if state['placeholder'] else config.MODEL_VERSION
     state['mask'] = roi.mask_default(state['placeholder'])

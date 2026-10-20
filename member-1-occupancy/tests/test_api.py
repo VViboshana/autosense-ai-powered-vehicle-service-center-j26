@@ -141,3 +141,12 @@ def test_live_job_serves_the_latest_picture_of_each_bay(client):
 def test_live_replay_is_refused_for_camera_streams(client):
     body = {'jobId': 'L2', 'source': 'rtsp://cam/1', 'bays': [{'id': 'B1', 'polygon': BAY.polygon}], 'live': True}
     assert client.post('/video-jobs', json=body).status_code == 422
+
+
+def test_pretrained_model_can_be_forced_and_is_reported_as_not_fine_tuned(tmp_path, monkeypatch):
+    monkeypatch.setattr(main, 'Detector', FakeDetector)
+    monkeypatch.setattr(config, 'MODEL_CHOICE', 'pretrained')
+    with TestClient(main.app) as c:
+        model = c.get('/health').json()['model']
+    assert model['placeholder'] is True and model['version'] == 'coco-yolo11s-placeholder'
+    assert model['roiMask']['default'] is (config.ROI_MASK == 'on')    # auto masking is off for the pretrained model

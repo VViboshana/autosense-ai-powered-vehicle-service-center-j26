@@ -151,3 +151,13 @@ describe('suggesting which waiting vehicle is in an occupied bay', () => {
     expect(r.error!.issues[0]!.message).toBe('Pick the vehicle that is in the bay.');
   });
 });
+
+describe('which cameras may have jobs in their bays', () => {
+  it('allows real cameras and the simulated demo camera, not other test cameras', async () => {
+    const { cameraTakesJobs } = await import('./occupancy.repository.js');
+    expect(cameraTakesJobs('CAM-A')).toBe(true);
+    expect(cameraTakesJobs(null)).toBe(true);
+    expect(cameraTakesJobs('TEST-SIM')).toBe(true);
+    expect(cameraTakesJobs('TEST-PKL04')).toBe(false);
+  });
+});

@@ -303,3 +303,7 @@
   background: var(--as-danger);
   animation: as-beacon 2s ease-out infinite;
 }
+
+.as-sugg-release {
+  border-left-color: var(--as-success);
+}
