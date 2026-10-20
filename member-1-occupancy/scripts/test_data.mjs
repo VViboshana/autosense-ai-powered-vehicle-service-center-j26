@@ -6,7 +6,7 @@
  *   label    name them "[TEST] ..." so nobody mistakes them for real bays (kept on, e.g. for the PP1 demo)
  *   off      switch them off (is_active = false): gone from the dashboard, Bay monitor and suggestions
  *   on       switch them back on
- *   sim      add (or update) camera TEST-SIM "[TEST] Simulated service bays (AI-generated)" with bays SIM1..SIM6 from
+ *   sim      add (or update) camera TEST-SIM "Service bays" with bays SIM1..SIM6 ("Bay 1".."Bay 6") from
  *            the .bays.json written by eval/simulate_bays.py compose:  sim videos/sim-service-bays.bays.json
  *            (then use status / off / on with --camera TEST-SIM)
  *
@@ -55,9 +55,9 @@ try {
     const meta = JSON.parse(readFileSync(path.resolve(simFile), 'utf8'));
     if (!meta.simulated) throw new Error('That file is not from eval/simulate_bays.py compose (no "simulated": true).');
     const source = path.basename(simFile).replace(/\.bays\.json$/, '.mp4');
-    const name = '[TEST] Simulated service bays (AI-generated)';
+    const name = 'Service bays';   // simulated footage: the live picture is labelled, the code stays TEST-SIM
     const c = (await db.query(
-      `INSERT INTO occupancy.cameras (code, name, location, source_url, is_active) VALUES ($1, $2, 'Simulated footage', $3, true)
+      `INSERT INTO occupancy.cameras (code, name, location, source_url, is_active) VALUES ($1, $2, 'Service centre (simulated footage)', $3, true)
        ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, source_url = EXCLUDED.source_url RETURNING camera_id`,
       [camera, name, source],
     )).rows[0];
@@ -65,7 +65,7 @@ try {
     const entries = Object.entries(meta.bays);
     for (const [i, [k, polygon]] of entries.entries()) {
       const code = `SIM${k.replace(/\D/g, '')}`;
-      const bayName = `[TEST] Simulated bay ${k.replace(/\D/g, '')}`;
+      const bayName = `Bay ${k.replace(/\D/g, '')}`;
       const b = (await db.query(
         `INSERT INTO occupancy.bays (code, name, camera_id, polygon, display_order, is_active) VALUES ($1, $2, $3, $4, $5, true)
          ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, camera_id = EXCLUDED.camera_id, polygon = EXCLUDED.polygon,

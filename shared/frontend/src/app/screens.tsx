@@ -5,6 +5,7 @@ import { RolesPage } from '@/modules/admin/RolesPage';
 import { UsersPage } from '@/modules/admin/UsersPage';
 import { DashboardPage } from '@/modules/dashboard/DashboardPage';
 import { BookingsPage } from '@/modules/floor/BookingsPage';
+import { JobsPage } from '@/modules/floor/JobsPage';
 import { VehicleRequestsPage } from '@/modules/floor/VehicleRequestsPage';
 import { DamagePerformancePage } from '@/modules/inspections/DamagePerformancePage';
 import { InspectionDetailPage } from '@/modules/inspections/InspectionDetailPage';
@@ -38,6 +39,7 @@ export const SCREENS: ScreenRoute[] = [
   { code: 'DASHBOARD', path: '/', element: <DashboardPage /> },
   { code: 'VEHICLE_CLAIMS', path: '/floor/vehicle-requests', element: <VehicleRequestsPage /> },
   { code: 'BOOKINGS', path: '/floor/bookings', element: <BookingsPage /> },
+  { code: 'JOBS', path: '/floor/jobs', element: <JobsPage /> },
   { code: 'USERS', path: '/admin/users', element: <UsersPage /> },
   { code: 'ROLES', path: '/admin/roles', element: <RolesPage /> },
   { code: 'ROLE_PERMISSIONS', path: '/admin/role-permissions', element: <RolePermissionsPage /> },

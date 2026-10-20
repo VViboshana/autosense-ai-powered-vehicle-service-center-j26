@@ -101,6 +101,8 @@ export type VehicleOption = {
   vehicle: string;
   customer: string | null;
   stage: string;
+  /** The bay the vehicle is in, while it is in one */
+  bay: string | null;
   checkedInAt: string;
   inspectionCount: number;
 };

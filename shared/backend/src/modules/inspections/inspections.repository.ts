@@ -260,11 +260,16 @@ export type VehicleOption = {
   vehicle: string;
   customer: string | null;
   stage: string;
+  /** The bay the vehicle is in (in_bay, inspecting or inspected), or null. */
+  bay: string | null;
   checkedInAt: string;
   inspectionCount: number;
 };
 
-/** Open jobs to start an inspection for (newest first), optionally matched by plate or job number. */
+/**
+ * Open jobs to start an inspection for, optionally matched by plate or job number: first the vehicles the bay operator
+ * sent for damage inspection, then other vehicles in a bay, then the rest (newest first).
+ */
 export async function vehicleOptions(db: Db, search?: string): Promise<VehicleOption[]> {
   const params: unknown[] = [];
   let filter = '';
@@ -274,13 +279,15 @@ export async function vehicleOptions(db: Db, search?: string): Promise<VehicleOp
   }
   const { rows } = await db.query(
     `SELECT j.job_id, j.job_no, v.vehicle_id, v.registration_no, v.make || ' ' || v.model || coalesce(' · ' || v.year, '') AS vehicle,
-            c.full_name AS customer, j.stage, j.checked_in_at,
+            c.full_name AS customer, j.stage, b.name AS bay, j.checked_in_at,
             (SELECT count(*) FROM damage.inspections i WHERE i.job_id = j.job_id) AS inspection_count
      FROM workshop.jobs j
      JOIN workshop.vehicles v ON v.vehicle_id = j.vehicle_id
      LEFT JOIN workshop.customers c ON c.customer_id = j.customer_id
+     LEFT JOIN occupancy.bays b ON b.bay_id = j.bay_id AND j.stage IN ('in_bay', 'inspecting', 'inspected')
      WHERE j.stage NOT IN ('completed', 'cancelled') ${filter}
-     ORDER BY j.checked_in_at DESC, j.job_id DESC
+     ORDER BY CASE j.stage WHEN 'inspecting' THEN 0 WHEN 'in_bay' THEN 1 WHEN 'inspected' THEN 2 ELSE 3 END,
+              j.checked_in_at DESC, j.job_id DESC
      LIMIT 20`,
     params,
   );
@@ -292,6 +299,7 @@ export async function vehicleOptions(db: Db, search?: string): Promise<VehicleOp
     vehicle: r.vehicle,
     customer: r.customer,
     stage: r.stage,
+    bay: r.bay,
     checkedInAt: r.checked_in_at,
     inspectionCount: r.inspection_count,
   }));

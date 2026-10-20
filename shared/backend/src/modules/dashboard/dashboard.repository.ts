@@ -42,11 +42,18 @@ export type BayCard = {
   bayId: number;
   code: string;
   name: string;
+  /** The camera that watches this bay (null when none is set) */
+  camera: { cameraId: number; code: string; name: string } | null;
   state: 'free' | 'occupied' | 'uncertain' | 'unknown';
   since: string | null;
   overlap: number | null;
   job: {
+    jobId: number;
     jobNo: string;
+    /** in_bay, inspecting or inspected (the stages in which the vehicle is in its bay) */
+    stage: 'in_bay' | 'inspecting' | 'inspected';
+    /** The job's latest damage inspection (component 2), or null when none was started */
+    inspectionStatus: 'draft' | 'processing' | 'awaiting_review' | 'confirmed' | 'failed' | null;
     registrationNo: string;
     vehicle: string;
     service: string;
@@ -63,15 +70,17 @@ export type BayBoard = {
 
 export async function getBayBoard(db: Db): Promise<BayBoard> {
   const bays = await db.query(
-    `SELECT b.bay_id, b.code, b.name, s.state, s.since, s.overlap,
+    `SELECT b.bay_id, b.code, b.name, b.camera_id, s.state, s.since, s.overlap,
             cam.code AS camera_code, cam.name AS camera_name, cam.status AS camera_status,
-            j.job_no, v.registration_no, v.make || ' ' || v.model AS vehicle, st.name AS service,
-            j.bay_entered_at, j.estimated_minutes
+            j.job_id, j.job_no, j.stage AS job_stage, v.registration_no, v.make || ' ' || v.model AS vehicle, st.name AS service,
+            j.bay_entered_at, j.estimated_minutes,
+            (SELECT i.status FROM damage.inspections i WHERE i.job_id = j.job_id ORDER BY i.created_at DESC LIMIT 1) AS inspection_status
      FROM occupancy.bays b
      LEFT JOIN occupancy.cameras cam ON cam.camera_id = b.camera_id
      LEFT JOIN occupancy.bay_status s ON s.bay_id = b.bay_id
      LEFT JOIN LATERAL (
-       SELECT * FROM workshop.jobs jj WHERE jj.bay_id = b.bay_id AND jj.stage = 'in_bay' ORDER BY jj.bay_entered_at DESC LIMIT 1
+       SELECT * FROM workshop.jobs jj WHERE jj.bay_id = b.bay_id AND jj.stage IN ('in_bay', 'inspecting', 'inspected')
+       ORDER BY jj.bay_entered_at DESC LIMIT 1
      ) j ON true
      LEFT JOIN workshop.vehicles v ON v.vehicle_id = j.vehicle_id
      LEFT JOIN workshop.service_types st ON st.service_type_id = j.service_type_id
@@ -94,12 +103,16 @@ export async function getBayBoard(db: Db): Promise<BayBoard> {
       bayId: r.bay_id,
       code: r.code,
       name: r.name,
+      camera: r.camera_code ? { cameraId: r.camera_id, code: r.camera_code, name: r.camera_name } : null,
       state: r.state ?? 'unknown',
       since: r.since,
       overlap: r.overlap,
       job: r.job_no
         ? {
+            jobId: r.job_id,
             jobNo: r.job_no,
+            stage: r.job_stage,
+            inspectionStatus: r.inspection_status,
             registrationNo: r.registration_no,
             vehicle: r.vehicle,
             service: r.service,

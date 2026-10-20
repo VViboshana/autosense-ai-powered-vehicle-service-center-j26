@@ -26,6 +26,7 @@ class Job:
     sample_fps: float
     mask: bool = False          # frames greyed out outside the bays before detection (roi.py)
     live: bool = False          # replay the video as a live camera until cancelled (pipeline._sampled_frames)
+    views: dict = field(default_factory=dict)   # bay_id -> normalised (x0, y0, x1, y1) its live picture stays inside
     status: Status = 'queued'
     progress: Progress = field(default_factory=Progress)
     transitions: list[Transition] = field(default_factory=list)

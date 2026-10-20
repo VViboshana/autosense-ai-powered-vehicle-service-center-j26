@@ -8,6 +8,7 @@ const STAGE_NEWS: Record<string, { title: string; tone: string; icon: string }> 
   checked_in: { title: 'was checked in', tone: 'info', icon: 'bi-box-arrow-in-right' },
   waiting_for_bay: { title: 'is waiting for a bay', tone: 'warning', icon: 'bi-hourglass-split' },
   in_bay: { title: 'is in a service bay', tone: 'brand', icon: 'bi-tools' },
+  inspecting: { title: 'is being inspected for damage', tone: 'info', icon: 'bi-clipboard-check' },
   ready: { title: 'is ready for pickup', tone: 'success', icon: 'bi-check2-circle' },
   completed: { title: 'was collected', tone: 'muted', icon: 'bi-flag' },
 };
@@ -90,7 +91,7 @@ export function myActivityRoutes(pool: pg.Pool) {
          JOIN workshop.job_stage_history h ON h.job_id = j.job_id
          LEFT JOIN occupancy.bays b ON b.bay_id = j.bay_id
          WHERE vc.customer_id = $1 AND vc.status = 'approved' AND h.at >= vc.reviewed_at
-           AND h.at > now() - interval '60 days' AND h.stage IN ('checked_in', 'waiting_for_bay', 'in_bay', 'ready', 'completed')`,
+           AND h.at > now() - interval '60 days' AND h.stage IN ('checked_in', 'waiting_for_bay', 'in_bay', 'inspecting', 'ready', 'completed')`,
         [me],
       ),
       canReports

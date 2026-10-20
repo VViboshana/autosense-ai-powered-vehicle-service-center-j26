@@ -23,8 +23,10 @@ def _outline(img: np.ndarray, pts: np.ndarray, thickness: int) -> None:
 
 
 def render(frame: np.ndarray, vehicles: Sequence[Vehicle], polygon: Sequence[Sequence[float]] | None = None,
-           width: int = 480, quality: int = 80) -> bytes:
-    """JPEG of the whole frame, or of the area around `polygon` (normalised 0..1) when given, `width` px wide."""
+           width: int = 480, quality: int = 80, bounds: Sequence[float] | None = None) -> bytes:
+    """JPEG of the whole frame, or of the area around `polygon` (normalised 0..1) when given, `width` px wide.
+    `bounds` (normalised x0, y0, x1, y1) keeps the crop inside one part of the frame, e.g. one panel of the simulated
+    service-bay video, which tiles six bays' clips into one picture."""
     h, w = frame.shape[:2]
     img = frame.copy()
     for v in vehicles:
@@ -38,8 +40,12 @@ def render(frame: np.ndarray, vehicles: Sequence[Vehicle], polygon: Sequence[Seq
         side = max(side, MIN_SIDE_PX)
         cx, cy = x + bw / 2, y + bh / 2
         cw, ch = side * 4 / 3, side          # 4:3, like the tiles
-        x0 = int(max(0, min(w - cw, cx - cw / 2)))
-        y0 = int(max(0, min(h - ch, cy - ch / 2)))
+        lx0, ly0, lx1, ly1 = (0, 0, w, h) if bounds is None else (bounds[0] * w, bounds[1] * h, bounds[2] * w, bounds[3] * h)
+        if cw > lx1 - lx0 or ch > ly1 - ly0:   # larger than the allowed area: the biggest 4:3 that fits
+            ch = min(ch, ly1 - ly0, (lx1 - lx0) * 3 / 4)
+            cw = ch * 4 / 3
+        x0 = int(max(lx0, min(lx1 - cw, cx - cw / 2)))
+        y0 = int(max(ly0, min(ly1 - ch, cy - ch / 2)))
         img = img[y0:int(min(h, y0 + ch)), x0:int(min(w, x0 + cw))]
     scale = width / img.shape[1]
     img = cv2.resize(img, (width, max(1, round(img.shape[0] * scale))),

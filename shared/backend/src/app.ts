@@ -15,6 +15,7 @@ import { claimsRoutes } from './modules/claims/claims.routes.js';
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes.js';
 import { inspectionsRoutes } from './modules/inspections/inspections.routes.js';
 import { jobsRoutes } from './modules/jobs/jobs.routes.js';
+import { myServiceCentreRoutes } from './modules/occupancy/occupancy.my.routes.js';
 import { myActivityRoutes } from './modules/my/myActivity.routes.js';
 import { myRoutes } from './modules/my/my.routes.js';
 import { navigationRoutes } from './modules/navigation/navigation.routes.js';
@@ -55,6 +56,7 @@ export function createApp(pool: pg.Pool, env: Env) {
   app.use('/api/admin/audit', auditRoutes(pool));
   // Customers
   app.use('/api/my/bookings', myBookingsRoutes(pool));
+  app.use('/api/my/service-centre', myServiceCentreRoutes(pool));
   app.use('/api/my', myActivityRoutes(pool));
   app.use('/api/my', myRoutes(pool, env.UPLOAD_DIR));
 

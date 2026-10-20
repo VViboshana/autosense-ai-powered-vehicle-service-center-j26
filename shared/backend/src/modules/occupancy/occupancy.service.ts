@@ -18,7 +18,10 @@ export type OccupancyDeps = { pool: pg.Pool; serviceUrl?: string };
 
 /** The occupancy.rules setting; the service applies them (see member-1-occupancy/backend/app/state_machine.py). */
 export const DEFAULT_RULES = { overlapThreshold: 0.4, confirmOccupiedSeconds: 3, confirmFreeSeconds: 5, sampleFps: 2 };
-export type OccupancyRules = typeof DEFAULT_RULES & Partial<Record<'releaseThreshold' | 'toleranceSeconds' | 'minSupport' | 'staleAfterSeconds', number>>;
+export type OccupancyRules = typeof DEFAULT_RULES & Partial<Record<'releaseThreshold' | 'toleranceSeconds' | 'minSupport' | 'staleAfterSeconds', number>> & {
+  /** Move the only waiting vehicle into the only newly occupied bay without asking (off unless switched on). */
+  autoConfirm?: boolean;
+};
 
 /** The service knows a job by this id; the API's own id is the number in it. */
 export const serviceJobId = (videoJobId: number) => `VJ-${videoJobId}`;
@@ -44,7 +47,7 @@ export async function startVideoJob(deps: OccupancyDeps, input: { cameraId: numb
   const model = await occupancyModel(deps.serviceUrl);
   const rules = await getSetting<OccupancyRules>(deps.pool, 'occupancy.rules', DEFAULT_RULES);
   const sampleFps = input.sampleFps ?? rules.sampleFps;
-  const { sampleFps: _s, ...stateRules } = rules;
+  const { sampleFps: _s, autoConfirm: _a, ...stateRules } = rules;   // the service applies the state rules only
 
   const id = await withTransaction(deps.pool, async (client) => {
     const videoJobId = await repo.insertVideoJob(client, {
@@ -138,12 +141,41 @@ export async function syncOpenJobs(deps: OccupancyDeps): Promise<void> {
       }
       for (const row of transitionRows(report, job.videoJobId, new Date(job.startedAt))) {
         await repo.applyTransition(client, row);
+        if (row.toState === 'occupied') await maybeAutoConfirm(client, row.bayId);
       }
       await repo.updateVideoJob(client, job.videoJobId, {
         status: report.status, framesProcessed: report.framesProcessed, totalFrames: report.totalFrames, error: report.error,
       });
       if (job.cameraId && report.status === 'running') await repo.markCameraSeen(client, job.cameraId, true);
     });
+  }
+}
+
+/**
+ * Auto-confirm (setting occupancy.rules.autoConfirm): which job to move into `bayId` without asking, or null. Only when
+ * there is no doubt: this is the ONLY occupied bay without a job and exactly ONE vehicle is waiting. Anything else
+ * (two cars arriving, nobody or several waiting) stays a suggestion for staff to confirm.
+ */
+export function autoConfirmChoice(enabled: boolean, bayId: number, unlinked: repo.UnlinkedBay[], queue: repo.QueuedJob[]): number | null {
+  if (!enabled || unlinked.length !== 1 || unlinked[0]!.bayId !== bayId || queue.length !== 1) return null;
+  return queue[0]!.jobId;
+}
+
+/** Called by the sync when a bay turns occupied: moves the job in when auto-confirm is on and the match is certain. */
+async function maybeAutoConfirm(client: pg.PoolClient, bayId: number): Promise<void> {
+  const rules = await getSetting<OccupancyRules>(client, 'occupancy.rules', DEFAULT_RULES);
+  if (!rules.autoConfirm) return;
+  await repo.lockBay(client, bayId);
+  const [unlinked, queue] = await Promise.all([repo.occupiedBaysWithoutJob(client), repo.jobsReadyForBay(client, 2)]);
+  const jobId = autoConfirmChoice(true, bayId, unlinked, queue);
+  if (!jobId) return;
+  const bay = unlinked[0]!;
+  const moved = await repo.moveJobIntoBay(client, {
+    jobId, bayId, userId: null,
+    note: `Auto-confirmed by the camera: ${bay.name} occupied and ${queue[0]!.registrationNo} was the only vehicle waiting`,
+  });
+  if (moved) {
+    await audit(client, { table: 'workshop.jobs', recordId: jobId, action: 'auto_move_to_bay', userId: null, snapshot: { bayId, source: 'occupancy_auto_confirm' } });
   }
 }
 

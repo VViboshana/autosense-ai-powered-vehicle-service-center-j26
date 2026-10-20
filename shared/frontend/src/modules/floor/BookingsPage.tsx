@@ -13,7 +13,7 @@ import { useApi } from '@/lib/useApi';
 type StaffBooking = {
   bookingId: number;
   bookingNo: string;
-  status: 'pending' | 'confirmed' | 'declined' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'declined' | 'cancelled' | 'checked_in';
   date: string;
   time: string;
   service: string;
@@ -33,6 +33,7 @@ const TABS = [
   { key: 'confirmed', label: 'Confirmed' },
   { key: 'declined', label: 'Declined' },
   { key: 'cancelled', label: 'Cancelled by customer' },
+  { key: 'checked_in', label: 'Checked in' },
 ] as const;
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

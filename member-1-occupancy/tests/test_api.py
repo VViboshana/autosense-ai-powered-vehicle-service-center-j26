@@ -150,3 +150,13 @@ def test_pretrained_model_can_be_forced_and_is_reported_as_not_fine_tuned(tmp_pa
         model = c.get('/health').json()['model']
     assert model['placeholder'] is True and model['version'] == 'coco-yolo11s-placeholder'
     assert model['roiMask']['default'] is (config.ROI_MASK == 'on')    # auto masking is off for the pretrained model
+
+
+def test_composed_simulation_video_crops_each_bay_inside_its_panel(tmp_path):
+    video = tmp_path / 'sim.mp4'
+    video.write_bytes(b'')
+    poly = [[0.1, 0.6], [0.2, 0.6], [0.2, 0.7], [0.1, 0.7]]
+    (tmp_path / 'sim.bays.json').write_text(json.dumps({'bays': {'S4': poly}, 'views': {'S4': [0, 0.5, 0.3333, 1]}}))
+    bays = [main.Bay(id='31', polygon=poly), main.Bay(id='32', polygon=[[0.5, 0.1], [0.6, 0.1], [0.6, 0.2]])]
+    assert main.bay_views(str(video), bays) == {'31': [0, 0.5, 0.3333, 1]}
+    assert main.bay_views(str(tmp_path / 'other.mp4'), bays) == {}

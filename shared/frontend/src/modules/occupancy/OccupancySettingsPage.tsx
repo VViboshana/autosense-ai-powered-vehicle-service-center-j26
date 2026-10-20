@@ -14,7 +14,7 @@ import './occupancy.css';
  * Edits the occupancy.rules setting: when a bay counts as occupied, free or uncertain. The occupancy service applies
  * the rules to each video job when it starts, so a change affects jobs started after saving.
  */
-type Key = keyof OccupancyRules;
+type Key = Exclude<keyof OccupancyRules, 'autoConfirm'>;
 type Form = Record<Key, string>;
 
 /** What the service uses when a value is left empty (member-1-occupancy/backend/app/state_machine.py, Rules). */
@@ -48,7 +48,7 @@ function toRules(f: Form): { rules?: OccupancyRules; errors: Record<string, stri
     if (!Number.isFinite(n)) errors[key] = 'Enter a number.';
     else out[key] = n;
   }
-  return Object.keys(errors).length ? { errors } : { rules: out as OccupancyRules, errors };
+  return Object.keys(errors).length ? { errors } : { rules: out as unknown as OccupancyRules, errors };
 }
 
 /** The values in effect, filling empty optional ones the way the service does. */
@@ -87,9 +87,10 @@ function RulesCard() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [autoConfirm, setAutoConfirm] = useState(false);
 
   useEffect(() => {
-    if (data) setForm(toForm(data));
+    if (data) { setForm(toForm(data)); setAutoConfirm(!!data.autoConfirm); }
   }, [data]);
 
   const set = (key: Key) => (e: { target: { value: string } }) => {
@@ -107,8 +108,9 @@ function RulesCard() {
     if (!rules) return;
     setSaving(true);
     try {
-      const saved = await apiSend<OccupancyRules>('PUT', '/occupancy/rules', rules);
+      const saved = await apiSend<OccupancyRules>('PUT', '/occupancy/rules', { ...rules, autoConfirm });
       setForm(toForm(saved));
+      setAutoConfirm(!!saved.autoConfirm);
       setMessage({ tone: 'success', text: 'Saved. Video jobs started from now on use these rules.' });
     } catch (err) {
       setErrors(fieldErrors(err));
@@ -173,12 +175,25 @@ function RulesCard() {
           {field('staleAfterSeconds', 'Uncertain after no picture for (seconds)', `Empty: ${SERVICE_DEFAULTS.staleAfterSeconds}.`, { step: '1', min: 1, max: 600, placeholder: String(SERVICE_DEFAULTS.staleAfterSeconds) })}
         </div>
 
+        <h3 className="as-occ-group">Moving vehicles into bays</h3>
+        <div className="form-check form-switch mb-1">
+          <input className="form-check-input" type="checkbox" role="switch" id="auto-confirm" checked={autoConfirm}
+            onChange={(e) => { setAutoConfirm(e.target.checked); setMessage(null); }} />
+          <label className="form-check-label" htmlFor="auto-confirm">Auto-confirm when there is no doubt</label>
+        </div>
+        <p className="small text-body-secondary mb-3">
+          Off: the Bay monitor suggests the waiting vehicle and staff confirm it. On: when one bay fills and exactly one
+          vehicle is waiting, it is moved into that bay straight away (marked "auto-confirmed" in its history; "Not this
+          vehicle" puts it back in the queue). Two cars arriving, or several waiting, are always left for staff to confirm.
+          The camera cannot read number plates, so it cannot check that the car is really that vehicle.
+        </p>
+
         {message && <Alert tone={message.tone}>{message.text}</Alert>}
         <div className="d-flex gap-2 flex-wrap">
           <button type="submit" className="btn btn-primary" disabled={saving}>
             {saving ? 'Saving…' : 'Save rules'}
           </button>
-          <button type="button" className="btn btn-light" disabled={saving} onClick={() => { setForm(toForm(SHIPPED)); setErrors({}); setMessage(null); }}>
+          <button type="button" className="btn btn-light" disabled={saving} onClick={() => { setForm(toForm(SHIPPED)); setAutoConfirm(false); setErrors({}); setMessage(null); }}>
             Restore defaults
           </button>
           <span className="small text-body-secondary align-self-center">Restoring fills in the shipped values; nothing changes until you save.</span>

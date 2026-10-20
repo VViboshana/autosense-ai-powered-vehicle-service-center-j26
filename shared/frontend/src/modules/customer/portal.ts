@@ -13,6 +13,7 @@ export const BOOKING_STATUS: Record<BookingStatus, { label: string; tone: string
   confirmed: { label: 'Confirmed', tone: 'success', icon: 'bi-check-circle' },
   declined: { label: 'Declined', tone: 'danger', icon: 'bi-x-circle' },
   cancelled: { label: 'Cancelled', tone: 'muted', icon: 'bi-slash-circle' },
+  checked_in: { label: 'Checked in', tone: 'info', icon: 'bi-box-arrow-in-right' },
 };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

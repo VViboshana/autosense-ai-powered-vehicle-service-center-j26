@@ -61,6 +61,8 @@ export type OccupancyRules = {
   minSupport?: number;
   staleAfterSeconds?: number;
   sampleFps: number;
+  /** Move the only waiting vehicle into the only newly occupied bay without asking staff (off unless switched on). */
+  autoConfirm?: boolean;
 };
 
 /** GET /api/occupancy/service: the model the occupancy service runs. */
@@ -92,7 +94,7 @@ export type QueuedJob = {
   registrationNo: string;
   vehicle: string;
   service: string;
-  stage: 'waiting_for_bay' | 'inspected' | 'checked_in';
+  stage: 'waiting_for_bay' | 'checked_in';
   checkedInAt: string;
 };
 export type BaySuggestion = { bayId: number; code: string; name: string; since: string | null; overlap: number | null; suggestedJobId: number | null };

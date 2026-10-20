@@ -10,7 +10,7 @@ import { requireScreen, signedInUser } from '../../middleware/requireScreen.js';
 import { centreTimeZone, nowInZone } from './bookingRules.js';
 import { BOOKING_COLUMNS, toBooking } from './myBookings.routes.js';
 
-const STATUSES = ['pending', 'confirmed', 'declined', 'cancelled'] as const;
+const STATUSES = ['pending', 'confirmed', 'declined', 'cancelled', 'checked_in'] as const;
 const listQuery = pageQuery.extend({ status: z.enum(STATUSES).default('pending') });
 const confirmBody = z.object({ note: z.string().trim().max(300).optional().transform((s) => s || null) });
 const declineBody = z.object({ note: z.string().trim().min(3, 'Tell the customer why, e.g. "Fully booked; try Thursday."').max(300) });

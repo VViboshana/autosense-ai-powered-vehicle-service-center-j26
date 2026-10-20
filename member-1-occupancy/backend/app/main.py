@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Literal
 
 import cv2
@@ -103,6 +104,22 @@ class VideoJobIn(BaseModel):
     live: bool = Field(False, description='replay a recorded video as a live camera (real time, looping) until cancelled')
 
 
+def bay_views(source_path: str, bays: list[Bay]) -> dict[str, list[float]]:
+    """For a composed simulation video (eval/simulate_bays.py), the panel each bay is in, read from the video's
+    `<name>.bays.json`: a bay's live picture is then cropped inside its own panel. Bays are matched by outline.
+    Empty for any other video."""
+    side = Path(source_path).with_suffix('.bays.json')
+    if not side.is_file():
+        return {}
+    try:
+        meta = json.loads(side.read_text())
+        key = lambda poly: tuple(tuple(round(float(c), 4) for c in p) for p in poly)   # noqa: E731
+        views = {key(meta['bays'][code]): view for code, view in meta.get('views', {}).items() if code in meta['bays']}
+    except (ValueError, KeyError, TypeError):
+        return {}
+    return {b.id: views[key(b.polygon)] for b in bays if key(b.polygon) in views}
+
+
 def resolve_source(source: str) -> str:
     """Live streams pass through; files must sit inside OCC_VIDEO_DIR (the API cannot make the service read
     anything else on this computer)."""
@@ -166,8 +183,10 @@ def analyze(
 def create_video_job(body: VideoJobIn):
     if body.live and body.source.startswith(('rtsp://', 'rtsps://')):
         raise HTTPException(422, 'Live replay is for recorded videos; camera streams are not supported yet.')
-    job = Job(body.jobId, resolve_source(body.source), [BayConfig(b.id, b.polygon) for b in body.bays],
-              body.rules.to_rules(), body.sampleFps, use_mask(body.mask), body.live)
+    path = resolve_source(body.source)
+    job = Job(body.jobId, path, [BayConfig(b.id, b.polygon) for b in body.bays],
+              body.rules.to_rules(), body.sampleFps, use_mask(body.mask), body.live,
+              views=bay_views(path, body.bays) if not path.startswith(('rtsp://', 'rtsps://')) else {})
     try:
         state['jobs'].submit(job)
     except ValueError as e:
@@ -205,7 +224,7 @@ def video_job_frame(job_id: str, bay: str | None = Query(None, max_length=20),
         polygon = next((b.polygon for b in job.bays if b.bay_id == bay), None)
         if polygon is None:
             raise HTTPException(404, f'Bay {bay} is not part of this job.')
-    return Response(liveview.render(frame, vehicles, polygon, width), media_type='image/jpeg',
+    return Response(liveview.render(frame, vehicles, polygon, width, bounds=job.views.get(bay)), media_type='image/jpeg',
                     headers={'X-Stream-Seconds': str(t), 'Cache-Control': 'no-store'})
 
 

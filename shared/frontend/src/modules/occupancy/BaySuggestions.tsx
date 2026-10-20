@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { useSession } from '@/app/session';
-import { Card } from '@/components/ui/Card';
 import { Alert } from '@/components/ui/Form';
-import { ErrorState } from '@/components/ui/States';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { ApiError, apiSend } from '@/lib/api';
 import { formatDuration, formatTime, minutesSince } from '@/lib/format';
@@ -14,54 +12,70 @@ import './occupancy.css';
  * Bay monitor: when the camera sees a bay occupied and no job is in it, suggest the next vehicle in the queue
  * (GET /api/occupancy/bay-suggestions). It is only a suggestion: staff pick the vehicle that is really there and
  * confirm (function BAY_JOB_CONFIRM), which moves that job to "In bay". The other way round: when a bay with a job
- * turns free, it asks whether the vehicle left; confirming moves the job to "Ready". Hidden when there is nothing to suggest.
+ * turns free, it asks whether the vehicle left; confirming moves the job to "Ready". Shown as small pop-ups in the
+ * bottom-right corner that never cover the page's content (they can be minimised); hidden when there is nothing to do.
  */
 const STAGE: Record<QueuedJob['stage'], string> = {
   waiting_for_bay: 'waiting for a bay',
-  inspected: 'inspected',
   checked_in: 'checked in',
 };
 
 export function BaySuggestions({ onConfirmed }: { onConfirmed: () => void }) {
   const { can } = useSession();
-  const { data, error, reload } = useApi<Data>('/occupancy/bay-suggestions', undefined, { refreshMs: 15_000 });
+  const { data, error, reload } = useApi<Data>('/occupancy/bay-suggestions', undefined, { refreshMs: 5_000 });
   const [hidden, setHidden] = useState<number[]>([]);
+  const [open, setOpen] = useState(true);
+  const [all, setAll] = useState(false);
+
+  // Only what staff can act on: a parked car while someone is waiting, or a bay that emptied with a job still in it.
+  // (A car in a bay with nobody waiting is shown on the bay's tile instead.)
+  const shown = data && data.queue.length > 0 ? data.suggestions.filter((s) => !hidden.includes(s.bayId)) : [];
+  const releases = data?.releases.filter((r) => !hidden.includes(-r.jobId)) ?? [];
+  const total = shown.length + releases.length;
 
   if (error && !data) {
-    return <Card icon="bi-lightbulb" title="Suggested by the camera"><ErrorState inline error={error} onRetry={reload} title="Suggestions couldn't be loaded" /></Card>;
+    return (
+      <aside className="as-toasts" aria-label="Camera suggestions">
+        <div className="as-toast as-toast-error" role="alert">
+          <span>Camera suggestions couldn't be loaded.</span>
+          <button type="button" className="btn btn-link btn-sm p-0" onClick={reload}>Try again</button>
+        </div>
+      </aside>
+    );
   }
-  const shown = data?.suggestions.filter((s) => !hidden.includes(s.bayId)) ?? [];
-  const releases = data?.releases.filter((r) => !hidden.includes(-r.jobId)) ?? [];
-  if (!data || (shown.length === 0 && releases.length === 0)) return null;
+  if (total === 0) return null;
+
+  const items = [
+    ...releases.map((r) => (
+      <Release key={`r${r.jobId}`} release={r} canConfirm={can('BAY_JOB_CONFIRM')}
+        onHide={() => setHidden((h) => [...h, -r.jobId])} onConfirmed={() => { reload(); onConfirmed(); }} />
+    )),
+    ...shown.map((sg) => (
+      <Suggestion key={sg.bayId} suggestion={sg} queue={data!.queue} canConfirm={can('BAY_JOB_CONFIRM')}
+        onHide={() => setHidden((h) => [...h, sg.bayId])} onConfirmed={() => { reload(); onConfirmed(); }} />
+    )),
+  ];
+  const visible = all ? items : items.slice(0, 3);
 
   return (
-    <Card
-      icon="bi-lightbulb"
-      title="Suggested by the camera"
-      subtitle="Bay changes the camera saw that the job list doesn't show yet. Nothing changes until you confirm."
-    >
-      <ul className="as-sugg-list">
-        {releases.map((r) => (
-          <Release
-            key={`r${r.jobId}`}
-            release={r}
-            canConfirm={can('BAY_JOB_CONFIRM')}
-            onHide={() => setHidden((h) => [...h, -r.jobId])}
-            onConfirmed={() => { reload(); onConfirmed(); }}
-          />
-        ))}
-        {shown.map((s) => (
-          <Suggestion
-            key={s.bayId}
-            suggestion={s}
-            queue={data.queue}
-            canConfirm={can('BAY_JOB_CONFIRM')}
-            onHide={() => setHidden((h) => [...h, s.bayId])}
-            onConfirmed={() => { reload(); onConfirmed(); }}
-          />
-        ))}
-      </ul>
-    </Card>
+    <aside className="as-toasts" aria-label="Camera suggestions" aria-live="polite">
+      <button type="button" className="as-toasts-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <i className="bi bi-lightbulb" aria-hidden="true" />
+        <span>Suggested by the camera</span>
+        <span className="as-toasts-count">{total}</span>
+        <i className={`bi ${open ? 'bi-chevron-down' : 'bi-chevron-up'} ms-auto`} aria-hidden="true" />
+      </button>
+      {open && (
+        <>
+          <ul className="as-toasts-list">{visible}</ul>
+          {items.length > 3 && (
+            <button type="button" className="btn btn-link btn-sm as-toasts-more" onClick={() => setAll((a) => !a)}>
+              {all ? 'Show fewer' : `Show ${items.length - 3} more`}
+            </button>
+          )}
+        </>
+      )}
+    </aside>
   );
 }
 
