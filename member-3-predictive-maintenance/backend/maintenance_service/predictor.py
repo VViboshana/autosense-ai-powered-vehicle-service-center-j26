@@ -78,6 +78,8 @@ def predict_category(request: ForecastRequest, bundle: ModelBundle) -> tuple[str
     artifacts: VariantArtifacts = getattr(bundle, variant)
     if not artifacts.available:
         raise RuntimeError(f"{variant} model is unavailable")
+    if artifacts.preprocessing_error:
+        raise RuntimeError(artifacts.preprocessing_error)
 
     frame = feature_frame(request, variant)
     encoded_prediction = int(artifacts.model.predict(frame)[0])

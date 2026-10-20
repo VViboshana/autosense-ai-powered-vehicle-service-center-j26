@@ -22,6 +22,11 @@ class VariantArtifacts:
     encoder: Any | None = None
     available: bool = False
     error: str | None = None
+    preprocessing_error: str | None = None
+
+    @property
+    def ready(self) -> bool:
+        return self.available and self.preprocessing_error is None
 
 
 @dataclass
@@ -54,7 +59,7 @@ class ModelBundle:
 
     @property
     def loaded(self) -> bool:
-        return self.basic.available or self.enriched.available
+        return self.basic.ready or self.enriched.ready
 
     @property
     def task_catalog_available(self) -> bool:
@@ -81,7 +86,15 @@ def _load_json_variant(model_path: Path, encoder_path: Path) -> VariantArtifacts
 
         model = XGBClassifier()
         model.load_model(model_path)
-        return VariantArtifacts(model=model, encoder=joblib.load(encoder_path), available=True)
+        return VariantArtifacts(
+            model=model,
+            encoder=joblib.load(encoder_path),
+            available=True,
+            preprocessing_error=(
+                "portable JSON classifier loaded without the fitted ColumnTransformer/OneHotEncoder "
+                "required to transform the enriched raw fields into 169 model features"
+            ),
+        )
     except Exception as exc:
         logger.exception("Unable to load portable predictive maintenance artifacts")
         return VariantArtifacts(error=f"portable artifact load failed: {type(exc).__name__}")
