@@ -239,7 +239,7 @@ function BayJob({ bay, onChanged }: { bay: BayCard; onChanged: () => void }) {
       subtitle={`${job.vehicle} · ${job.service} · ${job.jobNo}`}
       actions={<JobActions job={job} onDone={onChanged} size="md" showCancel={false} />}
     >
-      <div className="d-flex flex-wrap gap-2 align-items-center small">
+      <div className="as-card-body d-flex flex-wrap gap-2 align-items-center small">
         <StatusPill tone={STAGES[job.stage].tone}>{STAGES[job.stage].label}</StatusPill>
         <span className="text-body-secondary">
           {job.inspectionStatus ? INSPECTION[job.inspectionStatus] : 'No damage inspection yet'}
@@ -258,7 +258,7 @@ function Queue({ tick }: { tick: number }) {
   return (
     <Card icon="bi-hourglass-split" title="Queue for a bay" subtitle={data.totalCount === 0 ? undefined : 'When the camera sees a car drive into a free bay, it suggests the first vehicle here'}>
       {data.totalCount === 0 ? (
-        <p className="small text-body-secondary mb-0">Nobody is waiting. Check vehicles in on Vehicles &amp; jobs.</p>
+        <p className="as-card-body small text-body-secondary mb-0">Nobody is waiting. Check vehicles in on Vehicles &amp; jobs.</p>
       ) : (
         <ol className="as-queue">
           {data.records.map((j, i) => (

@@ -384,6 +384,10 @@ body.as-app {
   color: var(--as-muted);
   font-size: 0.8rem;
 }
+/* Card content that is not a table (tables pad their own first and last columns): the same inset as the card head */
+.as-card-body {
+  padding: 0 1.25rem 1.25rem;
+}
 .as-more {
   font-size: 0.82rem;
   text-decoration: none;

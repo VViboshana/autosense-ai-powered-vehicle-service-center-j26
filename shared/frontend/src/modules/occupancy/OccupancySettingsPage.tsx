@@ -121,7 +121,7 @@ function RulesCard() {
   }
 
   if (error && !data) return <Card icon="bi-sliders" title="Decision rules"><ErrorState inline error={error} onRetry={reload} title="The rules couldn't be loaded" /></Card>;
-  if (loading || !form) return <Card icon="bi-sliders" title="Decision rules"><Skeleton width="70%" /><div className="mt-2"><Skeleton width="90%" /></div><div className="mt-2"><Skeleton width="50%" /></div></Card>;
+  if (loading || !form) return <Card icon="bi-sliders" title="Decision rules"><div className="as-card-body"><Skeleton width="70%" /><div className="mt-2"><Skeleton width="90%" /></div><div className="mt-2"><Skeleton width="50%" /></div></div></Card>;
 
   const e = effective(form);
   const field = (key: Key, label: string, hint: string, opts: { step: string; min: number; max: number; placeholder?: string }) => (
@@ -148,7 +148,7 @@ function RulesCard() {
       title="Decision rules"
       subtitle="The occupancy service applies these to every video job when it starts"
     >
-      <form onSubmit={(ev) => void save(ev)} noValidate>
+      <form className="as-card-body" onSubmit={(ev) => void save(ev)} noValidate>
         <p className="as-occ-summary small" aria-live="polite">
           A bay becomes <strong>occupied</strong> once a vehicle covers at least {pct(e.overlap)} of it
           for {secs(e.occupied)}, and <strong>free</strong> once coverage stays below {pct(e.release)} for {secs(e.free)}.
@@ -208,9 +208,9 @@ function ServiceCard() {
   return (
     <Card icon="bi-cpu" title="Occupancy service" subtitle="The detection model the service is running now">
       {error && !data ? <ErrorState inline error={error} onRetry={reload} title="The occupancy service isn't answering" />
-        : loading || !data ? <><Skeleton width="70%" /><div className="mt-2"><Skeleton width="50%" /></div></>
+        : loading || !data ? <div className="as-card-body"><Skeleton width="70%" /><div className="mt-2"><Skeleton width="50%" /></div></div>
         : (
-          <dl className="as-occ-facts small">
+          <dl className="as-card-body as-occ-facts small">
             <dt>Model</dt>
             <dd>
               <span className="as-mono">{data.version}</span>

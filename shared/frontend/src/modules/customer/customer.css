@@ -167,9 +167,9 @@
 .cp-overall .cp-pill { font-size: 1rem; padding: 0.4rem 0.9rem; }
 @media (max-width: 640px) { .cp-rhead { grid-template-columns: 1fr; } .cp-overall { justify-items: start; } }
 .cp-how { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; font-size: 0.82rem; color: var(--as-ink-2); padding: 0 1.4rem 1.1rem; }
-.cp-how .st { display: inline-flex; align-items: center; gap: 0.45rem; background: var(--as-surface-2); border: 1px solid var(--as-line-soft); border-radius: 999px; padding: 0.25rem 0.7rem 0.25rem 0.3rem; }
-.cp-how .st i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--as-primary-soft); color: var(--as-primary); font-style: normal; font-size: 0.75rem; }
-.cp-how .st.ok i { background: var(--as-success-soft); color: var(--as-success); }
+.cp-how .cp-step { display: inline-flex; align-items: center; gap: 0.45rem; background: var(--as-surface-2); border: 1px solid var(--as-line-soft); border-radius: 999px; padding: 0.25rem 0.7rem 0.25rem 0.3rem; }
+.cp-how .cp-step i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--as-primary-soft); color: var(--as-primary); font-style: normal; font-size: 0.75rem; }
+.cp-how .cp-step.ok i { background: var(--as-success-soft); color: var(--as-success); }
 .cp-note { margin: 0 1.4rem 1.1rem; padding: 0.6rem 0.9rem; border-left: 3px solid var(--as-line); background: var(--as-surface-2); border-radius: 0 10px 10px 0; font-size: 0.9rem; color: var(--as-ink-2); }
 
 .cp-rgrid { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 1.1rem; align-items: start; }

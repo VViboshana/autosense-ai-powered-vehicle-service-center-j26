@@ -171,7 +171,7 @@ function WalkIn({ onCheckedIn }: { onCheckedIn: (msg: string) => void }) {
 
   return (
     <Card icon="bi-person-walking" title="Walk-in" subtitle="A vehicle on record without a booking">
-      <form onSubmit={(e) => void submit(e)} noValidate>
+      <form className="as-card-body" onSubmit={(e) => void submit(e)} noValidate>
         {!picked ? (
           <>
             <Field label="Vehicle number or owner" type="search" placeholder="e.g. KP 0683" value={draft} onChange={(e) => setDraft(e.target.value)}

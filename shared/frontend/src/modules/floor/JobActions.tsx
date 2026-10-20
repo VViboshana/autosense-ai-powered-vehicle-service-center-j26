@@ -29,7 +29,7 @@ export function JobActions({ job, onDone, size = 'sm', showCancel = true }: {
   const [error, setError] = useState<string | null>(null);
   const [ask, setAsk] = useState<'no_inspection' | 'cancel' | null>(null);
   const [note, setNote] = useState('');
-  const btn = `btn btn-${size === 'sm' ? 'sm ' : ''}`;
+  const btn = size === 'sm' ? 'btn btn-sm ' : 'btn ';
 
   async function run(action: 'send-to-inspection' | 'back-to-queue' | 'work-done' | 'collected' | 'cancel', body: Record<string, unknown> = {}) {
     setBusy(true);

@@ -72,11 +72,11 @@ export function InspectionReportView({ vehicle, report, history, onPick }: {
           </div>
         </div>
         <div className="cp-how cp-rise as-no-print" style={{ '--i': 4 } as CSSProperties} aria-label="How this report was made">
-          <span className="st"><i>1</i>Photos of each side</span>
+          <span className="cp-step"><i>1</i>Photos of each side</span>
           <i className="bi bi-arrow-right text-body-secondary" aria-hidden="true" />
-          <span className="st"><i>2</i>AI marked the damage</span>
+          <span className="cp-step"><i>2</i>AI marked the damage</span>
           <i className="bi bi-arrow-right text-body-secondary" aria-hidden="true" />
-          <span className="st ok"><i className="bi bi-check-lg" />A technician checked every mark</span>
+          <span className="cp-step ok"><i className="bi bi-check-lg" />A technician checked every mark</span>
         </div>
         {report.notes && (
           <p className="cp-note cp-rise" style={{ '--i': 5 } as CSSProperties}><b>Technician's note:</b> {report.notes}</p>
