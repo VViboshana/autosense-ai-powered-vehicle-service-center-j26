@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSession } from '@/app/session';
 import { Card } from '@/components/ui/Card';
 import { Alert } from '@/components/ui/Form';
@@ -50,6 +50,17 @@ export function NewInspectionPage() {
     return () => window.clearTimeout(t);
   }, [draft]);
   const options = useApi<VehicleOption[]>('/inspections/vehicle-options', { search });
+
+  // Opened from "Start inspection" (Bay monitor or job list): choose that job straight away
+  const [params] = useSearchParams();
+  const wanted = Number(params.get('job')) || null;
+  const preselected = useRef(false);
+  useEffect(() => {
+    if (preselected.current || !wanted || !options.data) return;
+    const match = options.data.find((o) => o.jobId === wanted);
+    if (match) setJob(match);
+    preselected.current = true;
+  }, [wanted, options.data]);
 
   // Previews are object URLs: free them when the page closes (replaced or removed ones are freed straight away)
   const shotsRef = useRef(shots);
@@ -323,7 +334,7 @@ function JobLine({ o }: { o: VehicleOption }) {
     <span className="as-veh">
       <b>{o.registrationNo}</b>
       <small>
-        {o.vehicle} · <span className="as-mono">{o.jobNo}</span>
+        {o.bay && <>{o.bay} · </>}{o.vehicle} · <span className="as-mono">{o.jobNo}</span>
         {o.customer && ` · ${o.customer}`} · in {formatDate(o.checkedInAt)} {formatTime(o.checkedInAt)}
         {o.inspectionCount > 0 && ` · ${o.inspectionCount} inspection${o.inspectionCount === 1 ? '' : 's'} already`}
       </small>

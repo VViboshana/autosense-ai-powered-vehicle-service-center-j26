@@ -1,0 +1,54 @@
+/* Service floor: Vehicles & jobs (check-in). Colours only through theme tokens. */
+.as-arrivals,
+.as-pick-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.as-arrival {
+  border: 1px solid var(--as-line);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.75rem;
+}
+.as-arrival-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.9rem;
+}
+.as-arrival-time {
+  font-weight: 700;
+  min-width: 3rem;
+}
+.as-arrival-form {
+  border-top: 1px solid var(--as-line-soft);
+  margin-top: 0.6rem;
+  padding-top: 0.75rem;
+}
+.as-pick {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--as-line);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.7rem;
+  background: var(--as-surface);
+  color: inherit;
+}
+.as-pick:hover:not(:disabled) {
+  border-color: var(--as-primary);
+}
+.as-pick:disabled {
+  opacity: 0.6;
+}
+.as-picked {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--as-line);
+  border-left: 3px solid var(--as-brand);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.7rem;
+}

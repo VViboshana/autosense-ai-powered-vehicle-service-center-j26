@@ -27,9 +27,9 @@ export const severityName = (s: string | null) => severityOf(s)?.name ?? 'Not gr
 /** The five steps of a visit, as the customer sees them (job stages map onto them with STAGES[stage].step). */
 export const JOURNEY = [
   { label: 'Checked in', icon: 'bi-box-arrow-in-right' },
-  { label: 'Inspected', icon: 'bi-clipboard-check' },
   { label: 'Waiting for a bay', icon: 'bi-hourglass-split' },
-  { label: 'In service', icon: 'bi-wrench-adjustable' },
+  { label: 'In a bay', icon: 'bi-wrench-adjustable' },
+  { label: 'Damage inspection', icon: 'bi-clipboard-check' },
   { label: 'Ready for pickup', icon: 'bi-key' },
 ];
 

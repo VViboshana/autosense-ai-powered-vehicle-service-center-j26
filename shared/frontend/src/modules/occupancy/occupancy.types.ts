@@ -92,7 +92,7 @@ export type QueuedJob = {
   registrationNo: string;
   vehicle: string;
   service: string;
-  stage: 'waiting_for_bay' | 'inspected' | 'checked_in';
+  stage: 'waiting_for_bay' | 'checked_in';
   checkedInAt: string;
 };
 export type BaySuggestion = { bayId: number; code: string; name: string; since: string | null; overlap: number | null; suggestedJobId: number | null };

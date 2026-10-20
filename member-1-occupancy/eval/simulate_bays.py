@@ -107,7 +107,8 @@ def panel(frame: np.ndarray) -> np.ndarray:
     return cv2.resize(frame, (PANEL_W, PANEL_H), interpolation=cv2.INTER_AREA)
 
 
-def timeline(frames: list[np.ndarray], clip_fps: float, seconds: float, seed: int) -> tuple[list[np.ndarray], list[int | None]]:
+def timeline(frames: list[np.ndarray], clip_fps: float, seconds: float, seed: int,
+             empty_s: tuple[int, int] = EMPTY_S, parked_s: tuple[int, int] = PARKED_S) -> tuple[list[np.ndarray], list[int | None]]:
     """Panel frames at FPS for `seconds`: empty hold -> arrive -> parked hold -> leave (reversed) -> repeat, and the
     expected state per output frame (0 free, 1 occupied, None while the car moves)."""
     rng = np.random.default_rng(seed)
@@ -115,19 +116,20 @@ def timeline(frames: list[np.ndarray], clip_fps: float, seconds: float, seed: in
     first_still = len(clip) // 10                     # the clip starts with the bay empty
     moving = clip[first_still:]
     out, state = [], []
-    lead = int(rng.integers(0, EMPTY_S[1])) * FPS     # stagger the bays
+    lead = int(rng.integers(0, empty_s[1])) * FPS     # stagger the bays
     out += [clip[0]] * lead
     state += [0] * lead
     while len(out) < seconds * FPS:
-        e = int(rng.integers(*EMPTY_S)) * FPS
-        p = int(rng.integers(*PARKED_S)) * FPS
+        e = int(rng.integers(*empty_s)) * FPS
+        p = int(rng.integers(*parked_s)) * FPS
         out += [clip[0]] * e + moving + [clip[-1]] * p + moving[::-1]
         state += [0] * e + [None] * len(moving) + [1] * p + [None] * len(moving)
     n = int(seconds * FPS)
     return out[:n], state[:n]
 
 
-def compose(clips: list[Path], weights: Path, out: Path, minutes: float) -> None:
+def compose(clips: list[Path], weights: Path, out: Path, minutes: float,
+            empty_s: tuple[int, int] = EMPTY_S, parked_s: tuple[int, int] = PARKED_S) -> None:
     if not 1 <= len(clips) <= COLS * ROWS:
         raise SystemExit(f'Give 1 to {COLS * ROWS} clips.')
     bays, panels, truth = {}, [], {}
@@ -136,7 +138,7 @@ def compose(clips: list[Path], weights: Path, out: Path, minutes: float) -> None
         if not any(rep.get('works', {}).values()):
             raise SystemExit(f"{path.name}: {rep['verdict']}")
         frames, fps = read_clip(path)
-        seq, states = timeline(frames, fps, minutes * 60, seed=k)
+        seq, states = timeline(frames, fps, minutes * 60, seed=k, empty_s=empty_s, parked_s=parked_s)
         col, row = k % COLS, k // COLS
         (x1, y1), _, (x2, y2), _ = rep['bay']
         # the panel's bay, in the coordinates of the whole 1920x720 picture
@@ -177,11 +179,14 @@ def main() -> None:
     m.add_argument('--weights', type=Path, required=True, help='the model the service will run')
     m.add_argument('--out', type=Path, required=True)
     m.add_argument('--minutes', type=float, default=6)
+    m.add_argument('--empty-s', type=int, nargs=2, default=list(EMPTY_S), metavar=('MIN', 'MAX'), help='seconds a bay stays empty')
+    m.add_argument('--parked-s', type=int, nargs=2, default=list(PARKED_S), metavar=('MIN', 'MAX'),
+                   help='seconds a car stays parked (long enough for a damage inspection in a demo: e.g. 240 360)')
     a = ap.parse_args()
     if a.cmd == 'check':
         print(json.dumps(check_clip(a.clip, a.weights), indent=1))
     else:
-        compose(a.clips, a.weights, a.out, a.minutes)
+        compose(a.clips, a.weights, a.out, a.minutes, tuple(a.empty_s), tuple(a.parked_s))
 
 
 if __name__ == '__main__':

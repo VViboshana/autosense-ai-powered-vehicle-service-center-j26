@@ -88,7 +88,7 @@ export type MyVehicle = {
   };
 };
 
-export type BookingStatus = 'pending' | 'confirmed' | 'declined' | 'cancelled';
+export type BookingStatus = 'pending' | 'confirmed' | 'declined' | 'cancelled' | 'checked_in';
 
 /** A service booking (/api/my/bookings). date is 'YYYY-MM-DD' and time 'HH:MM', in the service centre's time. */
 export type Booking = {

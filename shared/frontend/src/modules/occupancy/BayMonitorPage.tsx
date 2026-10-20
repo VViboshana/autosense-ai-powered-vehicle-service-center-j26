@@ -6,10 +6,14 @@ import { PageHeader } from '@/layout/PageHeader';
 import { formatDuration, formatTime, minutesSince } from '@/lib/format';
 import { useApi } from '@/lib/useApi';
 import type { BayBoardData, BayCard } from '@/modules/dashboard/dashboard.types';
+import { STAGES } from '@/modules/dashboard/stages';
+import { JobActions } from '@/modules/floor/JobActions';
 import { BayHistory } from './BayHistory';
 import { BaySuggestions } from './BaySuggestions';
 import { LiveBayPicture } from './LiveBayPicture';
 import type { LiveCamera } from './occupancy.types';
+import type { Page } from '@/lib/page';
+import type { JobListItem } from '@/modules/dashboard/dashboard.types';
 
 /**
  * Service floor › Bay monitor (screen BAY_MONITOR, component 1: bay occupancy).
@@ -51,6 +55,7 @@ function BayTile({ bay, live, selected, onSelect }: { bay: BayCard; live: boolea
           <div className="as-bay-line">
             {bay.job.vehicle} · {bay.job.service}
           </div>
+          <div className="mt-1"><StatusPill tone={STAGES[bay.job.stage].tone}>{STAGES[bay.job.stage].label}</StatusPill></div>
         </div>
       ) : (
         <div className="as-bay-line">
@@ -135,6 +140,7 @@ export function BayMonitorPage() {
             )}
 
             <BaySuggestions onConfirmed={reload} />
+            <Queue tick={data?.bays.filter((b) => b.job).length ?? 0} />
 
             <Card
               icon="bi-p-square"
@@ -167,10 +173,64 @@ export function BayMonitorPage() {
               )}
             </Card>
 
+            {selected?.job && <BayJob bay={selected} onChanged={reload} />}
             {selected && <BayHistory key={selected.bayId} bayId={selected.bayId} bayName={selected.name} />}
           </div>
         </div>
       </div>
     </>
+  );
+}
+
+const INSPECTION: Record<string, string> = {
+  awaiting_review: 'Inspection waiting for review',
+  confirmed: 'Inspection confirmed',
+  processing: 'Inspection being analysed',
+  draft: 'Inspection started',
+  failed: 'Inspection failed',
+};
+
+/** The job in the selected bay, with the next step of the service flow (send to damage inspection, work done). */
+function BayJob({ bay, onChanged }: { bay: BayCard; onChanged: () => void }) {
+  const job = bay.job!;
+  return (
+    <Card
+      icon="bi-car-front"
+      title={`In ${bay.name}: ${job.registrationNo}`}
+      subtitle={`${job.vehicle} · ${job.service} · ${job.jobNo}`}
+      actions={<JobActions job={{ ...job, stage: job.stage }} onDone={onChanged} size="md" showCancel={false} />}
+    >
+      <div className="d-flex flex-wrap gap-2 align-items-center small">
+        <StatusPill tone={STAGES[job.stage].tone}>{STAGES[job.stage].label}</StatusPill>
+        <span className="text-body-secondary">
+          {job.inspectionStatus ? INSPECTION[job.inspectionStatus] : 'No damage inspection yet'}
+          {job.bayEnteredAt && ` · in the bay since ${formatTime(job.bayEnteredAt)}`}
+        </span>
+      </div>
+    </Card>
+  );
+}
+
+/** The queue for a bay: checked-in vehicles waiting, first come first served (check-in order). */
+function Queue({ tick }: { tick: number }) {
+  const { data, error, loading, reload } = useApi<Page<JobListItem>>('/jobs', { scope: 'open', stage: 'waiting_for_bay', pageSize: 10, tick }, { refreshMs: 10_000 });
+  if (error && !data) return <Card icon="bi-hourglass-split" title="Queue for a bay"><ErrorState inline error={error} onRetry={reload} title="The queue couldn't be loaded" /></Card>;
+  if (loading || !data) return null;
+  return (
+    <Card icon="bi-hourglass-split" title="Queue for a bay" subtitle={data.totalCount === 0 ? undefined : 'When the camera sees a car drive into a free bay, it suggests the first vehicle here'}>
+      {data.totalCount === 0 ? (
+        <p className="small text-body-secondary mb-0">Nobody is waiting. Check vehicles in on Vehicles & jobs.</p>
+      ) : (
+        <ol className="as-queue">
+          {data.records.map((j, i) => (
+            <li key={j.jobId}>
+              <span className="as-queue-no">{i + 1}</span>
+              <span><b className="as-mono">{j.registrationNo}</b> · {j.vehicle}<span className="d-block small text-body-secondary">{j.service} · {j.jobNo} · waiting since {formatTime(j.checkedInAt)}</span></span>
+            </li>
+          ))}
+          {data.totalCount > data.records.length && <li className="small text-body-secondary">and {data.totalCount - data.records.length} more</li>}
+        </ol>
+      )}
+    </Card>
   );
 }

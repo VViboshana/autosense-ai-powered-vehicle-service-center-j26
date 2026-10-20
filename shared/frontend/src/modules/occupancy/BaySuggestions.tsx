@@ -18,7 +18,6 @@ import './occupancy.css';
  */
 const STAGE: Record<QueuedJob['stage'], string> = {
   waiting_for_bay: 'waiting for a bay',
-  inspected: 'inspected',
   checked_in: 'checked in',
 };
 

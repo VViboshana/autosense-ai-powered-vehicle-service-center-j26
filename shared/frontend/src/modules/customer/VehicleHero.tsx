@@ -12,9 +12,10 @@ function stageText(visit: Vehicle['visit']) {
   if (!visit) return 'Not at the service centre';
   switch (visit.stage) {
     case 'checked_in': return 'Checked in';
-    case 'inspected': return 'Inspected';
     case 'waiting_for_bay': return 'Waiting for a free bay';
     case 'in_bay': return `Being serviced${visit.bay ? ` in ${visit.bay}` : ''}`;
+    case 'inspecting': return `Damage inspection${visit.bay ? ` in ${visit.bay}` : ''}`;
+    case 'inspected': return 'Inspection done';
     case 'ready': return 'Ready for pickup';
     default: return STAGES[visit.stage].label;
   }

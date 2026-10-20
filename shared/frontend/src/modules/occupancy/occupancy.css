@@ -307,3 +307,29 @@
 .as-sugg-release {
   border-left-color: var(--as-success);
 }
+
+/* Bay monitor: the queue for a bay */
+.as-queue {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+.as-queue li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.as-queue-no {
+  display: inline-grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: var(--as-warning-soft);
+  color: var(--as-warning);
+  flex: none;
+}
