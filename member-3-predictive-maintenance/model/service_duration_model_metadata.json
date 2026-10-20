@@ -1,0 +1,31 @@
+{
+    "task": "service-duration-regression",
+    "target": "estimated_labor_hours",
+    "primary_model": {
+        "algorithm": "RandomForestRegressor",
+        "variant": "task_plus_cost",
+        "features": [
+            "fix_title",
+            "difficulty_level",
+            "probability_rank",
+            "parts_cost_mid_usd",
+            "parts_cost_range_usd"
+        ],
+        "cv_mean_mae_minutes": 13.976,
+        "cv_mean_rmse_minutes": 23.696,
+        "cv_mean_r2": 0.642
+    },
+    "fallback_model": {
+        "algorithm": "RandomForestRegressor",
+        "variant": "task_only",
+        "features": [
+            "fix_title",
+            "difficulty_level",
+            "probability_rank"
+        ],
+        "cv_mean_mae_minutes": 17.243,
+        "cv_mean_rmse_minutes": 28.665,
+        "cv_mean_r2": 0.554
+    },
+    "dataset_note": "MechanicDB benchmark uses estimated labor hours, not observed real-world workshop completion times."
+}
