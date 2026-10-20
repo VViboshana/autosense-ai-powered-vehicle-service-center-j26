@@ -67,8 +67,8 @@ def model_info() -> dict[str, object]:
         "task": "maintenance-category-classification",
         "primaryModel": "XGBoost",
         "variants": [
-            {"name": "basic", "available": bool(bundle and bundle.basic.available), "ready": bool(bundle and bundle.basic.ready)},
-            {"name": "enriched", "available": bool(bundle and bundle.enriched.available), "ready": bool(bundle and bundle.enriched.ready)},
+            {"name": "basic", "available": bool(bundle and bundle.basic.available), "ready": bool(bundle and bundle.basic.ready), "preprocessorReady": bool(bundle and bundle.basic.preprocessor)},
+            {"name": "enriched", "available": bool(bundle and bundle.enriched.available), "ready": bool(bundle and bundle.enriched.ready), "preprocessorReady": bool(bundle and bundle.enriched.preprocessor)},
         ],
         "classes": classes,
         "durationModel": _duration_model_info(bundle),

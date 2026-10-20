@@ -33,6 +33,9 @@ class Settings:
     enriched_json_model_filename: str = os.getenv(
         "AUTOSENSE_ENRICHED_JSON_MODEL_FILENAME", "maintenance_category_enriched_xgboost.json"
     )
+    enriched_preprocessor_filename: str = os.getenv(
+        "AUTOSENSE_ENRICHED_PREPROCESSOR_FILENAME", "maintenance_category_enriched_preprocessor.pkl"
+    )
 
     # Artifacts produced by the currently checked-in research notebook (03).
     legacy_model_filename: str = "maintenance_category_xgboost.pkl"

@@ -23,6 +23,7 @@ class VariantArtifacts:
     available: bool = False
     error: str | None = None
     preprocessing_error: str | None = None
+    preprocessor: Any | None = None
 
     @property
     def ready(self) -> bool:
@@ -77,23 +78,24 @@ def _load_variant(model_path: Path, encoder_path: Path) -> VariantArtifacts:
         return VariantArtifacts(error=f"artifact load failed: {type(exc).__name__}")
 
 
-def _load_json_variant(model_path: Path, encoder_path: Path) -> VariantArtifacts:
+def _load_json_variant(model_path: Path, encoder_path: Path, preprocessor_path: Path) -> VariantArtifacts:
     try:
-        if not model_path.is_file() or not encoder_path.is_file():
-            missing = [str(path.name) for path in (model_path, encoder_path) if not path.is_file()]
+        if not model_path.is_file() or not encoder_path.is_file() or not preprocessor_path.is_file():
+            missing = [str(path.name) for path in (model_path, encoder_path, preprocessor_path) if not path.is_file()]
             return VariantArtifacts(error=f"missing artifacts: {', '.join(missing)}")
         from xgboost import XGBClassifier
 
         model = XGBClassifier()
         model.load_model(model_path)
+        preprocessor = joblib.load(preprocessor_path)
+        feature_count = len(preprocessor.get_feature_names_out())
+        if feature_count != 169:
+            return VariantArtifacts(error=f"preprocessor produced {feature_count} features; expected 169")
         return VariantArtifacts(
             model=model,
+            preprocessor=preprocessor,
             encoder=joblib.load(encoder_path),
             available=True,
-            preprocessing_error=(
-                "portable JSON classifier loaded without the fitted ColumnTransformer/OneHotEncoder "
-                "required to transform the enriched raw fields into 169 model features"
-            ),
         )
     except Exception as exc:
         logger.exception("Unable to load portable predictive maintenance artifacts")
@@ -159,11 +161,12 @@ def load_models(config: Settings = settings) -> ModelBundle:
         config.model_dir / config.basic_encoder_filename,
     )
     enriched_json_path = config.model_dir / config.enriched_json_model_filename
+    enriched_preprocessor_path = config.model_dir / config.enriched_preprocessor_filename
     enriched_encoder_path = config.model_dir / config.enriched_encoder_filename
     if not enriched_encoder_path.is_file():
         enriched_encoder_path = config.model_dir / config.legacy_encoder_filename
     enriched = (
-        _load_json_variant(enriched_json_path, enriched_encoder_path)
+        _load_json_variant(enriched_json_path, enriched_encoder_path, enriched_preprocessor_path)
         if enriched_json_path.is_file()
         else _load_variant(*_paths_for_enriched(config))
     )
