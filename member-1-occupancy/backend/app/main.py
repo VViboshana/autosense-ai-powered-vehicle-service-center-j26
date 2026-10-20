@@ -6,6 +6,7 @@ AutoSense bay occupancy service (component 1). Called only by the AutoSense API,
   POST /video-jobs                 start processing a recorded video with the given bays and rules
   GET  /video-jobs/{id}            status, progress, current bay states, transitions (?since=n for new ones only)
   POST /video-jobs/{id}/cancel
+  GET  /video-jobs/{id}/frame      the latest analysed frame as a JPEG (?bay= one bay's surroundings), for live tiles
   GET  /snapshot?source=&at=       one JPEG frame of a video, for drawing bay outlines
 
 Bay outlines are normalised [[x, y], ...] (0..1), as stored in occupancy.bays.polygon.
@@ -27,7 +28,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from . import config, roi
+from . import config, liveview, roi
 from .association import associate
 from .detector import Detector
 from .jobs import Job, JobManager
@@ -40,7 +41,7 @@ state: dict = {}
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # Loaded once at startup, reused for every request
-    state['placeholder'] = not config.MODEL_PATH.exists()
+    state['placeholder'] = config.MODEL_CHOICE == 'pretrained' or not config.MODEL_PATH.exists()
     state['detector'] = Detector(config.COCO_MODEL_PATH if state['placeholder'] else config.MODEL_PATH)
     state['version'] = 'coco-yolo11s-placeholder' if state['placeholder'] else config.MODEL_VERSION
     state['mask'] = roi.mask_default(state['placeholder'])
@@ -99,6 +100,7 @@ class VideoJobIn(BaseModel):
     rules: RulesIn = RulesIn()
     sampleFps: float = Field(2.0, gt=0, le=15)
     mask: bool | None = Field(None, description='grey out outside the bays before detection; omitted = service default')
+    live: bool = Field(False, description='replay a recorded video as a live camera (real time, looping) until cancelled')
 
 
 def resolve_source(source: str) -> str:
@@ -162,8 +164,10 @@ def analyze(
 
 @app.post('/video-jobs', status_code=202)
 def create_video_job(body: VideoJobIn):
+    if body.live and body.source.startswith(('rtsp://', 'rtsps://')):
+        raise HTTPException(422, 'Live replay is for recorded videos; camera streams are not supported yet.')
     job = Job(body.jobId, resolve_source(body.source), [BayConfig(b.id, b.polygon) for b in body.bays],
-              body.rules.to_rules(), body.sampleFps, use_mask(body.mask))
+              body.rules.to_rules(), body.sampleFps, use_mask(body.mask), body.live)
     try:
         state['jobs'].submit(job)
     except ValueError as e:
@@ -184,6 +188,25 @@ def cancel_video_job(job_id: str):
     if job_id not in state['jobs'].jobs:
         raise HTTPException(404, 'No such video job.')
     return state['jobs'].cancel(job_id).view()
+
+
+@app.get('/video-jobs/{job_id}/frame')
+def video_job_frame(job_id: str, bay: str | None = Query(None, max_length=20),
+                    width: int = Query(480, ge=64, le=1280)):
+    job = state['jobs'].jobs.get(job_id)
+    if job is None:
+        raise HTTPException(404, 'No such video job.')
+    latest = job.get_latest()
+    if latest is None:
+        raise HTTPException(404, 'No picture yet: the job has not analysed a frame.')
+    frame, vehicles, t = latest
+    polygon = None
+    if bay is not None:
+        polygon = next((b.polygon for b in job.bays if b.bay_id == bay), None)
+        if polygon is None:
+            raise HTTPException(404, f'Bay {bay} is not part of this job.')
+    return Response(liveview.render(frame, vehicles, polygon, width), media_type='image/jpeg',
+                    headers={'X-Stream-Seconds': str(t), 'Cache-Control': 'no-store'})
 
 
 @app.get('/snapshot')

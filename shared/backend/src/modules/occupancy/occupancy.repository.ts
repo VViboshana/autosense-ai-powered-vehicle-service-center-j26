@@ -43,6 +43,8 @@ export type VideoJob = {
   modelVersion: string | null;
   /** Whether the service masked outside the bays (null = not reported, e.g. jobs from before migration 0010). */
   roiMask: boolean | null;
+  /** Replaying the video as a live camera until stopped (no end, no total frames). */
+  live: boolean;
   createdBy: string | null;
   createdAt: string;
   startedAt: string | null;
@@ -191,7 +193,7 @@ export async function bayEvents(db: Db, bayId: number, page: PageRequest): Promi
 const JOB_SELECT = `
   SELECT j.video_job_id AS "videoJobId", j.camera_id AS "cameraId", c.name AS "cameraName", j.source_path AS "sourcePath",
          j.sample_fps AS "sampleFps", j.status, j.frames_processed AS "framesProcessed", j.total_frames AS "totalFrames",
-         j.error, mv.version AS "modelVersion", j.roi_mask AS "roiMask", u.first_name || ' ' || u.last_name AS "createdBy", j.created_at AS "createdAt",
+         j.error, mv.version AS "modelVersion", j.roi_mask AS "roiMask", j.live, u.first_name || ' ' || u.last_name AS "createdBy", j.created_at AS "createdAt",
          j.started_at AS "startedAt", j.finished_at AS "finishedAt",
          (SELECT count(*) FROM occupancy.bay_state_events e WHERE e.video_job_id = j.video_job_id)::int AS transitions
   FROM occupancy.video_jobs j
@@ -213,14 +215,32 @@ export async function listVideoJobs(db: Db, page: PageRequest): Promise<Page<Vid
 
 export async function insertVideoJob(
   db: Db,
-  j: { cameraId: number; sourcePath: string; sampleFps: number; modelVersionId: number; userId: number },
+  j: { cameraId: number; sourcePath: string; sampleFps: number; modelVersionId: number; userId: number; live: boolean },
 ): Promise<number> {
   const { rows } = await db.query<{ id: number }>(
-    `INSERT INTO occupancy.video_jobs (camera_id, source_path, sample_fps, status, model_version_id, created_by)
-     VALUES ($1, $2, $3, 'queued', $4, $5) RETURNING video_job_id AS id`,
-    [j.cameraId, j.sourcePath, j.sampleFps, j.modelVersionId, j.userId],
+    `INSERT INTO occupancy.video_jobs (camera_id, source_path, sample_fps, status, model_version_id, created_by, live)
+     VALUES ($1, $2, $3, 'queued', $4, $5, $6) RETURNING video_job_id AS id`,
+    [j.cameraId, j.sourcePath, j.sampleFps, j.modelVersionId, j.userId, j.live],
   );
   return rows[0]!.id;
+}
+
+export type LiveCamera = { videoJobId: number; cameraId: number; cameraCode: string; cameraName: string; startedAt: string; bayIds: number[] };
+
+/** Cameras with a live job queued or running, and the bays it watches (active bays with an outline). */
+export async function liveCameras(db: Db): Promise<LiveCamera[]> {
+  const { rows } = await db.query<LiveCamera>(
+    `SELECT j.video_job_id AS "videoJobId", c.camera_id AS "cameraId", c.code AS "cameraCode", c.name AS "cameraName",
+            j.created_at AS "startedAt",
+            coalesce(array_agg(b.bay_id ORDER BY b.display_order, b.code) FILTER (WHERE b.bay_id IS NOT NULL), '{}') AS "bayIds"
+     FROM occupancy.video_jobs j
+     JOIN occupancy.cameras c ON c.camera_id = j.camera_id
+     LEFT JOIN occupancy.bays b ON b.camera_id = c.camera_id AND b.is_active AND b.polygon IS NOT NULL
+     WHERE j.live AND j.status IN ('queued', 'running')
+     GROUP BY j.video_job_id, c.camera_id
+     ORDER BY j.video_job_id`,
+  );
+  return rows;
 }
 
 /** What the service reported when it accepted the job: whether it masks outside the bays. */
@@ -317,6 +337,12 @@ export type QueuedJob = {
 
 /** A camera whose code starts with this shows test footage (e.g. TEST-PKL04, a PKLot time-lapse): never real vehicles. */
 export const TEST_CAMERA_PREFIX = 'TEST-';
+/** Test cameras whose bays may still hold jobs: the simulated service bays used for demos (Hashini's decision, 20/10/2026). */
+export const TEST_CAMERAS_WITH_JOBS = ['TEST-SIM'];
+
+/** Whether jobs may be linked to bays on this camera (any real camera, and the test cameras listed above). */
+export const cameraTakesJobs = (code: string | null | undefined) =>
+  !code || !code.startsWith(TEST_CAMERA_PREFIX) || TEST_CAMERAS_WITH_JOBS.includes(code);
 
 /**
  * Active bays the camera reports as occupied that have no job in them, longest occupied first. Bays on a test camera
@@ -328,12 +354,44 @@ export async function occupiedBaysWithoutJob(db: Db): Promise<UnlinkedBay[]> {
      FROM occupancy.bays b JOIN occupancy.bay_status s ON s.bay_id = b.bay_id
      LEFT JOIN occupancy.cameras c ON c.camera_id = b.camera_id
      WHERE b.is_active AND s.state = 'occupied'
-       AND (c.code IS NULL OR c.code NOT LIKE $1 || '%')
+       AND (c.code IS NULL OR c.code NOT LIKE $1 || '%' OR c.code = ANY($2::varchar[]))
        AND NOT EXISTS (SELECT 1 FROM workshop.jobs j WHERE j.bay_id = b.bay_id AND j.stage = 'in_bay')
      ORDER BY s.since NULLS LAST, b.display_order, b.code`,
-    [TEST_CAMERA_PREFIX],
+    [TEST_CAMERA_PREFIX, TEST_CAMERAS_WITH_JOBS],
   );
   return rows;
+}
+
+export type BayWithJob = UnlinkedBay & { jobId: number; jobNo: string; registrationNo: string; vehicle: string; bayEnteredAt: string | null };
+
+/**
+ * Bays the camera reports as free that still have a job in them: the vehicle has probably left (service finished).
+ * Only bays that turned free after the vehicle went in, so a bay that was free before the job was linked is not offered.
+ */
+export async function freeBaysWithJob(db: Db): Promise<BayWithJob[]> {
+  const { rows } = await db.query<BayWithJob>(
+    `SELECT b.bay_id AS "bayId", b.code, b.name, s.since, s.overlap, j.job_id AS "jobId", j.job_no AS "jobNo",
+            v.registration_no AS "registrationNo", v.make || ' ' || v.model AS vehicle, j.bay_entered_at AS "bayEnteredAt"
+     FROM occupancy.bays b
+     JOIN occupancy.bay_status s ON s.bay_id = b.bay_id
+     JOIN workshop.jobs j ON j.bay_id = b.bay_id AND j.stage = 'in_bay'
+     JOIN workshop.vehicles v ON v.vehicle_id = j.vehicle_id
+     WHERE b.is_active AND s.state = 'free' AND (j.bay_entered_at IS NULL OR s.since > j.bay_entered_at)
+     ORDER BY s.since, b.display_order, b.code`,
+  );
+  return rows;
+}
+
+/** The job's vehicle left the bay: stage ready (service done), with its stage history. False when it is not in that bay. */
+export async function markJobReady(db: Db, m: { jobId: number; bayId: number; userId: number; note: string }): Promise<boolean> {
+  const { rowCount } = await db.query(
+    `UPDATE workshop.jobs SET stage = 'ready', ready_at = now(), updated_at = now()
+     WHERE job_id = $1 AND bay_id = $2 AND stage = 'in_bay'`,
+    [m.jobId, m.bayId],
+  );
+  if (!rowCount) return false;
+  await db.query(`INSERT INTO workshop.job_stage_history (job_id, stage, user_id, note) VALUES ($1, 'ready', $2, $3)`, [m.jobId, m.userId, m.note]);
+  return true;
 }
 
 /** Open jobs not yet in a bay, in queue order: waiting for a bay first, then inspected, then checked in; oldest first. */

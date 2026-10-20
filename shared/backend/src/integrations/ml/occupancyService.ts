@@ -24,6 +24,8 @@ const job = z.object({
   error: z.string().nullable(),
   /** Frames greyed out outside the bays before detection; missing from service versions without masking. */
   roiMask: z.boolean().nullable().optional(),
+  /** Replaying a recorded video as a live camera; missing from older service versions. */
+  live: z.boolean().optional(),
   framesProcessed: z.number().int(),
   totalFrames: z.number().int().nullable(),
   streamSeconds: z.number(),
@@ -42,6 +44,7 @@ export type VideoJobRequest = {
   bays: { id: string; polygon: [number, number][] }[];
   rules: Record<string, number>;
   sampleFps: number;
+  live?: boolean;
 };
 
 const NOT_RESPONDING = 'The occupancy service is not responding. Try again in a moment.';
@@ -104,6 +107,17 @@ export async function fetchVideoJob(url: string | undefined, jobId: string, sinc
 export async function cancelVideoJob(url: string | undefined, jobId: string): Promise<void> {
   const res = await call(new URL(`/video-jobs/${encodeURIComponent(jobId)}/cancel`, base(url)).href, { method: 'POST' });
   if (!res.ok && res.status !== 404) throw new ServiceUnavailableError('OCCUPANCY_SERVICE_UNAVAILABLE', NOT_RESPONDING);
+}
+
+/** The latest analysed picture of a running job around one bay (JPEG), or null when there is none yet. */
+export async function fetchJobFrame(url: string | undefined, jobId: string, bayId: string, width = 480): Promise<Buffer | null> {
+  const u = new URL(`/video-jobs/${encodeURIComponent(jobId)}/frame`, base(url));
+  u.searchParams.set('bay', bayId);
+  u.searchParams.set('width', String(width));
+  const res = await call(u.href, { timeoutMs: 5000 });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new ServiceUnavailableError('OCCUPANCY_SERVICE_UNAVAILABLE', NOT_RESPONDING);
+  return Buffer.from(await res.arrayBuffer());
 }
 
 /** One JPEG frame of a camera's video, for drawing bay outlines. */

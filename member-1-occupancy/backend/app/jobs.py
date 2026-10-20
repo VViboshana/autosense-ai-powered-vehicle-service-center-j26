@@ -25,6 +25,7 @@ class Job:
     rules: Rules
     sample_fps: float
     mask: bool = False          # frames greyed out outside the bays before detection (roi.py)
+    live: bool = False          # replay the video as a live camera until cancelled (pipeline._sampled_frames)
     status: Status = 'queued'
     progress: Progress = field(default_factory=Progress)
     transitions: list[Transition] = field(default_factory=list)
@@ -33,11 +34,22 @@ class Job:
     started_at: float | None = None
     finished_at: float | None = None
     stop: threading.Event = field(default_factory=threading.Event)
+    # The latest analysed frame (before masking) and its vehicles, for the live bay pictures
+    latest: tuple | None = field(default=None, repr=False)
+    _latest_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    def set_latest(self, frame, vehicles, t: float) -> None:
+        with self._latest_lock:
+            self.latest = (frame, list(vehicles), t)
+
+    def get_latest(self) -> tuple | None:
+        with self._latest_lock:
+            return self.latest
 
     def view(self, since: int = 0) -> dict:
         """JSON for GET /video-jobs/{id}. `since` returns only transitions after that index (for polling)."""
         return {
-            'jobId': self.job_id, 'status': self.status, 'error': self.error, 'roiMask': self.mask,
+            'jobId': self.job_id, 'status': self.status, 'error': self.error, 'roiMask': self.mask, 'live': self.live,
             'framesProcessed': self.progress.frames_processed, 'totalFrames': self.progress.total_frames,
             'streamSeconds': self.progress.stream_s, 'bays': self.progress.states,
             'transitions': [_transition_json(t) for t in self.transitions[since:]],
@@ -79,8 +91,9 @@ class JobManager:
         try:
             def on_progress(p: Progress) -> None:
                 job.progress = p
-            process_video(job.source, job.bays, self.detector, job.rules, job.sample_fps, mask=job.mask,
-                          on_transition=job.transitions.append, on_progress=on_progress, stop=job.stop)
+            process_video(job.source, job.bays, self.detector, job.rules, job.sample_fps, mask=job.mask, live=job.live,
+                          on_transition=job.transitions.append, on_progress=on_progress, on_frame=job.set_latest,
+                          stop=job.stop)
             job.status = 'cancelled' if job.stop.is_set() else 'completed'
         except Exception as e:   # reported to the API; the service keeps running
             job.status, job.error = 'failed', str(e)[:500]

@@ -3,6 +3,7 @@ import { withTransaction } from '../../db/pool.js';
 import { BusinessRuleError, NotFoundError } from '../../http/errors.js';
 import {
   cancelVideoJob as cancelOnService,
+  fetchJobFrame,
   fetchVideoJob,
   occupancyModel,
   startVideoJob as startOnService,
@@ -27,13 +28,18 @@ export const serviceJobId = (videoJobId: number) => `VJ-${videoJobId}`;
  * then the service is asked to start. If the service refuses or is down, the job is marked failed with the reason
  * and the caller gets the error.
  */
-export async function startVideoJob(deps: OccupancyDeps, input: { cameraId: number; sampleFps?: number; userId: number }) {
+export async function startVideoJob(deps: OccupancyDeps, input: { cameraId: number; sampleFps?: number; live?: boolean; userId: number }) {
   const camera = await repo.getCamera(deps.pool, input.cameraId);
   if (!camera) throw new NotFoundError('That camera does not exist.');
   if (!camera.isActive) throw new BusinessRuleError('CAMERA_INACTIVE', 'This camera is switched off. Switch it on first.');
   if (!camera.sourceUrl) throw new BusinessRuleError('CAMERA_NO_SOURCE', 'Give this camera a video source first.');
   const bays = await repo.baysToWatch(deps.pool, camera.cameraId);
   if (bays.length === 0) throw new BusinessRuleError('NO_BAYS_DRAWN', 'Draw at least one bay outline on this camera first.');
+  // The service runs one job at a time and a live job never ends on its own: anything started after it would wait forever
+  const running = await repo.liveCameras(deps.pool);
+  if (running.length > 0) {
+    throw new BusinessRuleError('LIVE_CAMERA_RUNNING', `${running[0]!.cameraName} is running live. Stop it before processing another video.`);
+  }
 
   const model = await occupancyModel(deps.serviceUrl);
   const rules = await getSetting<OccupancyRules>(deps.pool, 'occupancy.rules', DEFAULT_RULES);
@@ -47,8 +53,9 @@ export async function startVideoJob(deps: OccupancyDeps, input: { cameraId: numb
       sampleFps,
       modelVersionId: await repo.modelVersionId(client, model.version, model.placeholder),
       userId: input.userId,
+      live: input.live ?? false,
     });
-    await audit(client, { table: 'occupancy.video_jobs', recordId: videoJobId, action: 'start', snapshot: { cameraId: camera.cameraId, sampleFps }, userId: input.userId });
+    await audit(client, { table: 'occupancy.video_jobs', recordId: videoJobId, action: 'start', snapshot: { cameraId: camera.cameraId, sampleFps, live: input.live ?? false }, userId: input.userId });
     return videoJobId;
   });
 
@@ -60,6 +67,7 @@ export async function startVideoJob(deps: OccupancyDeps, input: { cameraId: numb
       bays: bays.map((b) => ({ id: String(b.bayId), polygon: b.polygon })),
       rules: stateRules,
       sampleFps,
+      live: input.live ?? false,
     });
   } catch (err) {
     await repo.updateVideoJob(deps.pool, id, { status: 'failed', framesProcessed: 0, totalFrames: null, error: err instanceof Error ? err.message.slice(0, 500) : 'Could not start.' });
@@ -68,6 +76,15 @@ export async function startVideoJob(deps: OccupancyDeps, input: { cameraId: numb
   // The service decides masking from its model (OCC_ROI_MASK); store what it reported so results can be interpreted
   await repo.setVideoJobMask(deps.pool, id, started.roiMask ?? null);
   return id;
+}
+
+/** The latest picture around a bay from its camera's live job, or null when the camera is not live or has no picture yet. */
+export async function liveBayPicture(deps: OccupancyDeps, bayId: number): Promise<Buffer | null> {
+  const bay = await repo.getBay(deps.pool, bayId);
+  if (!bay) throw new NotFoundError('Bay not found.');
+  const live = (await repo.liveCameras(deps.pool)).find((c) => c.cameraId === bay.cameraId && c.bayIds.includes(bayId));
+  if (!live) return null;
+  return fetchJobFrame(deps.serviceUrl, serviceJobId(live.videoJobId), String(bayId));
 }
 
 export async function cancelVideoJob(deps: OccupancyDeps, videoJobId: number, userId: number) {
@@ -139,8 +156,25 @@ export function pairBaysWithQueue(bays: repo.UnlinkedBay[], queue: repo.QueuedJo
 }
 
 export async function baySuggestions(pool: pg.Pool) {
-  const [bays, queue] = await Promise.all([repo.occupiedBaysWithoutJob(pool), repo.jobsReadyForBay(pool)]);
-  return { suggestions: pairBaysWithQueue(bays, queue), queue };
+  const [bays, queue, releases] = await Promise.all([repo.occupiedBaysWithoutJob(pool), repo.jobsReadyForBay(pool), repo.freeBaysWithJob(pool)]);
+  return { suggestions: pairBaysWithQueue(bays, queue), queue, releases };
+}
+
+/** Staff confirmed that the vehicle left the bay (the camera saw it free): the job moves to ready and frees the bay. */
+export async function confirmJobLeftBay(pool: pg.Pool, input: { bayId: number; jobId: number; userId: number }) {
+  return withTransaction(pool, async (client) => {
+    await repo.lockBay(client, input.bayId);
+    const bay = await repo.getBay(client, input.bayId);
+    if (!bay) throw new NotFoundError('That bay does not exist.');
+    const moved = await repo.markJobReady(client, {
+      jobId: input.jobId,
+      bayId: input.bayId,
+      userId: input.userId,
+      note: `Confirmed on the Bay monitor: the camera saw ${bay.name} free`,
+    });
+    if (!moved) throw new BusinessRuleError('JOB_NOT_IN_BAY', 'That job is no longer in this bay. Refresh to see the current state.');
+    await audit(client, { table: 'workshop.jobs', recordId: input.jobId, action: 'mark_ready', snapshot: { bayId: input.bayId, source: 'occupancy_suggestion' }, userId: input.userId });
+  });
 }
 
 /** Staff confirmed that this job's vehicle is the one in the bay: the job moves to in_bay. */
@@ -151,8 +185,8 @@ export async function confirmJobInBay(pool: pg.Pool, input: { bayId: number; job
     const bay = await repo.getBay(client, input.bayId);
     if (!bay || !bay.isActive) throw new NotFoundError('That bay does not exist or is switched off.');
     const camera = bay.cameraId ? await repo.getCamera(client, bay.cameraId) : null;
-    if (camera?.code.startsWith(repo.TEST_CAMERA_PREFIX)) {
-      throw new BusinessRuleError('TEST_BAY', `${bay.name} is on a test camera (${camera.code}); real vehicles cannot be put in it.`);
+    if (!repo.cameraTakesJobs(camera?.code)) {
+      throw new BusinessRuleError('TEST_BAY', `${bay.name} is on a test camera (${camera!.code}); jobs cannot be put in it.`);
     }
     if (await repo.bayHasJob(client, input.bayId)) {
       throw new BusinessRuleError('BAY_HAS_JOB', `${bay.name} already has a vehicle linked to it. Refresh to see it.`);

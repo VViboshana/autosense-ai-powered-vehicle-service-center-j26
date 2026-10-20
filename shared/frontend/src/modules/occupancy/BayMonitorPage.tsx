@@ -8,13 +8,16 @@ import { useApi } from '@/lib/useApi';
 import type { BayBoardData, BayCard } from '@/modules/dashboard/dashboard.types';
 import { BayHistory } from './BayHistory';
 import { BaySuggestions } from './BaySuggestions';
+import { LiveBayPicture } from './LiveBayPicture';
+import type { LiveCamera } from './occupancy.types';
 
 /**
  * Service floor › Bay monitor (screen BAY_MONITOR, component 1: bay occupancy).
  * Live state of every service bay, refreshed every 15 seconds from GET /api/dashboard/bays.
  * Bay states come from the occupancy service: free, occupied, or uncertain (shown as "Confirming").
  * Pick a bay to see its history of confirmed changes below (BayHistory). When the camera sees a bay occupied with no
- * job in it, BaySuggestions proposes the waiting vehicle for staff to confirm.
+ * job in it, BaySuggestions proposes the waiting vehicle for staff to confirm. Bays whose camera is live show their
+ * live picture, and the board then refreshes every 3 seconds instead of 15.
  */
 const STATE = {
   occupied: { label: 'Occupied', tone: 'brand' },
@@ -23,7 +26,7 @@ const STATE = {
   unknown: { label: 'No reading', tone: 'muted' },
 } as const;
 
-function BayTile({ bay, selected, onSelect }: { bay: BayCard; selected: boolean; onSelect: () => void }) {
+function BayTile({ bay, live, selected, onSelect }: { bay: BayCard; live: boolean; selected: boolean; onSelect: () => void }) {
   const state = STATE[bay.state];
   const inBay = bay.job?.bayEnteredAt ? minutesSince(bay.job.bayEnteredAt) : null;
   const forecast = bay.job?.estimatedMinutes ?? null;
@@ -39,6 +42,8 @@ function BayTile({ bay, selected, onSelect }: { bay: BayCard; selected: boolean;
         <span className="as-bay-name">{bay.name}</span>
         <StatusPill tone={state.tone}>{state.label}</StatusPill>
       </div>
+
+      {live && <LiveBayPicture bayId={bay.bayId} label={bay.name} />}
 
       {bay.job ? (
         <div>
@@ -71,7 +76,9 @@ function BayTile({ bay, selected, onSelect }: { bay: BayCard; selected: boolean;
 }
 
 export function BayMonitorPage() {
-  const { data, error, loading, reload } = useApi<BayBoardData>('/dashboard/bays', undefined, { refreshMs: 15_000 });
+  const live = useApi<LiveCamera[]>('/occupancy/live', undefined, { refreshMs: 10_000 });
+  const liveBays = new Set(live.data?.flatMap((c) => c.bayIds) ?? []);
+  const { data, error, loading, reload } = useApi<BayBoardData>('/dashboard/bays', undefined, { refreshMs: liveBays.size > 0 ? 3_000 : 15_000 });
 
   const count = (s: BayCard['state']) => data?.bays.filter((b) => b.state === s).length ?? 0;
   const camera = data?.camera;
@@ -129,7 +136,12 @@ export function BayMonitorPage() {
 
             <BaySuggestions onConfirmed={reload} />
 
-            <Card icon="bi-p-square" title="Bays now" labelledBy="bays-now" subtitle="Refreshes every 15 seconds · pick a bay to see its history">
+            <Card
+              icon="bi-p-square"
+              title="Bays now"
+              labelledBy="bays-now"
+              subtitle={`${liveBays.size > 0 ? `Live: ${live.data!.map((c) => c.cameraName).join(', ')} · refreshes every 3 seconds` : 'Refreshes every 15 seconds'} · pick a bay to see its history`}
+            >
               {error && !data ? (
                 <ErrorState inline error={error} onRetry={reload} title="Bays couldn't be loaded" />
               ) : loading || !data ? (
@@ -149,7 +161,7 @@ export function BayMonitorPage() {
               ) : (
                 <div className="as-bays">
                   {data.bays.map((bay) => (
-                    <BayTile key={bay.bayId} bay={bay} selected={bay.bayId === selected?.bayId} onSelect={() => setPicked(bay.bayId)} />
+                    <BayTile key={bay.bayId} bay={bay} live={liveBays.has(bay.bayId)} selected={bay.bayId === selected?.bayId} onSelect={() => setPicked(bay.bayId)} />
                   ))}
                 </div>
               )}

@@ -34,7 +34,8 @@ Interactive docs: http://localhost:8002/docs. The AutoSense API finds it through
 `"placeholder": true`.
 
 Settings (environment variables): `OCC_MODEL_PATH`, `OCC_MODEL_VERSION`, `OCC_IMGSZ` (1280), `OCC_CONFIDENCE`
-(0.25), `OCC_VIDEO_DIR` (videos/), `OCC_ROI_MASK` (auto | on | off), `OCC_ROI_MARGIN_PX` (12). Occupancy rules come from the API with each video job (setting
+(0.25), `OCC_VIDEO_DIR` (videos/), `OCC_ROI_MASK` (auto | on | off), `OCC_ROI_MARGIN_PX` (12), `OCC_MODEL` (auto |
+pretrained: force the COCO model, reported as not fine-tuned). Occupancy rules come from the API with each video job (setting
 `occupancy.rules`): `overlapThreshold`, `releaseThreshold`, `confirmOccupiedSeconds`, `confirmFreeSeconds`,
 `toleranceSeconds`, `minSupport`, `staleAfterSeconds`.
 
@@ -71,10 +72,24 @@ no frames, only bay states (through the API). NFR-11 (blurring retained footage)
 
 ## Test data on the shared database
 Camera `TEST-PKL04` (the PKLot UFPR04 time-lapse) and its bays `T06`-`T27` are test data, named "[TEST] ...". A camera
-whose code starts with `TEST-` is never used for camera suggestions, and its bays cannot be linked to real jobs.
+whose code starts with `TEST-` is never used for camera suggestions, and its bays cannot be linked to jobs, except
+`TEST-SIM` (Hashini's decision, 20/10/2026; see below).
 They stay on for the PP1 demo; afterwards switch them off (nothing is deleted, their history is evaluation evidence):
 ```powershell
 node member-1-occupancy/scripts/test_data.mjs status    # or: label | off | on
+```
+
+### Simulated service bays (demo only)
+`TEST-SIM` ("[TEST] Simulated service bays (AI-generated)", bays `SIM1`-`SIM6`) plays AI-generated service-bay clips
+composed by `eval/simulate_bays.py` (each panel stamped "SIMULATED"). **Demo footage only, never evaluation data.**
+The fine-tuned model does not detect cars at this closer view (0 % of parked frames in the clip check), so the
+service runs the pretrained model for it: start it with `OCC_MODEL=pretrained` (shown as "Not fine-tuned").
+Its bays may hold jobs: when a car arrives, the Bay monitor suggests the next waiting vehicle; when a bay with a job
+turns free, it asks whether the vehicle left (job -> ready). Staff confirm both.
+```powershell
+.venv\Scripts\python eval\simulate_bays.py check   --clip <bay1.mp4> --weights model\yolo11s.pt model\best.pt
+.venv\Scripts\python eval\simulate_bays.py compose --clips <bay1.mp4> ... <bay6.mp4> --weights model\yolo11s.pt --out videos\sim-service-bays.mp4
+node member-1-occupancy/scripts/test_data.mjs sim member-1-occupancy/videos/sim-service-bays.bays.json   # from the repo root
 ```
 
 ## Set up (once)

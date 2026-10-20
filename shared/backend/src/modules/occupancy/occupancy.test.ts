@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchVideoJob, occupancyModel, startVideoJob } from '../../integrations/ml/occupancyService.js';
+import { fetchJobFrame, fetchVideoJob, occupancyModel, startVideoJob } from '../../integrations/ml/occupancyService.js';
 import { area, bayBody, cameraBody, confirmBayBody, polygonSchema, rulesBody, sourceSchema } from './occupancy.routes.js';
 import { pairBaysWithQueue, serviceJobId, transitionRows } from './occupancy.service.js';
 
@@ -105,6 +105,15 @@ describe('occupancy service client', () => {
     expect((await startVideoJob('http://svc:8002', request)).roiMask).toBeUndefined();
   });
 
+  it("fetches a live bay picture, and reports 'no picture yet' as null", async () => {
+    const fetch = vi.fn(async () => new Response(new Uint8Array([0xff, 0xd8, 0xff]), { status: 200, headers: { 'content-type': 'image/jpeg' } }));
+    vi.stubGlobal('fetch', fetch);
+    expect((await fetchJobFrame('http://svc:8002', 'VJ-3', '25'))?.length).toBe(3);
+    expect(String((fetch.mock.calls[0] as unknown[])[0])).toBe('http://svc:8002/video-jobs/VJ-3/frame?bay=25&width=480');
+    vi.stubGlobal('fetch', reply(404, { detail: 'No picture yet' }));
+    expect(await fetchJobFrame('http://svc:8002', 'VJ-3', '25')).toBeNull();
+  });
+
   it('reports the model and its masking default, for the settings screen', async () => {
     const model = { version: 'pklot_yolo11s_1280', placeholder: false, imgsz: 1280, roiMask: { setting: 'auto', default: true, marginPx: 12 } };
     vi.stubGlobal('fetch', reply(200, { status: 'up', model, jobsRunning: 0 }));
@@ -140,5 +149,15 @@ describe('suggesting which waiting vehicle is in an occupied bay', () => {
     const r = confirmBayBody.safeParse({ bayId: 3 });
     expect(r.success).toBe(false);
     expect(r.error!.issues[0]!.message).toBe('Pick the vehicle that is in the bay.');
+  });
+});
+
+describe('which cameras may have jobs in their bays', () => {
+  it('allows real cameras and the simulated demo camera, not other test cameras', async () => {
+    const { cameraTakesJobs } = await import('./occupancy.repository.js');
+    expect(cameraTakesJobs('CAM-A')).toBe(true);
+    expect(cameraTakesJobs(null)).toBe(true);
+    expect(cameraTakesJobs('TEST-SIM')).toBe(true);
+    expect(cameraTakesJobs('TEST-PKL04')).toBe(false);
   });
 });

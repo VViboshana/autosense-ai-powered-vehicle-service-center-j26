@@ -9,6 +9,12 @@ MODEL_DIR = COMPONENT_DIR / 'model'
 MODEL_PATH = Path(os.getenv('OCC_MODEL_PATH', MODEL_DIR / 'best.pt'))
 MODEL_VERSION = os.getenv('OCC_MODEL_VERSION', 'pklot_yolo11s_1280')
 COCO_MODEL_PATH = MODEL_DIR / 'yolo11s.pt'
+# Which model to run: auto = the fine-tuned one if model/best.pt exists, else the pretrained COCO model;
+# pretrained = always the COCO model (e.g. for simulated close-up footage, where the fine-tuned model fails).
+# The pretrained model is always reported as a placeholder ("not fine-tuned").
+MODEL_CHOICE = os.getenv('OCC_MODEL', 'auto').strip().lower()
+if MODEL_CHOICE not in ('auto', 'pretrained'):
+    raise ValueError(f'OCC_MODEL must be auto or pretrained (got {MODEL_CHOICE!r}).')
 
 IMGSZ = int(os.getenv('OCC_IMGSZ', '1280'))                 # must match the training imgsz
 CONFIDENCE = float(os.getenv('OCC_CONFIDENCE', '0.25'))     # detections below this are ignored

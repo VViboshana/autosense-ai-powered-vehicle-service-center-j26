@@ -9,7 +9,7 @@ import { audit } from '../../lib/audit.js';
 import { clearSettingsCache, getSetting } from '../../lib/settings.js';
 import { requireScreen, signedInUser } from '../../middleware/requireScreen.js';
 import * as repo from './occupancy.repository.js';
-import { baySuggestions, cancelVideoJob, confirmJobInBay, DEFAULT_RULES, startVideoJob, type OccupancyDeps, type OccupancyRules } from './occupancy.service.js';
+import { baySuggestions, cancelVideoJob, confirmJobInBay, confirmJobLeftBay, DEFAULT_RULES, liveBayPicture, startVideoJob, type OccupancyDeps, type OccupancyRules } from './occupancy.service.js';
 
 const VIEW = ['BAY_MONITOR', 'BAYS_CAMERAS', 'OCCUPANCY_SETTINGS'] as const;
 const SETUP = 'BAYS_CAMERAS';
@@ -93,7 +93,7 @@ export const confirmBayBody = z.object({
   bayId: z.number({ error: 'Pick a bay.' }).int().positive(),
   jobId: z.number({ error: 'Pick the vehicle that is in the bay.' }).int().positive(),
 });
-const jobBody = z.object({ cameraId: z.number().int().positive(), sampleFps: z.number().gt(0).max(15).optional() });
+const jobBody = z.object({ cameraId: z.number().int().positive(), sampleFps: z.number().gt(0).max(15).optional(), live: z.boolean().optional() });
 
 /**
  * Bay occupancy (component 1): cameras, bay outlines, video jobs and bay history. The occupancy service does the
@@ -105,12 +105,15 @@ const jobBody = z.object({ cameraId: z.number().int().positive(), sampleFps: z.n
  *   GET   /api/occupancy/bays?cameraId=            list with current state
  *   POST  /api/occupancy/bays                      add            PATCH /api/occupancy/bays/:id      change (incl. outline)
  *   GET   /api/occupancy/bays/:id/events           history of confirmed changes (paged)
+ *   GET   /api/occupancy/bays/:id/live.jpg         latest live picture around the bay (JPEG; 404 when not live)
+ *   GET   /api/occupancy/live                      cameras running live, with their bays
  *   GET   /api/occupancy/video-jobs                list (paged)   GET /api/occupancy/video-jobs/:id  one
  *   POST  /api/occupancy/video-jobs                process the camera's video   POST /api/occupancy/video-jobs/:id/cancel
  *   GET   /api/occupancy/rules                     PUT /api/occupancy/rules (setting occupancy.rules)
  *   GET   /api/occupancy/service                   the model the occupancy service runs, and whether it masks frames
  *   GET   /api/occupancy/bay-suggestions           occupied bays without a job, each with the next vehicle in the queue
  *   POST  /api/occupancy/bay-suggestions/confirm   staff confirm which vehicle is in the bay: the job moves to in_bay
+ *   POST  /api/occupancy/bay-suggestions/release   staff confirm the vehicle left a bay the camera sees free: job -> ready
  */
 export function occupancyRoutes(deps: OccupancyDeps) {
   const router = Router();
@@ -191,6 +194,20 @@ export function occupancyRoutes(deps: OccupancyDeps) {
     sendOk(res, await repo.bayEvents(pool, id, parse(pageQuery, req.query)));
   });
 
+  // ---- live cameras (a recorded video replayed as a live camera) and their bay pictures
+  router.get('/live', requireScreen(...VIEW), async (_req, res) => {
+    sendOk(res, await repo.liveCameras(pool));
+  });
+
+  router.get('/bays/:id/live.jpg', requireScreen(...VIEW), async (req, res) => {
+    const { id } = parse(idParam, req.params);
+    const jpeg = await liveBayPicture(deps, id);
+    if (!jpeg) throw new NotFoundError('No live picture for this bay right now.');
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.send(jpeg);
+  });
+
   // ---- video jobs
   router.get('/video-jobs', requireScreen(...VIEW), async (req, res) => {
     sendOk(res, await repo.listVideoJobs(pool, parse(pageQuery, req.query)));
@@ -236,6 +253,13 @@ export function occupancyRoutes(deps: OccupancyDeps) {
     const me = signedInUser(req);
     const body = parse(confirmBayBody, req.body);
     await confirmJobInBay(pool, { ...body, userId: me.userId });
+    sendOk(res, await baySuggestions(pool));
+  });
+
+  router.post('/bay-suggestions/release', requireScreen('BAY_JOB_CONFIRM'), async (req, res) => {
+    const me = signedInUser(req);
+    const body = parse(confirmBayBody, req.body);
+    await confirmJobLeftBay(pool, { ...body, userId: me.userId });
     sendOk(res, await baySuggestions(pool));
   });
 

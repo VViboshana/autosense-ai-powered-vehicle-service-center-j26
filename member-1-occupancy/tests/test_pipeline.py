@@ -100,3 +100,23 @@ def test_unreadable_source_is_reported(tmp_path):
 def test_read_frame_returns_the_requested_moment(tmp_path):
     video = make_video(tmp_path / 'snap.avi', 4, lambda t: 85 if t >= 2 else None)
     assert read_frame(video, 0.0).max() < 50 and read_frame(video, 3.0).max() > 200
+
+
+def test_live_replay_runs_in_real_time_and_loops_until_stopped(tmp_path):
+    import threading
+    video = make_video(tmp_path / 'live.avi', 1, lambda t: 85)     # 1 s long, car always in B1
+    stop, frames = threading.Event(), []
+    threading.Timer(2.6, stop.set).start()
+    progress = process_video(video, [BAY], BlobDetector(), Rules(), sample_fps=4, live=True, stop=stop,
+                             on_frame=lambda f, v, t: frames.append((t, len(v))))
+    times = [t for t, _ in frames]
+    assert progress.total_frames is None                     # live: no end
+    assert times == sorted(times) and 2.0 <= times[-1] < 2.8   # wall-clock time, kept going past the 1 s video
+    assert 6 <= len(frames) <= 12                            # paced to about 4 samples per second
+    assert all(n == 1 for _, n in frames)                    # the car is seen in every loop
+    assert progress.states['B1']['state'] == 'uncertain'     # 3 s confirmation not reached in 2.6 s
+
+
+def test_live_replay_needs_a_recorded_video(tmp_path):
+    with pytest.raises(ValueError):
+        process_video(str(tmp_path / 'missing.mp4'), [BAY], BlobDetector(), live=True)

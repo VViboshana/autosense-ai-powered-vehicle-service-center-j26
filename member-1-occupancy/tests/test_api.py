@@ -116,3 +116,37 @@ def test_invalid_rules_are_rejected(client):
 def test_snapshot_returns_a_jpeg_frame(client):
     r = client.get('/snapshot', params={'source': 'park.avi', 'at': 3})
     assert r.status_code == 200 and r.headers['content-type'] == 'image/jpeg' and r.headers['x-frame-width'] == '320'
+
+
+def test_live_job_serves_the_latest_picture_of_each_bay(client):
+    body = {'jobId': 'L1', 'source': 'park.avi', 'bays': [{'id': 'B1', 'polygon': BAY.polygon}], 'live': True}
+    job = client.post('/video-jobs', json=body).json()
+    assert job['live'] is True and job['totalFrames'] is None
+    for _ in range(100):
+        r = client.get('/video-jobs/L1/frame', params={'bay': 'B1', 'width': 200})
+        if r.status_code == 200:
+            break
+        time.sleep(0.05)
+    assert r.status_code == 200 and r.headers['content-type'] == 'image/jpeg' and r.headers['cache-control'] == 'no-store'
+    assert client.get('/video-jobs/L1/frame', params={'bay': 'B9'}).status_code == 404
+    assert client.get('/video-jobs/L1').json()['status'] == 'running'     # a live job keeps going
+    client.post('/video-jobs/L1/cancel')
+    for _ in range(100):
+        if client.get('/video-jobs/L1').json()['status'] == 'cancelled':
+            break
+        time.sleep(0.05)
+    assert client.get('/video-jobs/L1').json()['status'] == 'cancelled'
+
+
+def test_live_replay_is_refused_for_camera_streams(client):
+    body = {'jobId': 'L2', 'source': 'rtsp://cam/1', 'bays': [{'id': 'B1', 'polygon': BAY.polygon}], 'live': True}
+    assert client.post('/video-jobs', json=body).status_code == 422
+
+
+def test_pretrained_model_can_be_forced_and_is_reported_as_not_fine_tuned(tmp_path, monkeypatch):
+    monkeypatch.setattr(main, 'Detector', FakeDetector)
+    monkeypatch.setattr(config, 'MODEL_CHOICE', 'pretrained')
+    with TestClient(main.app) as c:
+        model = c.get('/health').json()['model']
+    assert model['placeholder'] is True and model['version'] == 'coco-yolo11s-placeholder'
+    assert model['roiMask']['default'] is (config.ROI_MASK == 'on')    # auto masking is off for the pretrained model
