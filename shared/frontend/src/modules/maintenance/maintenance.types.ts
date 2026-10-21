@@ -42,7 +42,13 @@ export type MaintenanceForecast = {
   engineConditionReason?: string;
   categoryScores: { label: string; score: number }[];
   durationMinutes?: number;
-  durationStatus?: 'model_pending' | string;
+  durationHours?: number;
+  durationStatus?: 'awaiting_task_selection' | 'evaluated' | string;
+  durationVariant?: string;
+  durationBenchmark?: boolean;
+  durationTargetType?: string;
+  candidateTasks?: MaintenanceTask[];
+  taskSelection?: { status: string; required: boolean };
   assessmentType?: 'basic' | 'enriched';
   dataMode?: 'sample' | 'live';
   model?: { task: string; algorithm: string; variant: 'basic' | 'enriched' };
@@ -60,14 +66,68 @@ export type MaintenanceForecastRequest = {
   inspection?: { linked: boolean; inspectionId?: string };
 };
 
+export type MaintenanceTask = {
+  fixTitle: string;
+  difficultyLevel: string;
+  probabilityRank: number;
+  partsCostMinUsd?: number | null;
+  partsCostMaxUsd?: number | null;
+};
+
+export type MaintenanceHealth = {
+  status: string;
+  service?: string;
+  modelsLoaded: boolean;
+  categoryModel?: string;
+  durationPrimaryModel?: string;
+  durationFallbackModel?: string;
+  taskCatalogue?: string;
+};
+
+export type MaintenanceModelInfo = {
+  service: string;
+  task: string;
+  primaryModel: string;
+  variants: { name: string; available: boolean; ready?: boolean; preprocessorReady?: boolean }[];
+  classes: string[];
+  durationModel: string | {
+    status: string;
+    algorithm: string;
+    primaryVariant: string;
+    fallbackVariant: string;
+    targetType: string;
+    benchmark: boolean;
+    primaryCvMetrics?: Record<string, number>;
+    fallbackCvMetrics?: Record<string, number>;
+  };
+  taskCatalogue?: { status: string; supportedCategories: string[] };
+};
+
 export type MaintenanceForecastResponse = {
   assessmentType: 'basic' | 'enriched';
   maintenanceCategory: { predicted: string; modelScore: number; scores: Record<string, number> };
   maintenanceRequired: { status: string; reason?: string | null; value?: null };
   engineCondition: { status: string; reason?: string | null; label?: string | null };
-  duration: { status: string; minutes?: number | null };
+  duration: { status: string; minutes?: number | null; estimatedHours?: number | null; estimatedMinutes?: number | null };
+  taskSelection: { status: string; required: boolean; candidateTasks: MaintenanceTask[] };
   informationSources: Record<string, boolean>;
   model: { task: string; algorithm: string; variant: 'basic' | 'enriched' };
+};
+
+export type MaintenanceTaskListResponse = {
+  category: string;
+  count: number;
+  taskSelectionRequired: boolean;
+  candidateTasks: MaintenanceTask[];
+};
+
+export type MaintenanceDurationResponse = {
+  status: 'evaluated';
+  task: { fixTitle: string; category: string; difficultyLevel: string; probabilityRank: number };
+  duration: { estimatedHours: number; estimatedMinutes: number };
+  model: { algorithm: string; variant: string };
+  benchmark: boolean;
+  targetType: string;
 };
 
 export type ForecastDraft = {
@@ -86,6 +146,9 @@ export type ForecastDraft = {
   technicianDiagnosis: string;
   engineCondition: string;
   technicianNotes: string;
+  serviceHistoryAvailable: boolean;
+  serviceHistorySummary: string;
+  inspectionId: string;
   brakeCondition: Condition;
   batteryCondition: Condition;
   tireCondition: Condition;

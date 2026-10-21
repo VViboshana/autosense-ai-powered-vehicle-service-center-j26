@@ -1,0 +1,175 @@
+fix_title,final_category,difficulty_level,probability_rank,est_parts_cost_min_usd,est_parts_cost_max_usd,parts_cost_mid_usd,parts_cost_range_usd
+Address oil or coolant consumption poisoning the catalyst,Engine,Professional Required,4.0,100.0,900.0,500.0,800.0
+Adjust brake pedal switch plunger clearance,Brakes,Easy DIY,1.0,3.0,15.0,9.0,12.0
+Adjust transmission range sensor,Transmission,Moderate DIY,1.0,15.0,40.0,27.5,25.0
+Change engine oil and filter to spec viscosity,Engine,Easy DIY,1.0,25.0,60.0,42.5,35.0
+Check HV battery state of charge,Battery,Professional Required,1.0,5.0,40.0,22.5,35.0
+Check coolant level and inspect for external leaks,Engine,Easy DIY,1.0,10.0,40.0,25.0,30.0
+Check engine oil level and condition,Engine,Easy DIY,1.0,20.0,45.0,32.5,25.0
+"Check for a missing, damaged, or off-track fuel filler cap",Engine,Easy DIY,1.0,5.0,25.0,15.0,20.0
+Check the module's dedicated fuse and battery/ground connections,Battery,Easy DIY,1.0,8.0,25.0,16.5,17.0
+Check transmission fluid level and condition,Transmission,Easy DIY,1.0,10.0,40.0,25.0,30.0
+Check transmission fluid level and filter condition,Transmission,Easy DIY,1.0,20.0,80.0,50.0,60.0
+Clean MAF sensor and inspect for false-high airflow readings,Engine,Easy DIY,1.0,8.0,25.0,16.5,17.0
+Clean and reseat corroded throttle body connector,Engine,Easy DIY,4.0,8.0,20.0,14.0,12.0
+Clean or replace a damaged reluctor wheel/tone ring,Unmapped,Professional Required,4.0,40.0,300.0,170.0,260.0
+Clean or replace a restricted charcoal canister,Unmapped,Moderate DIY,3.0,60.0,220.0,140.0,160.0
+Clean the EGR valve and passages of carbon buildup,Unmapped,Moderate DIY,1.0,20.0,80.0,50.0,60.0
+Clean the VTEC oil strainer and test the spool valve solenoid,Engine,Moderate DIY,3.0,30.0,100.0,65.0,70.0
+Clean throttle body and IAC passage,Engine,Easy DIY,1.0,8.0,20.0,14.0,12.0
+Clean throttle body and check MAF/MAP sensor readings,Engine,Easy DIY,2.0,15.0,50.0,32.5,35.0
+Clean throttle bore and plate of carbon buildup,Engine,Easy DIY,1.0,10.0,25.0,17.5,15.0
+Clean tone ring and inspect sensor air gap,Electrical,Easy DIY,1.0,5.0,15.0,10.0,10.0
+Clear debris from the barometric sensor sampling port,Electrical,Easy DIY,1.0,5.0,15.0,10.0,10.0
+Clear debris or ice blocking the vent valve,Unmapped,Easy DIY,3.0,5.0,20.0,12.5,15.0
+Command the TCC solenoid with a scan-tool actuator test,Unmapped,Moderate DIY,2.0,10.0,25.0,17.5,15.0
+Command the named shift solenoid with a scan-tool actuator test,Transmission,Moderate DIY,2.0,10.0,25.0,17.5,15.0
+Complete the manufacturer drive cycle,Unmapped,Easy DIY,1.0,1.0,5.0,3.0,4.0
+Correct an underlying rich/lean fuel condition first,Engine,Moderate DIY,2.0,15.0,100.0,57.5,85.0
+Correct timing chain/belt installation,Engine,Professional Required,4.0,150.0,900.0,525.0,750.0
+Diagnose IAC circuit wiring at the ECM,Electrical,Professional Required,4.0,10.0,45.0,27.5,35.0
+Diagnose a monitor that never completes,Unmapped,Professional Required,3.0,10.0,60.0,35.0,50.0
+Diagnose and repair VSS harness wiring,Transmission,Professional Required,4.0,15.0,60.0,37.5,45.0
+Diagnose fuel delivery imbalance affecting one bank,Engine,Professional Required,3.0,40.0,250.0,145.0,210.0
+Diagnose knock control module/ECM internal fault,Electrical,Professional Required,4.0,15.0,250.0,132.5,235.0
+Diagnose parasitic draw or replace alternator,Battery,Professional Required,4.0,40.0,350.0,195.0,310.0
+Diagnose the Passlock lock-cylinder sensor circuit (Passlock-equipped vehicles only),Electrical,Moderate DIY,3.0,60.0,250.0,155.0,190.0
+Free a carbon-stuck EGR valve/throttle and clean the bore,Engine,Moderate DIY,2.0,20.0,90.0,55.0,70.0
+Identify the theft-deterrent generation and run the manufacturer relearn procedure,Unmapped,Easy DIY,1.0,1.0,10.0,5.5,9.0
+Inspect AIR delivery hoses and check valves,Unmapped,Easy DIY,1.0,15.0,50.0,32.5,35.0
+Inspect DPF differential pressure sensor hoses for cracks or swapped routing,Electrical,Easy DIY,1.0,10.0,30.0,20.0,20.0
+Inspect and clean IAT sensor connector,Electrical,Easy DIY,1.0,5.0,15.0,10.0,10.0
+Inspect and clean MAP sensor vacuum port,Engine,Easy DIY,1.0,5.0,20.0,12.5,15.0
+Inspect and clean the EGR cooler for restriction,Unmapped,Moderate DIY,2.0,30.0,150.0,90.0,120.0
+Inspect and clean the engine-harness connector at the named module,Engine,Moderate DIY,2.0,12.0,40.0,26.0,28.0
+Inspect and clean throttle/pedal position sensor connector,Engine,Easy DIY,1.0,5.0,20.0,12.5,15.0
+Inspect and repair exhaust manifold gasket leak,Unmapped,Moderate DIY,3.0,40.0,180.0,110.0,140.0
+Inspect and repair vacuum/intake leaks,Engine,Moderate DIY,2.0,10.0,60.0,35.0,50.0
+Inspect and replace a leaking or damaged cylinder head gasket/valve,Unmapped,Professional Required,4.0,150.0,900.0,525.0,750.0
+Inspect and replace crankshaft/camshaft position sensor,Engine,Moderate DIY,1.0,25.0,90.0,57.5,65.0
+Inspect and reseat or replace fuel filler cap,Engine,Easy DIY,1.0,10.0,25.0,17.5,15.0
+Inspect and reseat the EGR valve/throttle connector,Engine,Easy DIY,1.0,5.0,20.0,12.5,15.0
+Inspect and reseat the camshaft position sensor connector,Engine,Easy DIY,1.0,5.0,15.0,10.0,10.0
+Inspect and reseat the crankshaft position sensor connector,Engine,Easy DIY,1.0,5.0,15.0,10.0,10.0
+Inspect and reseat the ignition coil connector,Engine,Easy DIY,1.0,5.0,15.0,10.0,10.0
+Inspect and reseat the knock sensor connector,Electrical,Easy DIY,1.0,5.0,15.0,10.0,10.0
+Inspect and reseat the vent solenoid connector,Electrical,Easy DIY,1.0,5.0,15.0,10.0,10.0
+Inspect brake pedal switch connector,Brakes,Easy DIY,2.0,5.0,20.0,12.5,15.0
+"Inspect for contamination sources (oil, coolant, silicone) reaching the exhaust",Engine,Easy DIY,1.0,5.0,60.0,32.5,55.0
+Inspect for exhaust leaks near the O2 sensor,Engine,Easy DIY,1.0,5.0,40.0,22.5,35.0
+Inspect for exhaust leaks near the oxygen sensors,Unmapped,Easy DIY,1.0,10.0,60.0,35.0,50.0
+Inspect for vacuum leaks and check fuel trim data with a scan tool,Engine,Easy DIY,1.0,10.0,40.0,25.0,30.0
+Inspect main HV contactors for full seating,Unmapped,Professional Required,2.0,60.0,180.0,120.0,120.0
+Inspect main TCM harness connector,Electrical,Moderate DIY,2.0,15.0,50.0,32.5,35.0
+Inspect output shaft speed sensor connector,Electrical,Easy DIY,1.0,5.0,20.0,12.5,15.0
+Inspect sensor connector for fluid intrusion,Electrical,Easy DIY,1.0,5.0,20.0,12.5,15.0
+Inspect the camshaft trigger wheel for timing-related damage,Engine,Professional Required,4.0,60.0,400.0,230.0,340.0
+Inspect the low-mount connector for water intrusion and corrosion,Electrical,Easy DIY,1.0,10.0,30.0,20.0,20.0
+"Inspect the purge line for kinks, collapse, or restriction",Unmapped,Easy DIY,1.0,10.0,40.0,25.0,30.0
+Inspect timing chain/belt for stretch or jumped timing,Engine,Professional Required,2.0,150.0,900.0,525.0,750.0
+Inspect wheel speed sensor connector and harness routing,Brakes,Easy DIY,1.0,5.0,25.0,15.0,20.0
+Locate and repair a disconnected or split EVAP hose,Unmapped,Moderate DIY,2.0,10.0,60.0,35.0,50.0
+Perform a manual DPF regeneration and inspect soot loading,Unmapped,Moderate DIY,2.0,20.0,60.0,40.0,40.0
+Pressure/vacuum-test the fuel tank and sending unit seal,Engine,Professional Required,4.0,40.0,300.0,170.0,260.0
+Reflash the TCM to the latest calibration,Unmapped,Professional Required,3.0,5.0,150.0,77.5,145.0
+Reflash the control module to the latest calibration,Electrical,Professional Required,2.0,5.0,150.0,77.5,145.0
+Repair AIR system control circuit wiring,Electrical,Professional Required,4.0,10.0,65.0,37.5,55.0
+Repair BARO sensor reference or signal wiring,Electrical,Professional Required,3.0,18.0,60.0,39.0,42.0
+Repair EGR control circuit wiring back to the ECM,Electrical,Professional Required,4.0,10.0,65.0,37.5,55.0
+Repair IAT sensor circuit wiring,Electrical,Professional Required,3.0,10.0,55.0,32.5,45.0
+Repair MAP sensor circuit wiring,Engine,Professional Required,3.0,10.0,60.0,35.0,50.0
+Repair O2 heater circuit wiring,Electrical,Professional Required,3.0,10.0,60.0,35.0,50.0
+Repair O2 sensor signal circuit wiring,Engine,Professional Required,3.0,10.0,60.0,35.0,50.0
+Repair PCM wiring to the VTEC solenoid and pressure switch,Electrical,Professional Required,4.0,40.0,160.0,100.0,120.0
+Repair TCC control circuit wiring,Electrical,Professional Required,4.0,15.0,60.0,37.5,45.0
+Repair camshaft position sensor circuit wiring,Engine,Professional Required,3.0,10.0,60.0,35.0,50.0
+Repair chafed wheel speed sensor harness wiring,Brakes,Professional Required,4.0,15.0,65.0,40.0,50.0
+Repair coil driver wiring back to the ECM/ignition module,Electrical,Professional Required,3.0,10.0,70.0,40.0,60.0
+Repair coolant temperature sensor wiring,Engine,Professional Required,3.0,10.0,60.0,35.0,50.0
+Repair crank/cam sensor wiring and connectors,Electrical,Professional Required,3.0,10.0,60.0,35.0,50.0
+Repair crankshaft position sensor circuit wiring,Engine,Professional Required,3.0,10.0,65.0,37.5,55.0
+Repair exhaust leak diluting sensor sample,Electrical,Moderate DIY,3.0,20.0,120.0,70.0,100.0
+Repair internal/external transmission wiring harness,Transmission,Professional Required,3.0,40.0,200.0,120.0,160.0
+Repair knock sensor circuit wiring,Electrical,Professional Required,3.0,10.0,60.0,35.0,50.0
+Repair main power/ground straps and connections,Unmapped,Moderate DIY,3.0,15.0,60.0,37.5,45.0
+Repair or replace VSS connector and pigtail,Transmission,Easy DIY,2.0,10.0,30.0,20.0,20.0
+Repair output shaft sensor wiring,Electrical,Professional Required,3.0,30.0,150.0,90.0,120.0
+Repair range sensor circuit wiring,Electrical,Professional Required,2.0,10.0,50.0,30.0,40.0
+Repair shift solenoid wiring at the valve body connector,Transmission,Professional Required,4.0,20.0,80.0,50.0,60.0
+Repair stop lamp/brake switch circuit wiring,Brakes,Professional Required,4.0,15.0,60.0,37.5,45.0
+Repair the LIN/CAN sub-bus wiring feeding the module,Electrical,Moderate DIY,3.0,20.0,90.0,55.0,70.0
+Repair theft-deterrent wiring or replace the BCM/security module,Electrical,Professional Required,4.0,100.0,450.0,275.0,350.0
+Repair throttle motor control circuit wiring,Engine,Professional Required,3.0,25.0,80.0,52.5,55.0
+Repair throttle/pedal position sensor wiring,Engine,Professional Required,3.0,10.0,60.0,35.0,50.0
+Repair under-vehicle harness damage from road debris,Unmapped,Moderate DIY,3.0,20.0,100.0,60.0,80.0
+Repair vent solenoid circuit wiring,Electrical,Professional Required,4.0,10.0,60.0,35.0,50.0
+Replace EVAP purge solenoid valve,Unmapped,Moderate DIY,3.0,25.0,90.0,57.5,65.0
+Replace MAP/barometric pressure sensor,Electrical,Easy DIY,2.0,20.0,90.0,55.0,70.0
+Replace a failed ignition control/driver module,Electrical,Professional Required,4.0,80.0,400.0,240.0,320.0
+Replace a failed-open EVAP canister vent valve,Unmapped,Moderate DIY,3.0,60.0,250.0,155.0,190.0
+Replace a mechanically stuck or worn EGR valve,Unmapped,Moderate DIY,4.0,80.0,350.0,215.0,270.0
+Replace a seized or weak secondary air injection pump,Unmapped,Moderate DIY,3.0,80.0,350.0,215.0,270.0
+Replace and calibrate the chassis control module,Electrical,Professional Required,4.0,220.0,650.0,435.0,430.0
+Replace and reprogram the powertrain module or sensor node,Electrical,Professional Required,4.0,120.0,650.0,385.0,530.0
+Replace brake pedal switch,Brakes,Moderate DIY,3.0,15.0,60.0,37.5,45.0
+Replace charcoal canister / vent valve assembly,Unmapped,Professional Required,4.0,90.0,350.0,220.0,260.0
+Replace electronic throttle body/actuator motor assembly,Engine,Moderate DIY,2.0,120.0,380.0,250.0,260.0
+Replace engine/radiator coolant temperature sensor,Engine,Moderate DIY,2.0,15.0,70.0,42.5,55.0
+Replace failing water pump,Engine,Professional Required,3.0,120.0,450.0,285.0,330.0
+Replace fuel filter and test fuel pump output,Engine,Moderate DIY,2.0,30.0,150.0,90.0,120.0
+Replace idle air control valve/motor,Unmapped,Moderate DIY,3.0,30.0,140.0,85.0,110.0
+Replace input/turbine shaft speed sensor,Electrical,Moderate DIY,2.0,30.0,110.0,70.0,80.0
+Replace intake air temperature sensor,Engine,Easy DIY,2.0,10.0,50.0,30.0,40.0
+Replace mass air flow sensor,Electrical,Moderate DIY,7.0,45.0,220.0,132.5,175.0
+Replace oil control valve and clean phaser feed passage,Engine,Moderate DIY,2.0,35.0,160.0,97.5,125.0
+Replace output shaft speed sensor,Electrical,Moderate DIY,2.0,25.0,90.0,57.5,65.0
+Replace oxygen sensor,Engine,Moderate DIY,2.0,50.0,180.0,115.0,130.0
+Replace oxygen sensor with failed heater,Engine,Moderate DIY,2.0,50.0,180.0,115.0,130.0
+Replace slow-responding oxygen sensor,Engine,Moderate DIY,2.0,50.0,180.0,115.0,130.0
+Replace spark plugs and inspect ignition coils as a set,Unmapped,Easy DIY,1.0,30.0,90.0,60.0,60.0
+Replace stuck-open fuel pressure regulator,Engine,Moderate DIY,3.0,40.0,180.0,110.0,140.0
+Replace stuck-open thermostat,Engine,Moderate DIY,2.0,20.0,90.0,55.0,70.0
+Replace the ECM housing an internal BARO sensor,Electrical,Professional Required,4.0,350.0,900.0,625.0,550.0
+Replace the EGR control valve/throttle solenoid or motor,Engine,Moderate DIY,3.0,60.0,300.0,180.0,240.0
+Replace the EVAP purge flow sensor if flow readings disagree with actual flow,Electrical,Moderate DIY,4.0,40.0,150.0,95.0,110.0
+Replace the EVAP vent control solenoid,Unmapped,Moderate DIY,2.0,30.0,120.0,75.0,90.0
+Replace the camshaft position sensor,Engine,Moderate DIY,2.0,25.0,130.0,77.5,105.0
+Replace the catalytic converter,Unmapped,Professional Required,3.0,250.0,1500.0,875.0,1250.0
+Replace the control module,Electrical,Professional Required,3.0,200.0,900.0,550.0,700.0
+Replace the crankshaft position sensor,Engine,Moderate DIY,2.0,30.0,140.0,85.0,110.0
+Replace the diesel particulate filter assembly,Unmapped,Professional Required,4.0,1200.0,3200.0,2200.0,2000.0
+Replace the external barometric pressure sensor,Electrical,Easy DIY,2.0,30.0,95.0,62.5,65.0
+Replace the ignition coil,Engine,Moderate DIY,2.0,25.0,120.0,72.5,95.0
+Replace the knock sensor at correct torque spec,Electrical,Moderate DIY,2.0,30.0,100.0,65.0,70.0
+Replace throttle body or pedal position sensor assembly,Engine,Moderate DIY,2.0,60.0,280.0,170.0,220.0
+Replace transmission range sensor,Transmission,Moderate DIY,3.0,40.0,150.0,95.0,110.0
+Replace vehicle speed sensor,Transmission,Moderate DIY,3.0,20.0,90.0,55.0,70.0
+Replace wheel speed sensor,Brakes,Moderate DIY,3.0,30.0,120.0,75.0,90.0
+Replace worn camshaft phaser assembly,Engine,Professional Required,3.0,180.0,550.0,365.0,370.0
+Run a cylinder compression or leak-down test,Unmapped,Moderate DIY,3.0,20.0,80.0,50.0,60.0
+Send the DPF out for professional cleaning (ash removal),Unmapped,Professional Required,3.0,250.0,600.0,425.0,350.0
+Smoke-test EVAP system and replace leaking hose,Unmapped,Moderate DIY,2.0,15.0,60.0,37.5,45.0
+Smoke-test intake and vacuum lines for a shared leak,Engine,Moderate DIY,2.0,15.0,60.0,37.5,45.0
+Smoke-test intake for vacuum/air leaks,Engine,Easy DIY,1.0,10.0,40.0,25.0,30.0
+Swap spark plug and ignition coil to confirm the cylinder,Engine,Easy DIY,1.0,15.0,45.0,30.0,30.0
+Test EGR valve position sensor tracking and valve travel,Electrical,Moderate DIY,3.0,15.0,60.0,37.5,45.0
+Test HV bus voltage-sense circuit,Electrical,Professional Required,3.0,80.0,240.0,160.0,160.0
+Test O2 sensor heater circuit fuse and relay,Engine,Easy DIY,1.0,5.0,25.0,15.0,20.0
+Test and clean or replace the cylinder's fuel injector,Engine,Moderate DIY,2.0,40.0,180.0,110.0,140.0
+Test and replace TCC solenoid,Unmapped,Moderate DIY,3.0,40.0,160.0,100.0,120.0
+Test and replace a leaking or sticking purge solenoid,Unmapped,Moderate DIY,2.0,25.0,100.0,62.5,75.0
+Test and replace the AIR switching/combination valve,Unmapped,Moderate DIY,2.0,40.0,180.0,110.0,140.0
+Test and replace the named shift solenoid,Transmission,Moderate DIY,3.0,35.0,150.0,92.5,115.0
+Test battery condition and terminal connections,Battery,Easy DIY,1.0,5.0,25.0,15.0,20.0
+Test charging system output under load,Battery,Easy DIY,2.0,5.0,30.0,17.5,25.0
+Test fuel injectors for leakage and replace as needed,Engine,Moderate DIY,2.0,40.0,220.0,130.0,180.0
+Test fuel pump output pressure and delivery volume,Engine,Moderate DIY,4.0,20.0,250.0,135.0,230.0
+Test the VATS key pellet and clean the decoder-ring contacts (VATS-equipped vehicles only),Unmapped,Moderate DIY,2.0,20.0,80.0,50.0,60.0
+Test the VTEC oil pressure switch,Engine,Easy DIY,2.0,15.0,55.0,35.0,40.0
+Test wheel speed sensor resistance and signal,Brakes,Moderate DIY,2.0,10.0,40.0,25.0,30.0
+Top off coolant and inspect ECT sensor connector,Engine,Easy DIY,1.0,10.0,30.0,20.0,20.0
+Verify battery and charging health before the drive cycle,Battery,Easy DIY,2.0,5.0,25.0,15.0,20.0
+Verify battery/charging voltage before further diagnosis,Battery,Easy DIY,1.0,5.0,25.0,15.0,20.0
+Verify fuel delivery and refuel if the tank is low,Engine,Easy DIY,3.0,5.0,20.0,12.5,15.0
+Verify transmission fluid level before TCC diagnosis,Transmission,Easy DIY,1.0,20.0,80.0,50.0,60.0
+Voltage-drop test the chassis module's power and ground circuits,Electrical,Moderate DIY,2.0,15.0,50.0,32.5,35.0

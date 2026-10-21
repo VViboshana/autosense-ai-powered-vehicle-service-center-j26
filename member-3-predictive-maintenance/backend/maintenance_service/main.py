@@ -67,8 +67,8 @@ def model_info() -> dict[str, object]:
         "task": "maintenance-category-classification",
         "primaryModel": "XGBoost",
         "variants": [
-            {"name": "basic", "available": bool(bundle and bundle.basic.available)},
-            {"name": "enriched", "available": bool(bundle and bundle.enriched.available)},
+            {"name": "basic", "available": bool(bundle and bundle.basic.available), "ready": bool(bundle and bundle.basic.ready), "preprocessorReady": bool(bundle and bundle.basic.preprocessor)},
+            {"name": "enriched", "available": bool(bundle and bundle.enriched.available), "ready": bool(bundle and bundle.enriched.ready), "preprocessorReady": bool(bundle and bundle.enriched.preprocessor)},
         ],
         "classes": classes,
         "durationModel": _duration_model_info(bundle),
@@ -79,15 +79,25 @@ def model_info() -> dict[str, object]:
 def _duration_model_info(bundle: ModelBundle | None) -> dict[str, object]:
     duration = bundle.duration if bundle else None
     metadata = duration.metadata if duration else None
+    primary = (metadata or {}).get("primary_model", {})
+    fallback = (metadata or {}).get("fallback_model", {})
     return {
         "status": "ready" if duration and (duration.primary_available or duration.fallback_available) else "unavailable",
         "algorithm": "RandomForestRegressor",
         "primaryVariant": "task_plus_cost",
         "fallbackVariant": "task_only_fallback",
-        "targetType": (metadata or {}).get("targetType", "estimated_labor_hours"),
+        "targetType": (metadata or {}).get("targetType", (metadata or {}).get("target", "estimated_labor_hours")),
         "benchmark": True,
-        "primaryCvMetrics": (metadata or {}).get("primaryCvMetrics"),
-        "fallbackCvMetrics": (metadata or {}).get("fallbackCvMetrics"),
+        "primaryCvMetrics": (metadata or {}).get("primaryCvMetrics", {
+            "maeMinutes": primary.get("cv_mean_mae_minutes"),
+            "rmseMinutes": primary.get("cv_mean_rmse_minutes"),
+            "r2": primary.get("cv_mean_r2"),
+        }),
+        "fallbackCvMetrics": (metadata or {}).get("fallbackCvMetrics", {
+            "maeMinutes": fallback.get("cv_mean_mae_minutes"),
+            "rmseMinutes": fallback.get("cv_mean_rmse_minutes"),
+            "r2": fallback.get("cv_mean_r2"),
+        }),
     }
 
 
