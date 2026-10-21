@@ -49,6 +49,12 @@ describe('API envelope and protection', () => {
     }
   });
 
+  it('protects the maintenance awaiting-forecast booking list', async () => {
+    const res = await request(createApp(fakePool(true), env)).get('/api/maintenance/bookings/awaiting-forecast');
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('UNAUTHENTICATED');
+  });
+
   it('refuses changes posted from another website', async () => {
     const res = await request(createApp(fakePool(true), env))
       .post('/api/auth/login')

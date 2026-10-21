@@ -83,7 +83,7 @@ export type MyVehicle = {
       estimatedReadyAt: string | null;
     } | null>;
     inspections: Section<InspectionReport[]>;
-    maintenance: Section<null>;
+    maintenance: Section<{ category: string; selectedTask: string | null; estimatedHours: number | null; estimatedMinutes: number | null; status: string; confirmedAt: string } | null>;
     safety: Section<null>;
   };
 };

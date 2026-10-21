@@ -59,6 +59,9 @@ export type MaintenanceForecast = {
 };
 
 export type MaintenanceForecastRequest = {
+  vehicleId?: number;
+  bookingId?: number;
+  inspectionId?: number;
   vehicle: { registration?: string; make: string; model: string; year: number; mileage?: number };
   customerReport: { problemDescription: string; severity: string; firstNoticed?: string; warningLightVisible?: boolean; notes?: string };
   serviceHistory?: { available: boolean; summary?: string };
@@ -104,6 +107,7 @@ export type MaintenanceModelInfo = {
 };
 
 export type MaintenanceForecastResponse = {
+  forecastId?: number;
   assessmentType: 'basic' | 'enriched';
   maintenanceCategory: { predicted: string; modelScore: number; scores: Record<string, number> };
   maintenanceRequired: { status: string; reason?: string | null; value?: null };
@@ -131,6 +135,8 @@ export type MaintenanceDurationResponse = {
 };
 
 export type ForecastDraft = {
+  vehicleId?: number;
+  bookingId?: number;
   registrationNo: string;
   make: string;
   model: string;
