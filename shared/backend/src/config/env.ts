@@ -21,6 +21,8 @@ const schema = z.object({
   ML_OCCUPANCY_URL: z.url().optional(),
   /** Internal Component 3 FastAPI service; never exposed to the browser. */
   MAINTENANCE_ML_SERVICE_URL: z.url().optional(),
+  /** Component 4 security service (member-4-anomaly-detection/service). */
+  ML_SECURITY_URL: z.url().default('http://localhost:8004'),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
 

@@ -34,6 +34,9 @@ def to_browser_mp4(src, dst) -> None:
     w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     tmp = dst.with_name(dst.stem + ".part.mp4")
     out = cv2.VideoWriter(str(tmp), cv2.VideoWriter_fourcc(*"avc1"), fps, (w, h))
+    if not out.isOpened() and hasattr(cv2, "CAP_MSMF"):
+        # Windows: the pip OpenCV build has no OpenH264, but Media Foundation (built into Windows) encodes H.264
+        out = cv2.VideoWriter(str(tmp), cv2.CAP_MSMF, cv2.VideoWriter_fourcc(*"H264"), fps, (w, h))
     if not out.isOpened():
         cap.release()
         raise RuntimeError("this OpenCV build cannot write H.264")
