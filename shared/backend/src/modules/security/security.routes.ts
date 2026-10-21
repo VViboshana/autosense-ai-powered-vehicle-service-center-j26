@@ -1,4 +1,5 @@
 import { mkdirSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { Router, type Request, type Response } from 'express';
 import multer from 'multer';
@@ -16,6 +17,11 @@ import {
   addAction,
   alertSnapshotKey,
   cameraForVideo,
+  cameraWall,
+  cameraRecordings,
+  deleteVideoAnalysis,
+  setCameraConnected,
+  demoClips,
   getAlert,
   getVideoAnalysis,
   insertVideoAnalysis,
@@ -30,7 +36,7 @@ import {
   securitySummary,
 } from './security.repository.js';
 import { actionProblem, RECORDED_ACTIONS, RESOLUTIONS, SEVERITIES, THREAT_TYPES } from './security.rules.js';
-import { removeUpload, serviceHealth, submitVideo, syncAnalysis, type VideoDeps } from './security.videos.js';
+import { removeServiceJob, removeUpload, serviceHealth, submitVideo, syncAnalysis, type VideoDeps } from './security.videos.js';
 
 const blankToUndefined = (v: unknown) => (v === '' || v == null ? undefined : v);
 
@@ -38,7 +44,11 @@ const blankToUndefined = (v: unknown) => (v === '' || v == null ? undefined : v)
 const VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska', 'video/webm', 'video/avi'];
 const MAX_VIDEO_MB = 500;
 const videoBody = z.object({
-  cameraId: z.coerce.number().int().positive({ message: 'Choose the camera this video is from.' }),
+  // A premises recording belongs to a camera; a synthetic test video belongs to none
+  synthetic: z.preprocess((v) => v === 'true' || v === true, z.boolean()),
+  cameraId: z.preprocess(blankToUndefined, z.coerce.number().int().positive().optional()),
+  title: z.string().trim().max(120).optional().transform((s) => s || undefined),
+  expectedThreat: z.preprocess(blankToUndefined, z.enum(THREAT_TYPES).optional()),
   startTime: z.preprocess(blankToUndefined, z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM, e.g. 21:30.').optional()),
   shortTimings: z.preprocess((v) => v === 'true' || v === true, z.boolean()),
 });
@@ -73,6 +83,11 @@ const actionBody = z
  *   GET  /api/security/rules                            threat catalogue, zones, thresholds, notification matrix
  *   GET  /api/security/alerts/:id/snapshot              the evidence frame of an alert
  *   GET  /api/security/service                          is the security service (model) running?
+ *   GET  /api/security/wall                             live wall: each camera's latest analysed clip and its alert times
+ *   GET  /api/security/demo                             synthetic test videos (model demo) with their alerts
+ *   DELETE /api/security/videos/:id                     delete an uploaded video with the alerts found in it
+ *   GET  /api/security/cameras/:id/recordings           one camera's uploaded recordings
+ *   POST /api/security/cameras/:id/connection           { connected } connect / disconnect a camera
  *   GET  /api/security/videos                           latest recorded video analyses
  *   POST /api/security/videos                           upload a clip (multipart: video, cameraId, startTime, shortTimings)
  *   GET  /api/security/videos/:id                       one analysis with its alerts (follows a running job)
@@ -175,6 +190,48 @@ export function securityRoutes(deps: VideoDeps) {
     sendOk(res, await serviceHealth(deps.serviceUrl));
   });
 
+  router.get('/wall', requireScreen('CAMERAS'), async (_req, res) => {
+    sendOk(res, await cameraWall(pool));
+  });
+
+  router.get('/demo', requireScreen('CAMERAS'), async (_req, res) => {
+    const clips = await demoClips(pool);
+    for (const c of clips.filter((c) => c.status === 'running')) await syncAnalysis(deps, c.videoAnalysisId);
+    sendOk(res, clips.some((c) => c.status === 'running') ? await demoClips(pool) : clips);
+  });
+
+  /** Deletes an uploaded video (premises recording or synthetic test video) with the alerts found in it. */
+  router.delete('/videos/:id', requireScreen('CAMERAS'), async (req, res) => {
+    const me = signedInUser(req);
+    const { id } = parse(idParam, req.params);
+    const removed = await withTransaction(pool, async (client) => {
+      const r = await deleteVideoAnalysis(client, id);
+      if (r?.status === 'running') throw new BusinessRuleError('VIDEO_STILL_ANALYSING', 'This video is still being analysed. Delete it when it has finished.');
+      return r;
+    });
+    if (!removed) throw new NotFoundError('Video not found.');
+    await rm(path.resolve(uploadDir, 'security', 'videos', String(id)), { recursive: true, force: true });
+    if (removed.serviceJobId) await removeServiceJob(deps.serviceUrl, removed.serviceJobId);
+    await audit(pool, { table: 'security.video_analyses', recordId: id, action: removed.isSynthetic ? 'test_video_removed' : 'recording_deleted',
+      userId: me.userId, snapshot: { fileName: removed.fileName, cameraId: removed.cameraId, alertsRemoved: removed.alertsRemoved } });
+    sendOk(res, { removed: true, alertsRemoved: removed.alertsRemoved });
+  });
+
+  router.get('/cameras/:id/recordings', requireScreen('CAMERAS'), async (req, res) => {
+    const { id } = parse(idParam, req.params);
+    sendOk(res, await cameraRecordings(pool, id));
+  });
+
+  /** Connect (online) or disconnect (offline) a premises camera. Its recordings and alerts are kept. */
+  router.post('/cameras/:id/connection', requireScreen('CAMERAS'), async (req, res) => {
+    const me = signedInUser(req);
+    const { id } = parse(idParam, req.params);
+    const { connected } = parse(z.object({ connected: z.boolean() }), req.body);
+    if (!(await setCameraConnected(pool, id, connected))) throw new NotFoundError('Camera not found.');
+    await audit(pool, { table: 'security.cameras', recordId: id, action: connected ? 'connected' : 'disconnected', userId: me.userId });
+    sendOk(res, { cameraId: id, status: connected ? 'online' : 'offline' });
+  });
+
   router.get('/videos', requireScreen('CAMERAS'), async (_req, res) => {
     for (const id of await runningVideoIds(pool)) await syncAnalysis(deps, id);
     sendOk(res, await listVideoAnalyses(pool));
@@ -201,16 +258,23 @@ export function securityRoutes(deps: VideoDeps) {
     if (!file) throw new ValidationError('Add a video.', [{ field: 'video', message: 'Choose an MP4, MOV, AVI, MKV or WebM video.' }]);
     try {
       const body = parse(videoBody, req.body);
-      const camera = await cameraForVideo(pool, body.cameraId);
-      if (!camera) throw new ValidationError('Choose the camera this video is from.', [{ field: 'cameraId', message: 'Not a security camera.' }]);
-      const jobId = await submitVideo(deps.serviceUrl, { path: file.path, name: file.originalname, mimeType: file.mimetype }, camera.code,
+      let cameraCode = 'synthetic'; // the service has no zone file for it: zone rules stay off for test clips
+      if (!body.synthetic) {
+        const camera = body.cameraId ? await cameraForVideo(pool, body.cameraId) : null;
+        if (!camera) throw new ValidationError('Choose the camera this video is from.', [{ field: 'cameraId', message: 'Choose a security camera.' }]);
+        cameraCode = camera.code;
+      } else if (!body.title) {
+        throw new ValidationError('Give the test video a name.', [{ field: 'title', message: 'e.g. Staged tampering at a car door' }]);
+      }
+      const jobId = await submitVideo(deps.serviceUrl, { path: file.path, name: file.originalname, mimeType: file.mimetype }, cameraCode,
         body.startTime ?? null, body.shortTimings);
       const id = await insertVideoAnalysis(pool, {
-        cameraId: body.cameraId, fileName: file.originalname, fileSize: file.size, startTime: body.startTime ?? null,
+        cameraId: body.synthetic ? null : body.cameraId!, fileName: file.originalname, fileSize: file.size, startTime: body.startTime ?? null,
         shortTimings: body.shortTimings, serviceJobId: jobId, userId: me.userId,
+        synthetic: body.synthetic ? { title: body.title!, expectedThreat: body.expectedThreat ?? null } : undefined,
       });
       await audit(pool, { table: 'security.video_analyses', recordId: id, action: 'uploaded', userId: me.userId,
-        snapshot: { fileName: file.originalname, camera: camera.code } });
+        snapshot: { fileName: file.originalname, camera: cameraCode, synthetic: body.synthetic } });
       sendOk(res, await getVideoAnalysis(pool, id), 201);
     } finally {
       await removeUpload(file.path); // the service keeps its own copy

@@ -2,20 +2,23 @@
 
   uvicorn c4security.service:app --port 8004
 
-Added endpoint:
+Added endpoints:
+  DELETE /jobs/{job_id}              removes a finished job's outputs and its uploaded video (no copy is left behind).
   GET /jobs/{job_id}/browser-video   the annotated video as H.264 MP4, which browsers can play. The pipeline writes
                                      annotated.mp4 with the mp4v codec (fine for desktop players, not for Chrome or
                                      Safari), so it is converted once, after the job has finished, and kept beside it.
 """
 from __future__ import annotations
 
+import shutil
 import threading
+from pathlib import Path
 
 import cv2
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
-from .api import app, jobs
+from .api import DATA, app, jobs
 
 BROWSER_VIDEO = "annotated_h264.mp4"
 _convert_lock = threading.Lock()
@@ -64,3 +67,22 @@ def browser_video(job_id: str):
             except RuntimeError as e:
                 raise HTTPException(500, str(e)) from e
     return FileResponse(dst, media_type="video/mp4")
+
+
+@app.delete("/jobs/{job_id}")
+def delete_job(job_id: str):
+    """Removes a finished job: its output folder (videos, snapshots, alerts) and its uploaded video. Called by the web
+    app when a recording is deleted there, so no copy of the footage is left behind."""
+    job = jobs.get(job_id)
+    if job is None:
+        raise HTTPException(404, "not found")
+    if job["status"] == "running":
+        raise HTTPException(409, "the job is still running")
+    out = job["out"].resolve()
+    if out.parent == DATA.resolve() and out.is_dir():
+        shutil.rmtree(out)
+    source = Path(job["source"]).resolve()
+    if (DATA / "uploads").resolve() in source.parents and source.is_file():
+        source.unlink()
+    jobs.pop(job_id, None)
+    return {"job_id": job_id, "removed": True}

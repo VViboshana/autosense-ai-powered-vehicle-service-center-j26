@@ -365,3 +365,181 @@
   border-radius: 10px;
   border: 1px solid var(--as-line);
 }
+
+/* ---------- Live wall (six camera screens) ---------- */
+.as-sec-wall {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+  padding: 0 1.25rem 1.25rem;
+}
+@media (max-width: 1199.98px) {
+  .as-sec-wall { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 767.98px) {
+  .as-sec-wall { grid-template-columns: minmax(0, 1fr); }
+}
+/* Full screen: the wall fills the monitor */
+.as-sec-wall:fullscreen {
+  padding: 0.6rem;
+  background: var(--as-sidebar);
+  align-content: center;
+}
+.as-sec-screen {
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--as-sidebar);
+  color: var(--as-sidebar-text);
+  box-shadow: 0 0 0 2px transparent;
+  transition: box-shadow 0.2s;
+}
+.as-sec-screen.alarm-danger {
+  box-shadow: 0 0 0 3px var(--as-danger);
+  animation: as-sec-pulse 1s ease-in-out infinite alternate;
+}
+.as-sec-screen.alarm-warning {
+  box-shadow: 0 0 0 3px var(--as-warning);
+}
+@keyframes as-sec-pulse {
+  to { box-shadow: 0 0 0 5px var(--as-danger); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .as-sec-screen.alarm-danger { animation: none; }
+}
+.as-sec-screen-head,
+.as-sec-screen-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.76rem;
+  min-width: 0;
+}
+.as-sec-screen-head b {
+  font-weight: 600;
+  color: var(--as-surface);
+  white-space: nowrap;
+}
+.as-sec-screen-head .as-mono,
+.as-sec-screen-zone {
+  color: var(--as-sidebar-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.as-sec-screen-foot {
+  color: var(--as-sidebar-muted);
+}
+.as-sec-screen-foot a {
+  color: var(--as-sidebar-text);
+}
+/* "Recording" dot */
+.as-sec-rec {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--as-danger);
+}
+.as-sec-screen-view {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--as-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.as-sec-screen-view video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.as-sec-screen-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--as-sidebar-muted);
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 1rem;
+}
+.as-sec-screen-empty > .bi {
+  font-size: 1.6rem;
+}
+.as-sec-banners {
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.as-sec-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  background: var(--as-surface);
+  color: var(--as-ink);
+  box-shadow: var(--as-shadow-pop);
+  font-size: 0.78rem;
+}
+.as-sec-banner > .bi {
+  color: var(--as-danger);
+  font-size: 1rem;
+}
+.as-sec-banner-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  min-width: 0;
+  margin-right: auto;
+}
+.as-sec-banner-text small {
+  color: var(--as-muted);
+}
+.as-sec-banner-link {
+  font-family: var(--as-mono);
+  font-size: 0.7rem;
+}
+
+/* Tags in a screen's head, footer buttons and the model demo verdict */
+.as-sec-screen-off,
+.as-sec-screen-synthetic {
+  flex: none;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+.as-sec-screen-off {
+  color: var(--as-surface);
+  background: var(--as-danger);
+}
+.as-sec-screen-synthetic {
+  color: var(--as-sidebar);
+  background: var(--as-info-soft);
+}
+.as-sec-screen-foot .as-sec-screen-btn {
+  color: var(--as-sidebar-text);
+  font-size: 0.76rem;
+  text-decoration: underline;
+}
+.as-sec-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: 600;
+}
+.as-sec-verdict.ok { color: var(--as-success-soft); }
+.as-sec-verdict.miss { color: var(--as-warning-soft); }
+.as-sec-loc {
+  font-family: var(--as-font);
+  color: var(--as-muted);
+}
