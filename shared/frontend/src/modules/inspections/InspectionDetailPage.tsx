@@ -281,21 +281,23 @@ export function InspectionDetailPage() {
               )}
               <div className="row g-3">
                 <div className="col-lg-7">
-                  <DamagePhoto
-                    image={image}
-                    numbers={numbers}
-                    selected={selected}
-                    hovered={hovered}
-                    onSelect={setSelected}
-                    onHover={setHovered}
-                    onExpand={() => setViewerIndex(data.images.indexOf(image))}
-                    drawing={drawingImage === image.imageId}
-                    intro={data.status === 'awaiting_review'}
-                    onDrawn={(bbox) => {
-                      setDrawingImage(null);
-                      setAdding({ imageId: image.imageId, bbox });
-                    }}
-                  />
+                  <div className="as-dmg-stick">
+                    <DamagePhoto
+                      image={image}
+                      numbers={numbers}
+                      selected={selected}
+                      hovered={hovered}
+                      onSelect={setSelected}
+                      onHover={setHovered}
+                      onExpand={() => setViewerIndex(data.images.indexOf(image))}
+                      drawing={drawingImage === image.imageId}
+                      intro={data.status === 'awaiting_review'}
+                      onDrawn={(bbox) => {
+                        setDrawingImage(null);
+                        setAdding({ imageId: image.imageId, bbox });
+                      }}
+                    />
+                  </div>
                 </div>
                 <div className="col-lg-5">
                   {(() => {

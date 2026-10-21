@@ -125,6 +125,16 @@ body.as-app {
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * AdminLTE's fixed layout gives .app-main overflow: auto, but it is the window that scrolls, so all that does is stop
+ * position: sticky from working anywhere inside the page. clip still keeps wide content from spilling sideways
+ * without turning .app-main into a scroll box.
+ */
+.as-app.sidebar-expand-lg.layout-fixed .app-main {
+  overflow: visible;
+  overflow-x: clip;
+}
+
 /* ---------- Header ---------- */
 .app-header {
   background: var(--as-surface);

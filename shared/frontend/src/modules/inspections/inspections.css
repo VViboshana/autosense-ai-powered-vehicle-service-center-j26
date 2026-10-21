@@ -9,6 +9,18 @@
 }
 
 /* ---------- Photo with damage outlines ---------- */
+/* Beside the region list (wide screens), the photo stays in view while the technician scrolls through the regions */
+@media (min-width: 992px) {
+  .as-dmg-stick {
+    position: sticky;
+    top: calc(var(--as-header-h, 3.5rem) + 1rem);
+    z-index: 1;
+  }
+}
+/* A region scrolled into view (picked on the photo) stops below the top bar, not under it */
+[data-detection] {
+  scroll-margin: calc(var(--as-header-h, 3.5rem) + 1rem) 0 1rem;
+}
 .as-dmg-photo {
   position: relative;
   width: 100%;
