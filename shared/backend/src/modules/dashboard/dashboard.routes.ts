@@ -6,7 +6,7 @@ import { getActions, getBayBoard, getSummary } from './dashboard.repository.js';
 
 /**
  * The home dashboard: key figures, the bay board and the "needs your action" queues.
- * Safety alerts and maintenance suggestions report connected: false until those components are plugged in.
+ * Safety alerts report connected: false until that component is plugged in.
  */
 export function dashboardRoutes(db: Db) {
   const router = Router();

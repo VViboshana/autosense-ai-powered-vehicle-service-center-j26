@@ -1,11 +1,13 @@
 import { apiGet, apiSend } from '@/lib/api';
 import type { ForecastDraft, MaintenanceDurationResponse, MaintenanceForecast, MaintenanceForecastRequest, MaintenanceForecastResponse, MaintenanceHealth, MaintenanceModelInfo, MaintenanceTaskListResponse, ServiceHistoryRecord } from './maintenance.types';
 export const MAINTENANCE_SAMPLE_MODE = false;
-export type VehicleBootstrap = { vehicle: { vehicleId: number; registrationNo: string; make: string; model: string; year: number | null; latestMileage: number | null; customer: { customerId: number; name: string } | null }; bookings: { bookingId: number; bookingNo: string; date: string; time: string; status: string; service: string; notes: string | null }[]; serviceHistory: ServiceHistoryRecord[]; inspections: { inspectionId: number; inspectionNo: string; status: string; severity: string | null; notes: string | null; reviewedAt: string | null }[] };
+export type VehicleBootstrap = { job: { jobId: number; jobNo: string; stage: string; service: string; bookingId: number | null } | null; vehicle: { vehicleId: number; registrationNo: string; make: string; model: string; year: number | null; latestMileage: number | null; customer: { customerId: number; name: string } | null }; bookings: { bookingId: number; bookingNo: string; date: string; time: string; status: string; service: string; notes: string | null }[]; serviceHistory: ServiceHistoryRecord[]; inspections: { jobId: number | null; inspectionId: number; inspectionNo: string; status: string; severity: string | null; notes: string | null; reviewedAt: string | null }[] };
 export type VehicleSearchResult = VehicleBootstrap['vehicle'];
+export type AwaitingForecastJob = { jobId: number; jobNo: string; vehicleId: number; registrationNo: string; make: string; model: string; customer: string | null; service: string; bay: string | null; inspectionId: number | null; inspectionNo: string | null; severity: string | null; inspectedAt: string | null };
 export type AwaitingForecastBooking = { bookingId: number; bookingNo: string; vehicleId: number; registrationNo: string; make: string; model: string; customer: string | null; service: string; date: string | null; time: string | null; status: string; notes: string | null };
 export function searchVehicles(search: string) { return apiGet<VehicleSearchResult[]>('/maintenance/vehicles/search', { search }); }
-export function getVehicleBootstrap(vehicleId: number, bookingId?: number) { return apiGet<VehicleBootstrap>('/maintenance/vehicles/bootstrap', { vehicleId, bookingId }); }
+export function getVehicleBootstrap(vehicleId: number, bookingId?: number, jobId?: number) { return apiGet<VehicleBootstrap>('/maintenance/vehicles/bootstrap', { vehicleId, bookingId, jobId }); }
+export function listAwaitingForecast() { return apiGet<{ jobs: AwaitingForecastJob[]; bookings: AwaitingForecastBooking[] }>('/maintenance/awaiting-forecast'); }
 export function listBookingsAwaitingForecast() { return apiGet<AwaitingForecastBooking[]>('/maintenance/bookings/awaiting-forecast'); }
 export function updateVehicleYear(vehicleId: number, year: number) { return apiSend<{ vehicleId: number; year: number }>('PATCH', `/maintenance/vehicles/${vehicleId}`, { year }); }
 export function listForecasts(): Promise<MaintenanceForecast[]> { return apiGet<MaintenanceForecast[]>('/maintenance/forecasts'); }
@@ -23,7 +25,8 @@ export function getMaintenanceTasks(category: string, limit = 8): Promise<Mainte
 export function estimateMaintenanceDuration(fixTitle: string): Promise<MaintenanceDurationResponse> { return apiSend<MaintenanceDurationResponse>('POST', '/maintenance/duration', { fixTitle }); }
 export async function createForecast(draft: ForecastDraft): Promise<MaintenanceForecast> {
   const payload: MaintenanceForecastRequest = {
-    ...(draft.vehicleId ? { vehicleId: draft.vehicleId } : {}), ...(draft.bookingId ? { bookingId: draft.bookingId } : {}),
+    ...(draft.vehicleId ? { vehicleId: draft.vehicleId } : {}), ...(draft.bookingId ? { bookingId: draft.bookingId } : {}), ...(draft.jobId ? { jobId: draft.jobId } : {}),
+    ...(draft.inspectionLinked && draft.inspectionId.trim() ? { inspectionId: Number(draft.inspectionId.trim()) || undefined } : {}),
     vehicle: { registration: draft.registrationNo.trim(), make: draft.make.trim(), model: draft.model.trim(), year: Number(draft.year), mileage: Number(draft.mileage) },
     customerReport: {
       problemDescription: draft.problemDescription.trim(), severity: draft.severity.trim(),
