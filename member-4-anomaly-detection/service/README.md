@@ -26,7 +26,7 @@ All numbers are in `configs/threat_rules.yaml`. You can change them there withou
 ```
 c4security/   engine.py (rules)  pipeline.py (detect + track + run)  api.py (REST)  cli.py  publisher.py  zone_helper.py
 configs/      threat_rules.yaml   zones/<camera_id>.yaml
-models/       component4_best.pt  (trained YOLO11m, 9 classes, 40 MB)
+models/       component4_best.pt  (trained YOLO11m, 9 classes, 40 MB; not in git: get it from component4-handover.zip)
 tests/        python -m pytest tests
 Dockerfile    requirements.txt
 ```
@@ -48,11 +48,14 @@ Docker (CPU): `docker build -t c4-security . && docker run -p 8004:8004 -e C4_WE
 
 ## Run as a service (integration)
 
+For the AutoSense web app, use `c4security.service:app` (the API below plus the browser video and delete
+endpoints the Cameras screen needs). `./start.sh` (macOS/Linux) or `.\start.ps1` (Windows) runs exactly this:
+
 ```bash
-uvicorn c4security.api:app --host 0.0.0.0 --port 8004
+uvicorn c4security.service:app --host 127.0.0.1 --port 8004
 ```
 
-Open http://localhost:8004/docs for the interactive API.
+`c4security.api:app` is the plain REST API without those two endpoints. Open http://localhost:8004/docs for the interactive API.
 
 | Method | Path | Use |
 |---|---|---|
