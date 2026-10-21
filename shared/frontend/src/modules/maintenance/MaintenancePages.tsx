@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Card } from '@/components/ui/Card';
 import { Alert, Field, SelectField } from '@/components/ui/Form';
@@ -27,12 +27,45 @@ export function ForecastsPage() { return <><div className="app-content"><div cla
 const steps = ['Vehicle', 'Service history', 'Diagnostics & inspection', 'Review'];
 function userMessage(error: unknown) { if (error instanceof ApiError) { if (error.status === 400 || error.status === 422) return 'Please review the forecast information and correct the highlighted fields.'; if (error.status === 503) return 'Maintenance prediction service is currently unavailable.'; if (error.status === 504) return 'Maintenance prediction service timed out. Please try again.'; if (error.status === 500 || error.status === 502) return 'Unable to generate the maintenance forecast right now.'; return error.message; } return 'Unable to generate the maintenance forecast right now.'; }
 
+const VEHICLE_CONTEXT_FIELDS = ['registrationNo', 'make', 'model', 'year', 'mileage', 'customer', 'serviceHistoryAvailable', 'serviceHistorySummary', 'inspectionLinked', 'inspectionId'] as const satisfies readonly (keyof ForecastDraft)[];
+
 export function NewForecastPage() {
   const navigate = useNavigate(); const [params] = useSearchParams(); const [step, setStep] = useState(0); const [draft, setDraft] = useState<ForecastDraft>(EMPTY_DRAFT); const [errors, setErrors] = useState<Record<string, string>>({}); const [busy, setBusy] = useState(false); const [error, setError] = useState<string>();
-  const set = (key: keyof ForecastDraft, value: string | boolean) => setDraft((d) => ({ ...d, [key]: value }));
-  const loadVehicle = (vehicleId: number, bookingId?: number) => void getVehicleBootstrap(vehicleId, bookingId).then((b) => setDraft((d) => ({ ...d, vehicleId, bookingId, registrationNo: b.vehicle.registrationNo, make: b.vehicle.make, model: b.vehicle.model, year: b.vehicle.year ? String(b.vehicle.year) : '', mileage: b.vehicle.latestMileage == null ? '' : String(b.vehicle.latestMileage), customer: b.vehicle.customer?.name ?? '', serviceHistoryAvailable: b.serviceHistory.length > 0, serviceHistorySummary: b.serviceHistory.map((x) => `${x.service} (${x.date})${x.notes ? `: ${x.notes}` : ''}`).join('\n'), inspectionLinked: b.inspections.length > 0, inspectionId: b.inspections[0] ? String(b.inspections[0].inspectionId) : '' }))).catch(() => setError('Unable to load the selected vehicle context.'));
+  // Fields the user has typed into; async vehicle bootstrap must never overwrite these.
+  const editedFields = useRef(new Set<keyof ForecastDraft>());
+  // Vehicle/booking context already requested, so the same selection is not loaded twice.
+  const loadedContext = useRef<string | undefined>(undefined);
+  const set = (key: keyof ForecastDraft, value: string | boolean) => { editedFields.current.add(key); setDraft((d) => ({ ...d, [key]: value })); };
+  // Loads vehicle context once per vehicle/booking selection and merges it without overwriting user edits.
+  // `refreshYear` is used after the vehicle year is corrected elsewhere: it re-fetches the same vehicle and only refreshes the year.
+  const loadVehicle = (vehicleId: number, bookingId?: number, refreshYear = false) => {
+    const contextKey = `${vehicleId}:${bookingId ?? ''}`;
+    if (!refreshYear && loadedContext.current === contextKey) return;
+    const vehicleChanged = !loadedContext.current?.startsWith(`${vehicleId}:`);
+    loadedContext.current = contextKey;
+    void getVehicleBootstrap(vehicleId, bookingId).then((b) => {
+      if (loadedContext.current !== contextKey) return; // a newer selection superseded this response
+      if (vehicleChanged) for (const key of VEHICLE_CONTEXT_FIELDS) editedFields.current.delete(key);
+      const fresh: Partial<ForecastDraft> = {
+        registrationNo: b.vehicle.registrationNo, make: b.vehicle.make, model: b.vehicle.model,
+        year: b.vehicle.year ? String(b.vehicle.year) : '', mileage: b.vehicle.latestMileage == null ? '' : String(b.vehicle.latestMileage),
+        customer: b.vehicle.customer?.name ?? '', serviceHistoryAvailable: b.serviceHistory.length > 0,
+        serviceHistorySummary: b.serviceHistory.map((x) => `${x.service} (${x.date})${x.notes ? `: ${x.notes}` : ''}`).join('\n'),
+        inspectionLinked: b.inspections.length > 0, inspectionId: b.inspections[0] ? String(b.inspections[0].inspectionId) : '',
+      };
+      setDraft((d) => {
+        const next: ForecastDraft = { ...d, vehicleId, bookingId };
+        const assign = <K extends keyof ForecastDraft>(key: K) => { if (fresh[key] !== undefined) next[key] = fresh[key] as ForecastDraft[K]; };
+        for (const key of VEHICLE_CONTEXT_FIELDS) {
+          if (refreshYear && !vehicleChanged) { if (key === 'year' && fresh.year) assign(key); continue; }
+          if (!editedFields.current.has(key)) assign(key);
+        }
+        return next;
+      });
+    }).catch(() => { if (loadedContext.current === contextKey) loadedContext.current = undefined; setError('Unable to load the selected vehicle context.'); });
+  };
   useEffect(() => { const vehicleId = Number(params.get('vehicleId')); if (vehicleId) loadVehicle(vehicleId, Number(params.get('bookingId')) || undefined); }, [params]);
-  useEffect(() => { const onVehicleSelected = (event: Event) => loadVehicle((event as CustomEvent<number>).detail); const onYearUpdated = (event: Event) => loadVehicle((event as CustomEvent<{ vehicleId: number }>).detail.vehicleId); window.addEventListener('autosense:vehicle-selected', onVehicleSelected); window.addEventListener('autosense:vehicle-year-updated', onYearUpdated); return () => { window.removeEventListener('autosense:vehicle-selected', onVehicleSelected); window.removeEventListener('autosense:vehicle-year-updated', onYearUpdated); }; }, []);
+  useEffect(() => { const onVehicleSelected = (event: Event) => loadVehicle((event as CustomEvent<number>).detail); const onYearUpdated = (event: Event) => loadVehicle((event as CustomEvent<{ vehicleId: number }>).detail.vehicleId, undefined, true); window.addEventListener('autosense:vehicle-selected', onVehicleSelected); window.addEventListener('autosense:vehicle-year-updated', onYearUpdated); return () => { window.removeEventListener('autosense:vehicle-selected', onVehicleSelected); window.removeEventListener('autosense:vehicle-year-updated', onYearUpdated); }; }, []);
   function validate() { const next: Record<string, string> = {}; if (!draft.registrationNo.trim()) next.registrationNo = 'Vehicle registration is required.'; if (!draft.make.trim()) next.make = 'Make is required.'; if (!draft.model.trim()) next.model = 'Model is required.'; if (!draft.year) next.year = draft.vehicleId ? 'Vehicle year is not recorded. Verify and update this vehicle before running the forecast.' : 'Enter a vehicle year.'; else if (Number(draft.year) < 1900 || Number(draft.year) > new Date().getFullYear() + 1) next.year = 'Enter a valid year.'; if (!draft.mileage || Number(draft.mileage) < 0) next.mileage = 'Enter a valid mileage.'; if (!draft.problemDescription.trim()) next.problemDescription = 'Describe the reported problem.'; if (!draft.severity.trim()) next.severity = 'Severity is required.'; setErrors(next); return Object.keys(next).length === 0; }
   async function submit(e: FormEvent) { e.preventDefault(); if (!validate()) { setStep(0); return; } setError(undefined); setBusy(true); try { const result = await createForecast(draft); navigate(`/maintenance/forecasts/${result.id}`, { state: { forecast: result } }); } catch (err) { setError(userMessage(err)); setBusy(false); } }
   return <><PageHeader title="New maintenance forecast" subtitle="Combine customer, service-centre and inspection information before running the model." documentTitle="New forecast" /><div className="app-content"><div className="container-fluid"><form onSubmit={submit} noValidate><div className="as-stepper">{steps.map((label, i) => <button type="button" className={i === step ? 'active' : i < step ? 'done' : ''} key={label} onClick={() => i <= step && setStep(i)}><span>{i + 1}</span>{label}</button>)}</div>{error && <Alert>{error}</Alert>}{step === 0 && <VehicleStep draft={draft} set={set} errors={errors} />}{step === 1 && <HistoryStep draft={draft} set={set} />}{step === 2 && <DiagnosticsStep draft={draft} set={set} />}{step === 3 && <ReviewStep draft={draft} />}{<div className="d-flex justify-content-between mt-3 mb-4"><Link className="btn btn-light" to="/maintenance/forecasts">Cancel</Link><div className="d-flex gap-2">{step > 0 && <button type="button" className="btn btn-light" onClick={() => setStep(step - 1)}>Back</button>}{step < 3 ? <button type="button" className="btn btn-primary" onClick={() => { if (step === 0 && !validate()) return; setStep(step + 1); }}>Continue <i className="bi bi-arrow-right ms-1" /></button> : <button className="btn btn-primary" disabled={busy}>{busy ? 'Analyzing vehicle information...' : 'Run forecast'}</button>}</div></div>}</form></div></div></>;
