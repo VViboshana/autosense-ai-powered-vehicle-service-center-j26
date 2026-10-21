@@ -144,6 +144,10 @@ export async function getActions(db: Db): Promise<ActionItem[]> {
        (SELECT inspection_no FROM damage.inspections WHERE status = 'awaiting_review' ORDER BY created_at LIMIT 1) AS review_oldest_no,
        (SELECT min(created_at) FROM damage.inspections WHERE status = 'awaiting_review') AS review_oldest_at,
        (SELECT count(*) FROM workshop.jobs WHERE stage = 'waiting_for_bay') AS waiting_count,
+       (SELECT count(*) FROM workshop.jobs j WHERE j.stage = 'inspected'
+          AND NOT EXISTS (SELECT 1 FROM maintenance.forecasts f WHERE f.job_id = j.job_id)) AS forecast_count,
+       (SELECT min(j.updated_at) FROM workshop.jobs j WHERE j.stage = 'inspected'
+          AND NOT EXISTS (SELECT 1 FROM maintenance.forecasts f WHERE f.job_id = j.job_id)) AS forecast_since,
        (SELECT min(checked_in_at) FROM workshop.jobs WHERE stage = 'waiting_for_bay') AS waiting_since,
        (SELECT count(*) FROM workshop.vehicle_claims WHERE status = 'pending') AS claims_count,
        (SELECT min(requested_at) FROM workshop.vehicle_claims WHERE status = 'pending') AS claims_oldest,
@@ -155,7 +159,7 @@ export async function getActions(db: Db): Promise<ActionItem[]> {
   return [
     { key: 'safety_alerts', connected: false, count: 0, detail: null, at: null },
     { key: 'inspection_review', connected: true, count: r.review_count, detail: r.review_oldest_no, at: r.review_oldest_at },
-    { key: 'maintenance_suggestions', connected: false, count: 0, detail: null, at: null },
+    { key: 'maintenance_suggestions', connected: true, count: r.forecast_count, detail: null, at: r.forecast_since },
     { key: 'waiting_for_bay', connected: true, count: r.waiting_count, detail: null, at: r.waiting_since },
     { key: 'vehicle_requests', connected: true, count: r.claims_count, detail: null, at: r.claims_oldest },
     { key: 'cameras_offline', connected: true, count: r.offline_count, detail: r.offline_name, at: r.offline_since },

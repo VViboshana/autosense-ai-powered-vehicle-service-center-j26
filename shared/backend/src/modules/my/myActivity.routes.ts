@@ -77,7 +77,8 @@ export function myActivityRoutes(pool: pg.Pool) {
     const user = signedInUser(req);
     const me = user.customerId!;
     const canReports = user.screens.has('MY_INSPECTIONS');
-    const [claims, stages, reports, bookings, seen] = await Promise.all([
+    const canPlans = user.screens.has('MY_MAINTENANCE');
+    const [claims, stages, reports, bookings, seen, plans] = await Promise.all([
       pool.query(
         `SELECT claim_id, registration_no, status, review_note, reviewed_at FROM workshop.vehicle_claims
          WHERE customer_id = $1 AND status IN ('approved', 'rejected') AND reviewed_at > now() - interval '60 days'`,
@@ -113,6 +114,17 @@ export function myActivityRoutes(pool: pg.Pool) {
         [me],
       ),
       pool.query<{ seen: Date | null }>('SELECT notifications_seen_at AS seen FROM app.users WHERE user_id = $1', [user.userId]),
+      canPlans
+        ? pool.query(
+            `SELECT f.forecast_id, f.confirmed_at, f.selected_fix_title, f.estimated_minutes, v.vehicle_id, v.registration_no
+             FROM workshop.vehicle_claims vc
+             JOIN workshop.vehicles v ON v.vehicle_id = vc.vehicle_id
+             JOIN maintenance.forecasts f ON f.vehicle_id = v.vehicle_id AND f.status = 'confirmed'
+             WHERE vc.customer_id = $1 AND vc.status = 'approved' AND f.confirmed_at >= vc.reviewed_at
+               AND f.confirmed_at > now() - interval '60 days'`,
+            [me],
+          )
+        : Promise.resolve({ rows: [] as Record<string, unknown>[] }),
     ]);
 
     type Item = { id: string; title: string; body: string | null; at: Date; tone: string; icon: string; link: string | null };
@@ -146,6 +158,15 @@ export function myActivityRoutes(pool: pg.Pool) {
         tone: 'info',
         icon: 'bi-clipboard-check',
         link: `/my/vehicles/${r.vehicle_id}#report`,
+      })),
+      ...plans.rows.map((f) => ({
+        id: `plan-${f.forecast_id}`,
+        title: `Maintenance plan ready for ${f.registration_no}`,
+        body: f.selected_fix_title ? `${f.selected_fix_title}${f.estimated_minutes != null ? `, about ${f.estimated_minutes} min of work` : ''}.` : null,
+        at: f.confirmed_at as Date,
+        tone: 'info',
+        icon: 'bi-wrench-adjustable',
+        link: `/my/vehicles/${f.vehicle_id}#plan`,
       })),
       ...bookings.rows.map((b) => ({
         id: `booking-${b.booking_id}`,

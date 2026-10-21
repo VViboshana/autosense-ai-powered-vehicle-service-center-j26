@@ -10,7 +10,7 @@ export type MyVehicles = {
     registrationNo: string;
     description: string;
     photoUrl: string | null;
-    visit: { stage: JobStage; checkedInAt: string; bay: string | null; queuePosition: number | null } | null;
+    visit: { stage: JobStage; checkedInAt: string; bay: string | null; queuePosition: number | null; planReady: boolean } | null;
     latestInspection: { inspectionNo: string; confirmedAt: string; overallSeverity: string | null; areas: number; priority: Priority | null } | null;
   }[];
   requests: {
@@ -81,9 +81,10 @@ export type MyVehicle = {
       readyAt: string | null;
       queuePosition: number | null;
       estimatedReadyAt: string | null;
+      planReady: boolean;
     } | null>;
     inspections: Section<InspectionReport[]>;
-    maintenance: Section<{ category: string; selectedTask: string | null; estimatedHours: number | null; estimatedMinutes: number | null; status: string; confirmedAt: string } | null>;
+    maintenance: Section<{ category: string; selectedTask: string | null; estimatedHours: number | null; estimatedMinutes: number | null; status: string; confirmedAt: string; thisVisit: boolean; jobNo: string | null; inspectionNo: string | null } | null>;
     safety: Section<null>;
   };
 };

@@ -103,8 +103,8 @@ const syncing = new Set<number>();
 export async function syncAnalysis(deps: VideoDeps, id: number) {
   const { pool, serviceUrl, uploadDir } = deps;
   const { rows } = await pool.query(
-    `SELECT a.video_analysis_id, a.service_job_id, a.status, a.created_at, a.camera_id, c.zone_id
-     FROM security.video_analyses a JOIN security.cameras c ON c.camera_id = a.camera_id WHERE a.video_analysis_id = $1`,
+    `SELECT a.video_analysis_id, a.service_job_id, a.status, a.created_at, a.camera_id, a.is_synthetic, c.zone_id
+     FROM security.video_analyses a LEFT JOIN security.cameras c ON c.camera_id = a.camera_id WHERE a.video_analysis_id = $1`,
     [id],
   );
   const a = rows[0];
@@ -163,6 +163,10 @@ export async function syncAnalysis(deps: VideoDeps, id: number) {
          WHERE video_analysis_id = $1`,
         [id, JSON.stringify(job.data.summary ?? {}), alerts.length, videoKey],
       );
+      // A camera whose recording was just analysed is sending pictures again: it is online
+      if (a.camera_id && !a.is_synthetic) {
+        await client.query(`UPDATE security.cameras SET status = 'online', last_seen_at = now() WHERE camera_id = $1`, [a.camera_id]);
+      }
     });
     return { reachable: true };
   } finally {
@@ -177,7 +181,7 @@ async function markFailed(db: Db, id: number, error: string) {
 /** One engine alert -> a security.alerts row (status open) with its "raised" (and "escalated") timeline entries. */
 async function importAlert(
   client: pg.PoolClient,
-  a: { video_analysis_id: number; created_at: Date; camera_id: number; zone_id: number | null },
+  a: { video_analysis_id: number; created_at: Date; camera_id: number | null; zone_id: number | null; is_synthetic: boolean },
   al: EngineAlert,
   snapshotKey: string | null,
 ) {
@@ -189,7 +193,7 @@ async function importAlert(
   const plates = al.affected_vehicles.map((v) => v.plate).filter(Boolean);
   const who = al.person_role ? `${al.person_role === 'worker' ? 'Worker' : 'Visitor'}${al.person_track_id ? ` (track ${al.person_track_id})` : ''}` : null;
   const summary = [
-    `Found in a recorded video at ${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`,
+    `Found in a ${a.is_synthetic ? 'synthetic test' : 'recorded'} video at ${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`,
     who,
     al.affected_vehicles.length ? `${al.affected_vehicles.length} ${al.affected_vehicles.length === 1 ? 'vehicle' : 'vehicles'} nearby` : null,
     reasons.length ? reasons.join(', ') : null,
@@ -201,31 +205,40 @@ async function importAlert(
     `INSERT INTO security.alerts (alert_id, alert_no, threat_type, severity, base_severity, escalation_reasons, confidence,
                                   camera_id, zone_id, detected_at, person_role, persons_involved, persons_affected,
                                   vehicle_id, summary, notify_roles, snapshot_key, status, model_version_id,
-                                  video_analysis_id, video_time_s, source_alert_id)
+                                  video_analysis_id, video_time_s, source_alert_id, is_synthetic)
      SELECT $1, $2, $3::varchar, $4, t.base_severity, $5, $6, $7, $8, $9, $10, $11, $12,
             (SELECT vehicle_id FROM workshop.vehicles WHERE upper(replace(replace(registration_no, ' ', ''), '-', '')) =
                upper(replace(replace($13::text, ' ', ''), '-', '')) LIMIT 1),
             $14, $15, $16, 'open',
             (SELECT model_version_id FROM app.model_versions WHERE component = 'security' AND is_active ORDER BY model_version_id DESC LIMIT 1),
-            $17, $18, $19
+            $17, $18, $19, $20
      FROM security.threat_types t WHERE t.code = $3::varchar
      ON CONFLICT (video_analysis_id, source_alert_id) WHERE video_analysis_id IS NOT NULL DO NOTHING
      RETURNING alert_id, base_severity`,
     [
       alertId, formatAlertNo(alertId, detectedAt), al.threat_type, severity, reasons, al.confidence, a.camera_id, a.zone_id, detectedAt,
       al.person_role ?? null, al.person_track_id != null ? 1 : 0, al.affected_persons, plates[0] ?? null, summary.slice(0, 300),
-      al.notify_roles.filter((r) => r !== 'log_only'), snapshotKey, a.video_analysis_id, t, al.alert_id,
+      al.notify_roles.filter((r) => r !== 'log_only'), snapshotKey, a.video_analysis_id, t, al.alert_id, a.is_synthetic,
     ],
   );
   const row = inserted.rows[0];
   if (!row) return;
   await client.query(`INSERT INTO security.alert_actions (alert_id, action, note, at) VALUES ($1, 'raised', $2, $3)`, [
-    alertId, 'From recorded video analysis', detectedAt,
+    alertId, a.is_synthetic ? 'From a synthetic test video (not a real incident)' : 'From recorded video analysis', detectedAt,
   ]);
   if (row.base_severity !== severity) {
     await client.query(`INSERT INTO security.alert_actions (alert_id, action, note, at) VALUES ($1, 'escalated', $2, $3)`, [
       alertId, `Raised from ${row.base_severity} to ${severity}: ${reasons.join(', ')}`, detectedAt,
     ]);
+  }
+}
+
+/** Asks the service to drop its own copy of a job (upload and outputs). Best effort: the app's copy is already gone. */
+export async function removeServiceJob(serviceUrl: string, jobId: string) {
+  try {
+    await fetch(new URL(`/jobs/${jobId}`, serviceUrl), { method: 'DELETE', signal: AbortSignal.timeout(5_000) });
+  } catch {
+    logger.warn('security service copy not removed (service not running)', { jobId });
   }
 }
 

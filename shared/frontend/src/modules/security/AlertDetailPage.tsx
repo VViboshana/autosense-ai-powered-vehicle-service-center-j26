@@ -124,7 +124,13 @@ export function AlertDetailPage() {
         <div className="container-fluid">
           {actionError && <Alert>{actionError}</Alert>}
 
-          {data.status !== 'resolved' && data.severity === 'critical' && (
+          {data.isSynthetic && (
+            <Alert tone="info">
+              <b>Synthetic test video, not a real incident.</b> This alert was found in a test clip on the Model demo and is not part of the
+              Alerts list or the alert figures.
+            </Alert>
+          )}
+          {!data.isSynthetic && data.status !== 'resolved' && data.severity === 'critical' && (
             <Alert>
               <b>Critical: check the camera or the area now.</b>{' '}
               {emergency ? `If the threat is real, call ${emergency}, then record it here with Record action.` : 'If the threat is real, alert the centre manager.'}{' '}

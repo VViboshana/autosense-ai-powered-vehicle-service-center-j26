@@ -60,6 +60,8 @@ export type AlertDetail = AlertListItem & {
   actions: { action: AlertActionKind; note: string | null; by: string | null; at: string }[];
   /** Set when the alert was found in a recorded video. */
   video: { videoAnalysisId: number; fileName: string; timeS: number } | null;
+  /** Found in a synthetic test video, not a real incident. */
+  isSynthetic: boolean;
 };
 
 export type SecuritySummary = {
@@ -112,7 +114,11 @@ export type VideoAnalysis = {
   videoAnalysisId: number;
   fileName: string;
   fileSize: number;
-  camera: { cameraId: number; code: string; name: string; zone: string | null };
+  /** null for a synthetic test video */
+  camera: { cameraId: number; code: string; name: string; zone: string | null } | null;
+  isSynthetic: boolean;
+  title: string | null;
+  expectedThreat: ThreatType | null;
   startTime: string | null;
   shortTimings: boolean;
   status: 'running' | 'done' | 'failed';
@@ -129,3 +135,18 @@ export type VideoAlert = AlertListItem & { videoTimeS: number; hasSnapshot: bool
 export type VideoAnalysisDetail = VideoAnalysis & { alerts: VideoAlert[]; serviceReachable: boolean };
 
 export type SecurityService = { online: boolean; modelFound: boolean; runningJobs: number; version: string | null };
+
+/** One screen of the live wall (GET /api/security/wall). */
+export type WallTile = {
+  camera: { cameraId: number; code: string; name: string; zone: string | null; status: 'online' | 'offline' };
+  clip: { videoAnalysisId: number; fileName: string; videoS: number | null; analysedAt: string } | null;
+  alerts: { alertId: number; alertNo: string; threatType: ThreatType; threatName: string; severity: Severity; confidence: number | null; videoTimeS: number; status: AlertStatus }[];
+};
+
+/** A synthetic test video on the model demo wall (GET /api/security/demo). */
+export type DemoClip = VideoAnalysis & {
+  alerts: { alertId: number; alertNo: string; threatType: ThreatType; threatName: string; severity: Severity; confidence: number | null; videoTimeS: number }[];
+};
+
+/** An alert shown on a replay screen at its moment in the clip. */
+export type ReplayAlert = { alertId: number; alertNo: string; threatType: ThreatType; threatName: string; severity: Severity; confidence: number | null; videoTimeS: number };

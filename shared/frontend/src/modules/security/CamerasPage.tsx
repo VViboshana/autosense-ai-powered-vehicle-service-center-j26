@@ -8,80 +8,144 @@ import { StatusPill } from '@/components/ui/StatusPill';
 import { PageHeader } from '@/layout/PageHeader';
 import { formatDate, formatDuration, formatTime, minutesSince } from '@/lib/format';
 import { useApi } from '@/lib/useApi';
+import { ConnectionButton, RecordingsDialog } from './CameraActions';
+import { LiveWall } from './LiveWall';
+import { ModelDemo } from './ModelDemo';
 import { SeverityPill } from './SecurityParts';
-import type { SecurityCamera, SecurityService, VideoAnalysis } from './security.types';
+import type { SecurityCamera, SecurityService } from './security.types';
 import { ZONE_TYPE } from './security.ui';
-import { RecentVideos, ServiceStatus, VideoUploadDialog } from './VideoParts';
+import { ServiceStatus, VideoUploadDialog } from './VideoParts';
 import './security.css';
 
-function CameraTile({ camera, canSeeAlerts, onAnalyse }: { camera: SecurityCamera; canSeeAlerts: boolean; onAnalyse?: () => void }) {
-  const offline = camera.status === 'offline';
+/** Every premises camera in one table: is it sending pictures, what it watches, and its real (not test) alerts. */
+function CameraHealth({
+  cameras,
+  canSeeAlerts,
+  canUpload,
+  onAnalyse,
+  onRecordings,
+  onChanged,
+}: {
+  cameras: SecurityCamera[];
+  canSeeAlerts: boolean;
+  canUpload: boolean;
+  onAnalyse: (cameraId: number) => void;
+  onRecordings: (camera: SecurityCamera) => void;
+  onChanged: () => void;
+}) {
   return (
-    <div className={`as-sec-cam${offline ? ' offline' : ''}`}>
-      <div className="as-sec-cam-view">
-        <StatusPill tone={offline ? 'danger' : 'success'}>{offline ? 'Offline' : 'Online'}</StatusPill>
-        <span className="as-sec-cam-code">{camera.code}</span>
-        <i className={`bi ${offline ? 'bi-camera-video-off' : 'bi-camera-video'}`} aria-hidden="true" />
-        <span>
-          {offline
-            ? camera.lastSeenAt ? `No picture for ${formatDuration(minutesSince(camera.lastSeenAt))}` : 'Never connected'
-            : 'Watched by the security service'}
-        </span>
-      </div>
-      <div className="as-sec-cam-body">
-        <b>{camera.name}</b>
-        {camera.zone && (
-          <div className="d-flex align-items-center gap-2 flex-wrap">
-            <span className="small">{camera.zone.name}</span>
-            <StatusPill tone={ZONE_TYPE[camera.zone.zoneType].tone}>{ZONE_TYPE[camera.zone.zoneType].label}</StatusPill>
-          </div>
-        )}
-        {camera.location && <span className="as-sec-cam-line">{camera.location}</span>}
-        <span className="as-sec-cam-line">
-          {camera.lastAlertAt ? `Last alert ${formatDate(camera.lastAlertAt)} ${formatTime(camera.lastAlertAt)}` : 'No alerts yet'}
-          {' · '}
-          {camera.alertsToday} today
-        </span>
-      </div>
-      <div className="as-sec-cam-foot">
-        {camera.activeAlerts > 0 && camera.worstActiveSeverity ? (
-          <span className="d-flex align-items-center gap-2">
-            <SeverityPill severity={camera.worstActiveSeverity} />
-            <span>{camera.activeAlerts} active</span>
-          </span>
-        ) : (
-          <span className="text-body-secondary">No active alerts</span>
-        )}
-        <span className="d-flex align-items-center gap-3">
-          {onAnalyse && (
-            <button type="button" className="btn btn-link btn-sm p-0 small" onClick={onAnalyse} title={`Analyse a recorded video from ${camera.name}`}>
-              <i className="bi bi-film me-1" aria-hidden="true" />Video
-            </button>
-          )}
-          {canSeeAlerts && (
-            <Link to={`/safety/alerts?camera=${camera.cameraId}`} className="small">
-              Alerts <i className="bi bi-chevron-right" aria-hidden="true" />
-            </Link>
-          )}
-        </span>
-      </div>
+    <div className="table-responsive">
+      <table className="table as-table">
+        <thead>
+          <tr>
+            <th>Camera</th>
+            <th>Zone</th>
+            <th>Status</th>
+            <th>Active alerts</th>
+            <th className="text-end">Today</th>
+            <th>Last alert</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {cameras.map((c) => {
+            const offline = c.status === 'offline';
+            return (
+              <tr key={c.cameraId}>
+                <td className="as-veh">
+                  <b>{c.name}</b>
+                  <small className="as-mono">
+                    {c.code}
+                    {c.location && <span className="as-sec-loc"> · {c.location}</span>}
+                  </small>
+                </td>
+                <td className="small">
+                  {c.zone ? (
+                    <span className="d-flex align-items-center gap-2 flex-wrap">
+                      {c.zone.name}
+                      <StatusPill tone={ZONE_TYPE[c.zone.zoneType].tone}>{ZONE_TYPE[c.zone.zoneType].label}</StatusPill>
+                    </span>
+                  ) : (
+                    '—'
+                  )}
+                </td>
+                <td className="small text-nowrap">
+                  <StatusPill tone={offline ? 'danger' : 'success'}>{offline ? 'Offline' : 'Online'}</StatusPill>
+                  {offline && c.lastSeenAt && (
+                    <div className="text-body-secondary mt-1">
+                      No picture for {formatDuration(minutesSince(c.lastSeenAt))}
+                    </div>
+                  )}
+                </td>
+                <td className="text-nowrap">
+                  {c.activeAlerts > 0 && c.worstActiveSeverity ? (
+                    <span className="d-flex align-items-center gap-2">
+                      <SeverityPill severity={c.worstActiveSeverity} />
+                      <span className="small">{c.activeAlerts}</span>
+                    </span>
+                  ) : (
+                    <span className="small text-body-secondary">None</span>
+                  )}
+                </td>
+                <td className="text-end as-num">{c.alertsToday}</td>
+                <td className="small as-num text-nowrap">
+                  {c.lastAlertAt ? `${formatDate(c.lastAlertAt)} ${formatTime(c.lastAlertAt)}` : '—'}
+                </td>
+                <td className="text-end text-nowrap">
+                  <span className="d-inline-flex gap-3 small">
+                    <ConnectionButton camera={c} onChanged={onChanged} />
+                    <button type="button" className="btn btn-link btn-sm p-0" onClick={() => onRecordings(c)}>
+                      <i className="bi bi-film me-1" aria-hidden="true" />
+                      Recordings
+                    </button>
+                    {canUpload && (
+                      <button type="button" className="btn btn-link btn-sm p-0" onClick={() => onAnalyse(c.cameraId)}>
+                        <i className="bi bi-upload me-1" aria-hidden="true" />
+                        Recording
+                      </button>
+                    )}
+                    {canSeeAlerts && (
+                      <Link to={`/safety/alerts?camera=${c.cameraId}`}>
+                        Alerts <i className="bi bi-chevron-right" aria-hidden="true" />
+                      </Link>
+                    )}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
 
+type Upload = { mode: 'premises'; cameraId?: number } | { mode: 'synthetic' };
+
 /**
- * Safety › Cameras (CAMERAS): the security cameras around the premises, whether each is sending pictures, the zone it
- * watches and its active alerts. The live picture is watched by the security service, not streamed to the browser.
+ * Safety › Cameras (CAMERAS): the security console for the premises cameras.
+ * - Live wall: each camera's latest analysed recording replayed with the alerts the model raised, at their moment.
+ * - Camera health: online / offline, zone and active alerts of every camera.
+ * - Model demo: synthetic test videos that show how the model works, kept apart from real security data.
  */
 export function CamerasPage() {
   const { can } = useSession();
-  const { data, error, loading, reload } = useApi<SecurityCamera[]>('/security/cameras', undefined, { refreshMs: 30_000 });
+  const { data, error, loading, reload } = useApi<SecurityCamera[]>('/security/cameras', undefined, {
+    refreshMs: 30_000,
+  });
+  const service = useApi<SecurityService>('/security/service', undefined, { refreshMs: 10_000 });
+  const [upload, setUpload] = useState<Upload | null>(null);
+  const [demoKey, setDemoKey] = useState(0); // remounts the demo wall after a new test video, so it shows at once
+  const [wallKey, setWallKey] = useState(0); // remounts the live wall after a camera or recording change
+  const [recordingsOf, setRecordingsOf] = useState<SecurityCamera | null>(null);
+  const changed = () => {
+    reload();
+    setWallKey((k) => k + 1);
+  };
+
   const offline = data?.filter((c) => c.status === 'offline').length ?? 0;
-  const service = useApi<SecurityService>('/security/service', undefined, { refreshMs: 15_000 });
-  const videos = useApi<VideoAnalysis[]>('/security/videos', undefined, { refreshMs: 5_000 });
-  // undefined = closed; null = open without a camera chosen; a number = open for that camera
-  const [uploadFor, setUploadFor] = useState<number | null | undefined>(undefined);
   const canUpload = Boolean(data && data.length > 0);
+  const analyse = (cameraId?: number) => setUpload({ mode: 'premises', cameraId });
 
   return (
     <>
@@ -90,9 +154,15 @@ export function CamerasPage() {
         subtitle={
           data ? (
             <>
-              <span>{data.length} security {data.length === 1 ? 'camera' : 'cameras'}</span>
+              <span>
+                {data.length} premises {data.length === 1 ? 'camera' : 'cameras'}
+              </span>
               <span aria-hidden="true">·</span>
-              {offline > 0 ? <span className="text-danger">{offline} offline</span> : <span className="as-live">All online · updated {formatTime(new Date())}</span>}
+              {offline > 0 ? (
+                <span className="text-danger">{offline} offline</span>
+              ) : (
+                <span className="as-live">All online · updated {formatTime(new Date())}</span>
+              )}
             </>
           ) : (
             'Security cameras around the premises'
@@ -108,9 +178,9 @@ export function CamerasPage() {
               </Link>
             )}
             {canUpload && (
-              <button type="button" className="btn btn-primary" onClick={() => setUploadFor(null)}>
+              <button type="button" className="btn btn-primary" onClick={() => analyse()}>
                 <i className="bi bi-upload me-1" aria-hidden="true" />
-                Analyse a video
+                Analyse a recording
               </button>
             )}
           </>
@@ -118,47 +188,65 @@ export function CamerasPage() {
       />
       <div className="app-content">
         <div className="container-fluid">
-          <RecentVideos videos={videos} onUpload={() => setUploadFor(null)} canUpload={canUpload} />
-          <Card icon="bi-camera-video" title="Premises cameras" subtitle="Bay cameras for occupancy are in Bays & cameras">
+          {offline > 0 && (
+            <Alert tone="warning">
+              {offline === 1 ? 'One camera is' : `${offline} cameras are`} offline. Threats in{' '}
+              {offline === 1 ? 'its' : 'their'} view are not detected until {offline === 1 ? 'it is' : 'they are'} back
+              online.
+            </Alert>
+          )}
+
+          <LiveWall key={`wall-${wallKey}`} onAnalyse={analyse} canUpload={canUpload} />
+
+          <Card
+            icon="bi-activity"
+            title="Camera health"
+            subtitle="Status and real alerts of each premises camera (test videos excluded)"
+          >
             {error && !data ? (
               <ErrorState inline error={error} onRetry={reload} title="Cameras couldn't be loaded" />
             ) : loading || !data ? (
-              <div className="as-sec-cams" aria-busy="true">
-                {Array.from({ length: 6 }, (_, i) => (
-                  <div className="as-sec-cam" key={i}>
-                    <div className="as-sec-cam-view" />
-                    <div className="as-sec-cam-body">
-                      <Skeleton width="50%" />
-                      <Skeleton width="80%" />
-                    </div>
-                  </div>
-                ))}
+              <div className="as-sec-body">
+                <Skeleton width="70%" />
+                <div className="mt-2">
+                  <Skeleton width="50%" />
+                </div>
               </div>
             ) : data.length === 0 ? (
               <EmptyState icon="bi-camera-video" title="No security cameras yet">
                 Cameras appear here once they are added for the security service.
               </EmptyState>
             ) : (
-              <>
-                {offline > 0 && (
-                  <div className="as-sec-body pb-0">
-                    <Alert tone="warning">
-                      {offline === 1 ? 'One camera is' : `${offline} cameras are`} offline. Threats in {offline === 1 ? 'its' : 'their'} view are not
-                      detected until {offline === 1 ? 'it is' : 'they are'} back online.
-                    </Alert>
-                  </div>
-                )}
-                <div className="as-sec-cams">
-                  {data.map((c) => <CameraTile key={c.cameraId} camera={c} canSeeAlerts={can('SAFETY_ALERTS')} onAnalyse={() => setUploadFor(c.cameraId)} />)}
-                </div>
-              </>
+              <CameraHealth
+                cameras={data}
+                canSeeAlerts={can('SAFETY_ALERTS')}
+                canUpload={canUpload}
+                onAnalyse={analyse}
+                onRecordings={setRecordingsOf}
+                onChanged={changed}
+              />
             )}
           </Card>
+
+          <ModelDemo key={`demo-${demoKey}`} onAdd={() => setUpload({ mode: 'synthetic' })} canUpload={can('CAMERAS')} />
         </div>
       </div>
-      {uploadFor !== undefined && data && (
-        <VideoUploadDialog cameras={data} initialCameraId={uploadFor ?? undefined} serviceOnline={service.data?.online ?? false}
-          onClose={() => setUploadFor(undefined)} />
+
+      {recordingsOf && (
+        <RecordingsDialog camera={recordingsOf} onClose={() => setRecordingsOf(null)} onChanged={changed} />
+      )}
+      {upload && data && (
+        <VideoUploadDialog
+          mode={upload.mode}
+          cameras={data}
+          initialCameraId={upload.mode === 'premises' ? upload.cameraId : undefined}
+          serviceOnline={service.data?.online ?? false}
+          onClose={() => setUpload(null)}
+          onStarted={() => {
+            setUpload(null);
+            setDemoKey((k) => k + 1);
+          }}
+        />
       )}
     </>
   );

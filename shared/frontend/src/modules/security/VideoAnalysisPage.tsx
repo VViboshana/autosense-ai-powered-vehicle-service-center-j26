@@ -10,7 +10,7 @@ import { formatDate, formatTime } from '@/lib/format';
 import { useApi } from '@/lib/useApi';
 import { SeverityPill, ThreatCell } from './SecurityParts';
 import type { VideoAlert, VideoAnalysisDetail } from './security.types';
-import { alertStatus, formatSeconds, megabytes, percent, VIDEO_STATUS } from './security.ui';
+import { alertStatus, formatSeconds, megabytes, percent, THREAT, VIDEO_STATUS } from './security.ui';
 import './security.css';
 
 /** 41.5 -> "0:41" */
@@ -80,11 +80,20 @@ export function VideoAnalysisPage() {
   return (
     <>
       <PageHeader
-        title={<>{data.fileName} <StatusPill tone={status.tone}>{status.label}</StatusPill></>}
-        documentTitle={`Video · ${data.fileName}`}
+        title={
+          <>
+            {data.title ?? data.fileName} <StatusPill tone={status.tone}>{status.label}</StatusPill>
+            {data.isSynthetic && <> <StatusPill tone="info">Synthetic test video</StatusPill></>}
+          </>
+        }
+        documentTitle={`Video · ${data.title ?? data.fileName}`}
         subtitle={
           <>
-            <span>{data.camera.name} <span className="as-mono">{data.camera.code}</span>{data.camera.zone && `, ${data.camera.zone}`}</span>
+            {data.camera ? (
+              <span>{data.camera.name} <span className="as-mono">{data.camera.code}</span>{data.camera.zone && `, ${data.camera.zone}`}</span>
+            ) : (
+              <span>{data.expectedThreat ? `Made to show: ${THREAT[data.expectedThreat].label}` : 'Model demo'} · {data.fileName}</span>
+            )}
             <span aria-hidden="true">·</span>
             <span>Uploaded {formatDate(data.createdAt)} {formatTime(data.createdAt)}{data.createdBy && ` by ${data.createdBy}`}</span>
             <span aria-hidden="true">·</span>
@@ -97,7 +106,7 @@ export function VideoAnalysisPage() {
               <i className="bi bi-arrow-left me-1" aria-hidden="true" />
               Cameras
             </Link>
-            {data.status === 'done' && data.alertCount > 0 && can('SAFETY_ALERTS') && (
+            {data.status === 'done' && data.alertCount > 0 && data.camera && can('SAFETY_ALERTS') && (
               <Link className="btn btn-primary" to={`/safety/alerts?camera=${data.camera.cameraId}`}>
                 <i className="bi bi-shield-exclamation me-1" aria-hidden="true" />
                 Open in Alerts
@@ -175,8 +184,9 @@ export function VideoAnalysisPage() {
                     </div>
                   </Card>
                   <Alert tone="info">
-                    Alerts from this video are in the Alerts list like live ones, as open alerts to acknowledge and resolve. Confidence is the
-                    model's confidence; check each one before acting.
+                    {data.isSynthetic
+                      ? 'This is a synthetic test video: its alerts are test results shown on the Model demo, not real incidents, and they never reach the Alerts list.'
+                      : "Alerts from this video are in the Alerts list like live ones, as open alerts to acknowledge and resolve. Confidence is the model's confidence; check each one before acting."}
                   </Alert>
                 </div>
 

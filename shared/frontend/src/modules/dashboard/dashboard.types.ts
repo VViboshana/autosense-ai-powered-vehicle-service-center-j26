@@ -63,4 +63,9 @@ export type JobListItem = {
   estimatedMinutes: number | null;
   estimateLkr: number | null;
   advisor: string | null;
+  vehicleId: number;
+  /** This visit's maintenance forecast (component 3), once one is made */
+  forecast: JobForecast | null;
 };
+
+export type JobForecast = { forecastId: number; status: string; category: string; task: string | null; estimatedMinutes: number | null };

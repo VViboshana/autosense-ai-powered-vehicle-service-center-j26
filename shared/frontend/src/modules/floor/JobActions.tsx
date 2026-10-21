@@ -4,18 +4,20 @@ import { useSession } from '@/app/session';
 import { Alert, Field } from '@/components/ui/Form';
 import { Modal } from '@/components/ui/Modal';
 import { ApiError, apiSend } from '@/lib/api';
-import type { JobStage } from '@/modules/dashboard/dashboard.types';
+import type { JobForecast, JobStage } from '@/modules/dashboard/dashboard.types';
 
 /**
  * The buttons that move a job along the service flow (POST /api/jobs/:id/<action>), for the job list and the Bay
  * monitor. Each shows only in the stages it applies to and only to staff who may do it:
  *   in a bay           -> Send to damage inspection; Not this vehicle (back to the queue) (BAY_JOB_CONFIRM)
  *   damage inspection  -> Start inspection (opens New inspection with the vehicle chosen; INSPECTION_CREATE)
+ *   inspected          -> Maintenance forecast (opens the forecast wizard for this visit), or the forecast once made
+ *                         (MAINTENANCE_FORECASTS)
  *   in a bay .. inspected -> Work done (BAY_JOB_CONFIRM or INSPECTION_CONFIRM); asks first if no inspection is confirmed
  *   ready              -> Customer collected (JOB_CHECK_IN)
  *   any open stage     -> Cancel, with a reason (JOB_CHECK_IN)
  */
-type Job = { jobId: number; jobNo: string; stage: JobStage; registrationNo: string };
+type Job = { jobId: number; jobNo: string; stage: JobStage; registrationNo: string; vehicleId?: number; forecast?: JobForecast | null };
 const IN_BAY: JobStage[] = ['in_bay', 'inspecting', 'inspected'];
 
 export function JobActions({ job, onDone, size = 'sm', showCancel = true }: {
@@ -70,6 +72,16 @@ export function JobActions({ job, onDone, size = 'sm', showCancel = true }: {
             <i className="bi bi-camera me-1" aria-hidden="true" />Start inspection
           </Link>
         )}
+        {job.stage === 'inspected' && job.vehicleId && can('MAINTENANCE_FORECASTS') && (job.forecast ? (
+          <Link className={`${btn}btn-light`} to={`/maintenance/forecasts/${job.forecast.forecastId}`}
+            title={job.forecast.status === 'confirmed' ? 'Maintenance plan confirmed' : 'Forecast made, task not confirmed yet'}>
+            <i className={`bi ${job.forecast.status === 'confirmed' ? 'bi-check2-circle text-success' : 'bi-wrench-adjustable'} me-1`} aria-hidden="true" />Forecast
+          </Link>
+        ) : (
+          <Link className={`${btn}btn-primary`} to={`/maintenance/forecasts/new?vehicleId=${job.vehicleId}&jobId=${job.jobId}`}>
+            <i className="bi bi-wrench-adjustable me-1" aria-hidden="true" />Maintenance forecast
+          </Link>
+        ))}
         {IN_BAY.includes(job.stage) && canDone && (
           <button type="button" className={`${btn}btn-light`} disabled={busy} onClick={() => void run('work-done')}>
             <i className="bi bi-check2-circle me-1" aria-hidden="true" />Work done

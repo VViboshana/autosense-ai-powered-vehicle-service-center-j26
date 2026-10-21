@@ -19,8 +19,8 @@ const META: Record<ActionItem['key'], Meta> = {
     detail: (a) => (a.detail && a.at ? `Oldest: ${a.detail} · ${formatDuration(minutesSince(a.at))}` : 'Nothing waiting'),
   },
   maintenance_suggestions: {
-    title: 'Accept maintenance suggestions', icon: 'bi-wrench-adjustable', tone: 'info', screen: 'MAINTENANCE_FORECASTS', url: '/maintenance/forecasts', owner: 'Maintenance',
-    detail: () => 'Suggested work for vehicles today',
+    title: 'Maintenance forecasts to make', icon: 'bi-wrench-adjustable', tone: 'info', screen: 'MAINTENANCE_FORECASTS', url: '/maintenance/forecasts', owner: 'Maintenance',
+    detail: (a) => (a.at ? `Inspected vehicles · oldest ${formatDuration(minutesSince(a.at))}` : 'None waiting'),
   },
   waiting_for_bay: {
     title: 'Vehicles waiting for a bay', icon: 'bi-hourglass', tone: 'warning', screen: 'JOBS', url: '/floor/jobs', owner: 'Service floor',

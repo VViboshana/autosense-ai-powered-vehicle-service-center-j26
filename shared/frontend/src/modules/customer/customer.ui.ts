@@ -1,3 +1,4 @@
+import type { JobStage } from '@/modules/dashboard/dashboard.types';
 import type { Priority } from '@/modules/inspections/inspections.types';
 import type { ViewAngle } from './customer.types';
 
@@ -24,14 +25,32 @@ export const severityOf = (s: string | null) => SEVERITIES.find((v) => v.key ===
 export const severityTone = (s: string | null): SeverityTone => severityOf(s)?.tone ?? 'muted';
 export const severityName = (s: string | null) => severityOf(s)?.name ?? 'Not graded';
 
-/** The five steps of a visit, as the customer sees them (job stages map onto them with STAGES[stage].step). */
+/** The six steps of a visit, as the customer sees them (job stages map onto them with journeyStep). */
 export const JOURNEY = [
   { label: 'Checked in', icon: 'bi-box-arrow-in-right' },
   { label: 'Waiting for a bay', icon: 'bi-hourglass-split' },
-  { label: 'In a bay', icon: 'bi-wrench-adjustable' },
+  { label: 'In a bay', icon: 'bi-car-front' },
   { label: 'Damage inspection', icon: 'bi-clipboard-check' },
+  { label: 'Maintenance plan', icon: 'bi-wrench-adjustable' },
   { label: 'Ready for pickup', icon: 'bi-key' },
 ];
+export const JOURNEY_STEPS = JOURNEY.length;
+
+/**
+ * Where a visit is on the journey (1-6; 0 for a cancelled one). After the damage inspection the service centre makes
+ * the maintenance plan: an inspected vehicle is on that step, and the step is done once the plan is confirmed.
+ */
+export function journeyStep(stage: JobStage, planReady = false): number {
+  switch (stage) {
+    case 'checked_in': return 1;
+    case 'waiting_for_bay': return 2;
+    case 'in_bay': return 3;
+    case 'inspecting': return 4;
+    case 'inspected': return planReady ? 6 : 5;
+    case 'ready': case 'completed': return 6;
+    default: return 0;
+  }
+}
 
 /** 1 -> "1st", 2 -> "2nd", 11 -> "11th" */
 export function ordinal(n: number) {

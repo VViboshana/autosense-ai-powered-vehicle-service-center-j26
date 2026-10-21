@@ -99,3 +99,6 @@ export const VIDEO_STATUS: Record<'running' | 'done' | 'failed', { label: string
 
 export const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
 
+
+/** 41.5 -> "0:41" (a moment in a clip) */
+export const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;

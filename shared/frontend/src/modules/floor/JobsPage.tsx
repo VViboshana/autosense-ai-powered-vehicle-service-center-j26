@@ -240,7 +240,7 @@ function OpenJobs({ tick, onChanged }: { tick: number; onChanged: () => void }) 
                   {data.records.map((j) => (
                     <tr key={j.jobId}>
                       <td><b className="as-mono">{j.registrationNo}</b><div className="small text-body-secondary">{j.vehicle} · {j.jobNo}{j.customer ? ` · ${j.customer}` : ''}</div></td>
-                      <td className="small">{j.service}{j.estimatedMinutes ? <div className="text-body-secondary">about {j.estimatedMinutes} min</div> : null}</td>
+                      <td className="small">{j.service}{j.estimatedMinutes ? <div className="text-body-secondary">about {j.estimatedMinutes} min</div> : null}{j.forecast && <div className="text-body-secondary"><i className="bi bi-wrench-adjustable me-1" aria-hidden="true" />{j.forecast.task ? `${j.forecast.task}${j.forecast.estimatedMinutes ? ` · ${j.forecast.estimatedMinutes} min` : ''}` : `${j.forecast.category} (task not chosen)`}</div>}</td>
                       <td><StatusPill tone={STAGES[j.stage].tone}>{STAGES[j.stage].label}</StatusPill></td>
                       <td className="small">{j.bay ?? '—'}</td>
                       <td className="small as-num">{formatTime(j.checkedInAt)}</td>
