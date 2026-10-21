@@ -50,6 +50,8 @@ export type AlertDetail = AlertListItem & {
   actions: AlertAction[];
   /** Set when the alert was found in a recorded video: which analysis, and how many seconds into the clip. */
   video: { videoAnalysisId: number; fileName: string; timeS: number } | null;
+  /** Found in a synthetic test video, not a real incident. */
+  isSynthetic: boolean;
 };
 
 export type AlertView = 'active' | 'resolved' | 'all';
@@ -98,7 +100,7 @@ function toListItem(r: pg.QueryResultRow): AlertListItem {
 }
 
 export async function listAlerts(db: Db, f: AlertFilter): Promise<Page<AlertListItem>> {
-  const where: string[] = ['true'];
+  const where: string[] = ['NOT a.is_synthetic']; // synthetic test clips are not real incidents
   const params: unknown[] = [];
   const add = (sql: (n: number) => string, value: unknown) => {
     params.push(value);
@@ -134,7 +136,7 @@ export async function getAlert(db: Db, id: number): Promise<AlertDetail | null> 
             cu.full_name AS owner_name, j.job_no, a.detections, a.notify_roles, a.snapshot_key IS NOT NULL AS has_snapshot,
             a.resolution_note, a.acknowledged_at, a.resolved_at, ${USER_NAME('au')} AS acknowledged_by, ${USER_NAME('ru')} AS resolved_by,
             mv.name AS model_name, mv.version AS model_version,
-            a.video_analysis_id, a.video_time_s, va.file_name AS video_file_name
+            a.video_analysis_id, a.video_time_s, coalesce(va.title, va.file_name) AS video_file_name, a.is_synthetic
      ${LIST_JOINS}
      LEFT JOIN security.video_analyses va ON va.video_analysis_id = a.video_analysis_id
      LEFT JOIN workshop.customers cu ON cu.customer_id = v.customer_id
@@ -179,6 +181,7 @@ export async function getAlert(db: Db, id: number): Promise<AlertDetail | null> 
     model: r.model_name ? { name: r.model_name, version: r.model_version } : null,
     actions: actions.rows.map((a) => ({ action: a.action, note: a.note, by: a.by, at: a.at })),
     video: r.video_analysis_id ? { videoAnalysisId: r.video_analysis_id, fileName: r.video_file_name, timeS: r.video_time_s } : null,
+    isSynthetic: r.is_synthetic,
   };
 }
 
@@ -244,7 +247,8 @@ export async function securitySummary(db: Db): Promise<SecuritySummary> {
        count(*) FILTER (WHERE resolved_at >= today.start AND resolution = 'false_alarm') AS false_today,
        (SELECT count(*) FROM security.cameras WHERE is_active AND status = 'online') AS cameras_online,
        (SELECT count(*) FROM security.cameras WHERE is_active)                       AS cameras_total
-     FROM security.alerts, today`,
+     FROM security.alerts, today
+     WHERE NOT is_synthetic`,
   );
   const r = rows[0];
   return {
@@ -281,7 +285,7 @@ export async function listCameras(db: Db): Promise<SecurityCamera[]> {
      FROM security.cameras c
      CROSS JOIN today
      LEFT JOIN security.zones z ON z.zone_id = c.zone_id
-     LEFT JOIN security.alerts a ON a.camera_id = c.camera_id
+     LEFT JOIN security.alerts a ON a.camera_id = c.camera_id AND NOT a.is_synthetic
      WHERE c.is_active
      GROUP BY c.camera_id, z.zone_id
      ORDER BY c.code`,
@@ -353,7 +357,11 @@ export type VideoAnalysis = {
   videoAnalysisId: number;
   fileName: string;
   fileSize: number;
-  camera: { cameraId: number; code: string; name: string; zone: string | null };
+  /** null for a synthetic test video */
+  camera: { cameraId: number; code: string; name: string; zone: string | null } | null;
+  isSynthetic: boolean;
+  title: string | null;
+  expectedThreat: ThreatType | null;
   startTime: string | null;
   shortTimings: boolean;
   status: VideoAnalysisStatus;
@@ -368,10 +376,10 @@ export type VideoAnalysis = {
 
 const VIDEO_COLUMNS = `
   va.video_analysis_id, va.file_name, va.file_size, va.start_time, va.short_timings, va.status, va.error, va.summary,
-  va.alert_count, va.video_key IS NOT NULL AS has_video, va.created_at, va.finished_at,
+  va.alert_count, va.video_key IS NOT NULL AS has_video, va.created_at, va.finished_at, va.is_synthetic, va.title, va.expected_threat,
   c.camera_id, c.code AS camera_code, c.name AS camera_name, z.name AS zone_name, ${USER_NAME('u')} AS created_by
   FROM security.video_analyses va
-  JOIN security.cameras c ON c.camera_id = va.camera_id
+  LEFT JOIN security.cameras c ON c.camera_id = va.camera_id
   LEFT JOIN security.zones z ON z.zone_id = c.zone_id
   LEFT JOIN app.users u ON u.user_id = va.created_by`;
 
@@ -380,7 +388,10 @@ function toVideo(r: pg.QueryResultRow): VideoAnalysis {
     videoAnalysisId: r.video_analysis_id,
     fileName: r.file_name,
     fileSize: r.file_size,
-    camera: { cameraId: r.camera_id, code: r.camera_code, name: r.camera_name, zone: r.zone_name },
+    camera: r.camera_id ? { cameraId: r.camera_id, code: r.camera_code, name: r.camera_name, zone: r.zone_name } : null,
+    isSynthetic: r.is_synthetic,
+    title: r.title,
+    expectedThreat: r.expected_threat,
     startTime: r.start_time,
     shortTimings: r.short_timings,
     status: r.status,
@@ -401,12 +412,15 @@ export async function cameraForVideo(db: Db, cameraId: number) {
 
 export async function insertVideoAnalysis(
   db: Db,
-  v: { cameraId: number; fileName: string; fileSize: number; startTime: string | null; shortTimings: boolean; serviceJobId: string; userId: number },
+  v: { cameraId: number | null; fileName: string; fileSize: number; startTime: string | null; shortTimings: boolean; serviceJobId: string; userId: number;
+       synthetic?: { title: string; expectedThreat: ThreatType | null } },
 ): Promise<number> {
   const { rows } = await db.query<{ id: number }>(
-    `INSERT INTO security.video_analyses (camera_id, file_name, file_size, start_time, short_timings, service_job_id, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING video_analysis_id AS id`,
-    [v.cameraId, v.fileName.slice(0, 200), v.fileSize, v.startTime, v.shortTimings, v.serviceJobId, v.userId],
+    `INSERT INTO security.video_analyses (camera_id, file_name, file_size, start_time, short_timings, service_job_id, created_by,
+                                          is_synthetic, title, expected_threat)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING video_analysis_id AS id`,
+    [v.cameraId, v.fileName.slice(0, 200), v.fileSize, v.startTime, v.shortTimings, v.serviceJobId, v.userId,
+     Boolean(v.synthetic), v.synthetic?.title.slice(0, 120) ?? null, v.synthetic?.expectedThreat ?? null],
   );
   return rows[0]!.id;
 }
@@ -444,4 +458,100 @@ export async function getVideoAnalysis(db: Db, id: number) {
 export async function videoKey(db: Db, id: number): Promise<string | null> {
   const { rows } = await db.query<{ video_key: string | null }>('SELECT video_key FROM security.video_analyses WHERE video_analysis_id = $1', [id]);
   return rows[0]?.video_key ?? null;
+}
+
+export type WallTile = {
+  camera: { cameraId: number; code: string; name: string; zone: string | null; status: 'online' | 'offline' };
+  clip: { videoAnalysisId: number; fileName: string; videoS: number | null; analysedAt: string } | null;
+  alerts: { alertId: number; alertNo: string; threatType: ThreatType; threatName: string; severity: Severity; confidence: number | null; videoTimeS: number; status: AlertStatus }[];
+};
+
+/** The live wall: every active camera with its latest finished, playable video analysis and that clip's alerts. */
+export async function cameraWall(db: Db): Promise<WallTile[]> {
+  const { rows } = await db.query(
+    `SELECT c.camera_id, c.code, c.name, c.status, z.name AS zone_name,
+            v.video_analysis_id, v.file_name, (v.summary->>'video_s')::numeric AS video_s, v.finished_at
+     FROM security.cameras c
+     LEFT JOIN security.zones z ON z.zone_id = c.zone_id
+     LEFT JOIN LATERAL (
+       SELECT * FROM security.video_analyses va
+       WHERE va.camera_id = c.camera_id AND NOT va.is_synthetic AND va.status = 'done' AND va.video_key IS NOT NULL
+       ORDER BY va.finished_at DESC NULLS LAST, va.video_analysis_id DESC LIMIT 1
+     ) v ON true
+     WHERE c.is_active ORDER BY c.code`,
+  );
+  const ids = rows.map((r) => r.video_analysis_id).filter(Boolean);
+  const alerts = ids.length
+    ? (await db.query(
+        `SELECT a.video_analysis_id, a.alert_id, a.alert_no, a.threat_type, t.name AS threat_name, a.severity, a.confidence, a.video_time_s, a.status
+         FROM security.alerts a JOIN security.threat_types t ON t.code = a.threat_type
+         WHERE a.video_analysis_id = ANY($1::int[]) ORDER BY a.video_time_s`,
+        [ids],
+      )).rows
+    : [];
+  return rows.map((r) => ({
+    camera: { cameraId: r.camera_id, code: r.code, name: r.name, zone: r.zone_name, status: r.status },
+    clip: r.video_analysis_id ? { videoAnalysisId: r.video_analysis_id, fileName: r.file_name, videoS: r.video_s, analysedAt: r.finished_at } : null,
+    alerts: alerts
+      .filter((a) => a.video_analysis_id === r.video_analysis_id)
+      .map((a) => ({ alertId: a.alert_id, alertNo: a.alert_no, threatType: a.threat_type, threatName: a.threat_name, severity: a.severity,
+        confidence: a.confidence, videoTimeS: a.video_time_s, status: a.status })),
+  }));
+}
+
+export type DemoClip = VideoAnalysis & {
+  alerts: { alertId: number; alertNo: string; threatType: ThreatType; threatName: string; severity: Severity; confidence: number | null; videoTimeS: number }[];
+};
+
+/** The model demo wall: synthetic test videos, newest first, with their alerts (kept out of the real alert figures). */
+export async function demoClips(db: Db, limit = 12): Promise<DemoClip[]> {
+  const { rows } = await db.query(`SELECT ${VIDEO_COLUMNS} WHERE va.is_synthetic ORDER BY va.created_at DESC LIMIT $1`, [limit]);
+  const ids = rows.map((r) => r.video_analysis_id);
+  const alerts = ids.length
+    ? (await db.query(
+        `SELECT a.video_analysis_id, a.alert_id, a.alert_no, a.threat_type, t.name AS threat_name, a.severity, a.confidence, a.video_time_s
+         FROM security.alerts a JOIN security.threat_types t ON t.code = a.threat_type
+         WHERE a.video_analysis_id = ANY($1::int[]) ORDER BY a.video_time_s`,
+        [ids],
+      )).rows
+    : [];
+  return rows.map((r) => ({
+    ...toVideo(r),
+    alerts: alerts.filter((a) => a.video_analysis_id === r.video_analysis_id).map((a) => ({
+      alertId: a.alert_id, alertNo: a.alert_no, threatType: a.threat_type, threatName: a.threat_name, severity: a.severity,
+      confidence: a.confidence, videoTimeS: a.video_time_s,
+    })),
+  }));
+}
+
+/**
+ * Removes an uploaded video (premises recording or synthetic test video) together with the alerts found in it (their
+ * timelines go with them). Returns what is needed to clean up its files, or null when it does not exist.
+ */
+export async function deleteVideoAnalysis(db: Db, id: number) {
+  const { rows } = await db.query<{ service_job_id: string | null; camera_id: number | null; is_synthetic: boolean; status: string; file_name: string }>(
+    'SELECT service_job_id, camera_id, is_synthetic, status, file_name FROM security.video_analyses WHERE video_analysis_id = $1 FOR UPDATE',
+    [id],
+  );
+  const v = rows[0];
+  if (!v) return null;
+  const alerts = await db.query('DELETE FROM security.alerts WHERE video_analysis_id = $1', [id]);
+  await db.query('DELETE FROM security.video_analyses WHERE video_analysis_id = $1', [id]);
+  return { serviceJobId: v.service_job_id, cameraId: v.camera_id, isSynthetic: v.is_synthetic, status: v.status, fileName: v.file_name, alertsRemoved: alerts.rowCount ?? 0 };
+}
+
+/** Connects (online) or disconnects (offline) a premises camera. Returns false when there is no such camera. */
+export async function setCameraConnected(db: Db, cameraId: number, connected: boolean): Promise<boolean> {
+  const { rowCount } = await db.query(
+    `UPDATE security.cameras SET status = $2::varchar, last_seen_at = CASE WHEN $2::varchar = 'online' THEN now() ELSE last_seen_at END
+     WHERE camera_id = $1 AND is_active`,
+    [cameraId, connected ? 'online' : 'offline'],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+/** The uploaded recordings of one premises camera, newest first (for its Recordings list). */
+export async function cameraRecordings(db: Db, cameraId: number): Promise<VideoAnalysis[]> {
+  const { rows } = await db.query(`SELECT ${VIDEO_COLUMNS} WHERE va.camera_id = $1 AND NOT va.is_synthetic ORDER BY va.created_at DESC`, [cameraId]);
+  return rows.map(toVideo);
 }

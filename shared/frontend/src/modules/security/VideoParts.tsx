@@ -1,15 +1,12 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Card } from '@/components/ui/Card';
+import { useNavigate } from 'react-router-dom';
 import { Alert } from '@/components/ui/Form';
 import { Modal } from '@/components/ui/Modal';
-import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { ApiError, apiUpload, fieldErrors } from '@/lib/api';
-import { formatDate, formatTime } from '@/lib/format';
 import type { ApiState } from '@/lib/useApi';
-import type { SecurityCamera, SecurityService, VideoAnalysis } from './security.types';
-import { formatSeconds, megabytes, VIDEO_STATUS } from './security.ui';
+import type { SecurityCamera, SecurityService, ThreatType, VideoAnalysis } from './security.types';
+import { formatSeconds, megabytes, THREAT } from './security.ui';
 
 const ACCEPT = 'video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm,.mp4,.mov,.avi,.mkv,.webm';
 const MAX_MB = 500;
@@ -42,16 +39,25 @@ function readDuration(file: File): Promise<number | null> {
 }
 
 /**
- * Upload a recorded clip for one security camera. The security service runs the trained model, tracking and the
- * rule engine on it; the alerts it finds go to the Alerts list like live ones.
+ * Upload a clip for the security service, which runs the trained model, tracking and the rule engine on it.
+ * - premises: a recording from one security camera; its alerts go to the Alerts list like live ones, and it plays
+ *   on that camera's Live wall screen. Opens the analysis page.
+ * - synthetic: an AI-generated or staged test clip for the Model demo; it belongs to no camera and its alerts stay out
+ *   of the Alerts list. Says which threat the clip shows, so the demo can check the model found it.
  */
-export function VideoUploadDialog({ cameras, initialCameraId, serviceOnline, onClose }: {
+export function VideoUploadDialog({ mode, cameras, initialCameraId, serviceOnline, onClose, onStarted }: {
+  mode: 'premises' | 'synthetic';
   cameras: SecurityCamera[];
   initialCameraId?: number;
   serviceOnline: boolean;
   onClose: () => void;
+  /** Synthetic: called when the analysis has started (the demo wall shows its progress) */
+  onStarted?: () => void;
 }) {
   const navigate = useNavigate();
+  const synthetic = mode === 'synthetic';
+  const [title, setTitle] = useState('');
+  const [expected, setExpected] = useState<ThreatType | ''>('');
   const [cameraId, setCameraId] = useState(String(initialCameraId ?? cameras[0]?.cameraId ?? ''));
   const [file, setFile] = useState<File | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
@@ -82,13 +88,20 @@ export function VideoUploadDialog({ cameras, initialCameraId, serviceOnline, onC
     setError(null);
     setSent(0);
     const form = new FormData();
-    form.append('cameraId', cameraId);
+    form.append('synthetic', String(synthetic));
+    if (synthetic) {
+      form.append('title', title.trim());
+      form.append('expectedThreat', expected);
+    } else {
+      form.append('cameraId', cameraId);
+    }
     form.append('startTime', startTime);
     form.append('shortTimings', String(shortTimings));
     form.append('video', file); // last, so the fields above are read before the file arrives
     try {
       const created = await apiUpload<VideoAnalysis>('/security/videos', form, setSent);
-      navigate(`/safety/videos/${created.videoAnalysisId}`);
+      if (synthetic && onStarted) onStarted();
+      else navigate(`/safety/videos/${created.videoAnalysisId}`);
     } catch (err) {
       setError(err);
       setSent(null);
@@ -99,12 +112,13 @@ export function VideoUploadDialog({ cameras, initialCameraId, serviceOnline, onC
   const uploading = sent !== null;
   return (
     <Modal
-      title="Analyse a recorded video"
+      title={synthetic ? 'Add a synthetic test video' : 'Analyse a camera recording'}
       onClose={uploading ? () => undefined : onClose}
       footer={
         <>
           <button type="button" className="btn btn-light" onClick={onClose} disabled={uploading}>Cancel</button>
-          <button type="submit" form="video-form" className="btn btn-primary" disabled={uploading || !file || !!fileProblem || !serviceOnline}>
+          <button type="submit" form="video-form" className="btn btn-primary"
+            disabled={uploading || !file || !!fileProblem || !serviceOnline || (synthetic && !title.trim())}>
             <i className="bi bi-play-circle me-1" aria-hidden="true" />
             {uploading ? (sent! < 1 ? `Uploading ${Math.round(sent! * 100)}%` : 'Starting…') : 'Analyse video'}
           </button>
@@ -118,8 +132,34 @@ export function VideoUploadDialog({ cameras, initialCameraId, serviceOnline, onC
           <code className="ms-1">uvicorn c4security.service:app --port 8004</code>.
         </Alert>
       )}
-      {error instanceof ApiError && !fields.video && !fields.cameraId && <Alert>{error.message}</Alert>}
+      {error instanceof ApiError && !fields.video && !fields.cameraId && !fields.title && <Alert>{error.message}</Alert>}
+      {synthetic && (
+        <p className="small text-body-secondary">
+          For AI-generated or staged clips that show how the model works. The clip is analysed like a camera recording, but its
+          alerts are test results: they stay on the Model demo and never reach the Alerts list.
+        </p>
+      )}
       <form id="video-form" onSubmit={submit} noValidate>
+        {synthetic ? (
+          <>
+            <div className="mb-3">
+              <label className="form-label" htmlFor="video-title">Name</label>
+              <input id="video-title" className={`form-control${fields.title ? ' is-invalid' : ''}`} maxLength={120} value={title}
+                onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Staged tampering at a car door" disabled={uploading} />
+              {fields.title && <div className="invalid-feedback">{fields.title}</div>}
+            </div>
+            <div className="mb-3">
+              <label className="form-label" htmlFor="video-expected">Which threat does this clip show?</label>
+              <select id="video-expected" className="form-select" value={expected} onChange={(e) => setExpected(e.target.value as ThreatType | '')} disabled={uploading}>
+                <option value="">Not sure / none (just see what the model finds)</option>
+                {(['fire', 'smoke', 'weapon', 'tampering', 'unauthorised_access', 'loitering'] as ThreatType[]).map((t) => (
+                  <option key={t} value={t}>{THREAT[t].label}</option>
+                ))}
+              </select>
+              <div className="form-text">The demo then shows whether the model detected it. Unauthorised access needs camera zones, so test it with a camera recording.</div>
+            </div>
+          </>
+        ) : (
         <div className="mb-3">
           <label className="form-label" htmlFor="video-camera">Camera</label>
           <select id="video-camera" className={`form-select${fields.cameraId ? ' is-invalid' : ''}`} value={cameraId}
@@ -132,6 +172,7 @@ export function VideoUploadDialog({ cameras, initialCameraId, serviceOnline, onC
             <div className="form-text">The camera the clip was recorded on. Its alerts are filed under this camera and its zone.</div>
           )}
         </div>
+        )}
 
         <div className="mb-3">
           <label className="form-label" htmlFor="video-file">Video</label>
@@ -171,54 +212,5 @@ export function VideoUploadDialog({ cameras, initialCameraId, serviceOnline, onC
         )}
       </form>
     </Modal>
-  );
-}
-
-/** The latest recorded video analyses, newest first. */
-export function RecentVideos({ videos, onUpload, canUpload }: { videos: ApiState<VideoAnalysis[]>; onUpload: () => void; canUpload: boolean }) {
-  const { data, error, loading, reload } = videos;
-  return (
-    <Card icon="bi-film" title="Recorded video analysis" subtitle="Clips analysed by the trained model, newest first"
-      actions={canUpload && <button type="button" className="btn btn-sm btn-primary" onClick={onUpload}><i className="bi bi-upload me-1" aria-hidden="true" />Analyse a video</button>}>
-      {error && !data ? (
-        <ErrorState inline error={error} onRetry={reload} title="Video analyses couldn't be loaded" />
-      ) : loading || !data ? (
-        <div className="as-sec-body"><Skeleton width="60%" /><div className="mt-2"><Skeleton width="40%" /></div></div>
-      ) : data.length === 0 ? (
-        <EmptyState icon="bi-film" title="No videos analysed yet" action={canUpload && <button type="button" className="btn btn-sm btn-primary" onClick={onUpload}>Analyse a video</button>}>
-          Upload a recorded clip to see what the model detects and which alerts it raises.
-        </EmptyState>
-      ) : (
-        <div className="table-responsive">
-          <table className="table as-table">
-            <thead>
-              <tr>
-                <th>Video</th>
-                <th>Camera</th>
-                <th className="text-end">Length</th>
-                <th>Status</th>
-                <th className="text-end">Alerts</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((v) => (
-                <tr key={v.videoAnalysisId}>
-                  <td className="as-veh">
-                    <Link to={`/safety/videos/${v.videoAnalysisId}`}><b>{v.fileName}</b></Link>
-                    <small className="as-num">{formatDate(v.createdAt)} {formatTime(v.createdAt)}{v.createdBy && ` · ${v.createdBy}`}</small>
-                  </td>
-                  <td className="small">{v.camera.name}<div className="text-body-secondary as-mono">{v.camera.code}</div></td>
-                  <td className="text-end as-num small">{v.summary?.video_s != null ? formatSeconds(Math.round(v.summary.video_s)) : '—'}</td>
-                  <td><StatusPill tone={VIDEO_STATUS[v.status].tone}>{VIDEO_STATUS[v.status].label}</StatusPill></td>
-                  <td className="text-end as-num">{v.status === 'done' ? v.alertCount : '—'}</td>
-                  <td className="text-end"><Link to={`/safety/videos/${v.videoAnalysisId}`} aria-label={`Open ${v.fileName}`}><i className="bi bi-chevron-right text-body-secondary" aria-hidden="true" /></Link></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Card>
   );
 }
