@@ -13,16 +13,17 @@ import type { BayBoardData, BayCard, JobListItem } from '@/modules/dashboard/das
 import { STAGES } from '@/modules/dashboard/stages';
 import { JobActions } from '@/modules/floor/JobActions';
 import { BayHistory } from './BayHistory';
-import { BaySuggestions } from './BaySuggestions';
+import { PlateAssistant } from './BaySuggestions';
 import { LiveBayPicture } from './LiveBayPicture';
-import type { Camera, LiveCamera } from './occupancy.types';
+import type { BaySuggestions as SuggestionData, Camera, LiveCamera } from './occupancy.types';
 
 /**
  * Service floor › Bay monitor (screen BAY_MONITOR, component 1: bay occupancy).
  * First the live feed: every camera's bays with their live picture (while the camera is live), state, and the job in
  * the bay. Then the selected bay's job and its history of confirmed changes, and the queue for a bay. Everything shown
- * comes from the database and the occupancy service; nothing is made up. Camera suggestions (which waiting vehicle is
- * in a bay, whether a vehicle left) appear as small pop-ups in the corner (BaySuggestions); staff confirm them.
+ * comes from the database and the occupancy service; nothing is made up. The selected bay's card holds its actions:
+ * move a waiting vehicle into an occupied bay, the job's next step, "vehicle left" when the camera sees the bay free.
+ * The only pop-up is the number-plate one (BaySuggestions.tsx > PlateAssistant), one card at a time.
  */
 const STATE = {
   occupied: { label: 'Occupied', tone: 'brand' },
@@ -110,13 +111,14 @@ export function BayMonitorPage() {
             )}
 
             {selected?.job && <BayJob bay={selected} onChanged={board.reload} />}
+            {selected && !selected.job && selected.state === 'occupied' && <MoveVehicleHere key={selected.bayId} bay={selected} onChanged={board.reload} />}
             {selected && <BayHistory key={selected.bayId} bayId={selected.bayId} bayName={selected.name} />}
             <Queue tick={bays.filter((b) => b.job).length} />
           </div>
         </div>
       </div>
 
-      <BaySuggestions onConfirmed={board.reload} />
+      <PlateAssistant onDone={board.reload} />
     </>
   );
 }
@@ -246,6 +248,7 @@ function BayJob({ bay, onChanged }: { bay: BayCard; onChanged: () => void }) {
       subtitle={`${job.vehicle} · ${job.service} · ${job.jobNo}`}
       actions={<JobActions job={job} onDone={onChanged} size="md" showCancel={false} />}
     >
+      {bay.state === 'free' && <VehicleLeft bay={bay} onChanged={onChanged} />}
       <div className="as-card-body d-flex flex-wrap gap-2 align-items-center small">
         <StatusPill tone={STAGES[job.stage].tone}>{STAGES[job.stage].label}</StatusPill>
         <span className="text-body-secondary">
@@ -277,6 +280,103 @@ function Queue({ tick }: { tick: number }) {
           {data.totalCount > data.records.length && <li className="small text-body-secondary">and {data.totalCount - data.records.length} more</li>}
         </ol>
       )}
+    </Card>
+  );
+}
+
+/** The camera sees the bay free while a job is still in it: has the vehicle left? Confirming moves the job to Ready. */
+function VehicleLeft({ bay, onChanged }: { bay: BayCard; onChanged: () => void }) {
+  const { can } = useSession();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const job = bay.job!;
+  async function confirm() {
+    setBusy(true);
+    setError(null);
+    try {
+      await apiSend('POST', '/occupancy/bay-suggestions/release', { bayId: bay.bayId, jobId: job.jobId });
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'That did not work. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="as-card-body">
+      <Alert tone="info">
+        The camera sees {bay.name} free{bay.since ? ` since ${formatTime(bay.since)}` : ''}. Has {job.registrationNo} left?
+        {can('BAY_JOB_CONFIRM') && (
+          <div className="mt-2">
+            <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void confirm()}>
+              {busy ? 'Saving…' : 'Vehicle left: job ready'}
+            </button>
+          </div>
+        )}
+      </Alert>
+      {error && <Alert>{error}</Alert>}
+    </div>
+  );
+}
+
+/**
+ * An occupied bay with no job in it: staff pick the waiting vehicle that is really there (the camera's plate match, or
+ * the first in the queue, is preselected) and move it in. For bays where no plate could be read.
+ */
+function MoveVehicleHere({ bay, onChanged }: { bay: BayCard; onChanged: () => void }) {
+  const { can } = useSession();
+  const { data, error: loadError, reload } = useApi<SuggestionData>('/occupancy/bay-suggestions', undefined, { refreshMs: 10_000 });
+  const suggestion = data?.suggestions.find((x) => x.bayId === bay.bayId);
+  const queue = data?.queue ?? [];
+  const [jobId, setJobId] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const chosen = jobId ?? suggestion?.suggestedJobId ?? queue[0]?.jobId ?? null;
+
+  async function move() {
+    if (chosen === null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await apiSend('POST', '/occupancy/bay-suggestions/confirm', { bayId: bay.bayId, jobId: chosen });
+      reload();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'That did not work. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card icon="bi-box-arrow-in-down" title={`${bay.name}: vehicle in the bay, no job linked`}
+      subtitle={bay.plate?.stable ? `Plate read: ${bay.plate.text}` : 'No number plate could be read for this vehicle'}>
+      <div className="as-card-body">
+        {loadError && !data ? <ErrorState inline error={loadError} onRetry={reload} />
+          : !data ? <Skeleton width="60%" />
+          : queue.length === 0 ? (
+            <p className="small text-body-secondary mb-0">Nobody is waiting for a bay. Check the vehicle in on Vehicles &amp; jobs first.</p>
+          ) : !can('BAY_JOB_CONFIRM') ? (
+            <p className="small text-body-secondary mb-0">Ask a colleague who can confirm vehicles in bays.</p>
+          ) : (
+            <div className="as-sugg-act">
+              <label className="small" htmlFor={`move-${bay.bayId}`}>Waiting vehicle in this bay</label>
+              <select id={`move-${bay.bayId}`} className="form-select form-select-sm" value={chosen ?? ''} disabled={busy}
+                onChange={(e) => setJobId(Number(e.target.value))}>
+                {queue.map((j, i) => (
+                  <option key={j.jobId} value={j.jobId}>
+                    {i + 1}. {j.registrationNo} · {j.vehicle} · {j.service} ({j.jobNo})
+                    {j.jobId === suggestion?.suggestedJobId && suggestion?.plateMatched ? ' · plate matches' : ''}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="btn btn-primary btn-sm" disabled={busy || chosen === null} onClick={() => void move()}>
+                {busy ? 'Moving…' : `Move into ${bay.name}`}
+              </button>
+            </div>
+          )}
+        {error && <div className="mt-2"><Alert>{error}</Alert></div>}
+      </div>
     </Card>
   );
 }
