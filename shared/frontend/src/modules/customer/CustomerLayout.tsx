@@ -99,7 +99,7 @@ export function CustomerLayout() {
 
       <footer className="pt-footer">
         <div className="pt-wrap">
-          <span>© {new Date().getFullYear()} {BUSINESS.name} · v{config.version}{config.environment !== 'production' && ' · test data'}</span>
+          <span>© {new Date().getFullYear()} {BUSINESS.name} · v{config.version}</span>
           <nav aria-label="Help">
             <a href={telUrl}><i className="bi bi-telephone me-1" aria-hidden="true" />{BUSINESS.phone}</a>
             <Link to="/contact">Help</Link>

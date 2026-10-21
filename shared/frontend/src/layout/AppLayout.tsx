@@ -34,7 +34,6 @@ export function AppLayout() {
       </main>
       <footer className="app-footer small text-body-secondary">
         <span>AutoSense · v{config.version}</span>
-        {config.environment !== 'production' && <span className="float-end">Sample data</span>}
       </footer>
       <div className="sidebar-overlay" onClick={() => document.body.classList.remove('sidebar-open')} aria-hidden="true" />
     </div>
