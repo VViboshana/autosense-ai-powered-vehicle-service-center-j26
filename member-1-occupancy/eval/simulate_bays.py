@@ -7,7 +7,7 @@ Each clip shows ONE service bay from a fixed camera: empty at the start, a car d
 the end. The car leaving is the same clip played backwards, so every bay cycles  empty -> arrive -> parked -> leave.
 
   check    run the detector(s) on a clip: is the parked car found, is the empty bay empty, where is the bay
-  compose  tile the clips (3 x 2, or 4 x 2 for 7-8 clips) into one 1920x720 (2560x720) video with staggered timelines, plus <out>.bays.json with each
+  compose  tile the clips (3 x 2; 4 x 2 for 7-8 clips; 3 x 3 for 9) into one video with staggered timelines, plus <out>.bays.json with each
            bay's outline (normalised, from the parked car) and the expected state per second
 
 Usage (from member-1-occupancy/):
@@ -135,9 +135,10 @@ def timeline(frames: list[np.ndarray], clip_fps: float, seconds: float, seed: in
 def compose(clips: list[Path], weights: Path, out: Path, minutes: float,
             empty_s: tuple[int, int] = EMPTY_S, parked_s: tuple[int, int] = PARKED_S,
             first_s: tuple[int, int] | None = None) -> None:
-    if not 1 <= len(clips) <= 8:
-        raise SystemExit('Give 1 to 8 clips.')
-    cols, rows = (3 if len(clips) <= 6 else 4), 2     # 3 x 2 panels for up to 6 bays, 4 x 2 for 7 or 8
+    if not 1 <= len(clips) <= 9:
+        raise SystemExit('Give 1 to 9 clips.')
+    # 3 x 2 panels for up to 6 bays (1920x720), 4 x 2 for 7 or 8 (2560x720), 3 x 3 for 9 (1920x1080)
+    cols, rows = (3, 2) if len(clips) <= 6 else (4, 2) if len(clips) <= 8 else (3, 3)
     bays, views, panels, truth = {}, {}, [], {}
     for k, path in enumerate(clips):
         rep = check_clip(path, [weights])
