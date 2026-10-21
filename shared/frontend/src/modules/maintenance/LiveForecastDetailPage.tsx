@@ -3,9 +3,14 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import { Alert } from '@/components/ui/Form';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, Skeleton } from '@/components/ui/States';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { ApiError } from '@/lib/api';
 import { PageHeader } from '@/layout/PageHeader';
-import { estimateMaintenanceDuration, getForecast } from './maintenance.api';
+import { useApi } from '@/lib/useApi';
+import type { JobStage } from '@/modules/dashboard/dashboard.types';
+import { STAGES } from '@/modules/dashboard/stages';
+import { JobActions } from '@/modules/floor/JobActions';
+import { confirmForecast, estimateMaintenanceDuration, getForecast } from './maintenance.api';
 import type { MaintenanceForecast } from './maintenance.types';
 import { ForecastSourcesCard, LiveBadge } from './MaintenanceComponents';
 import './maintenance.css';
@@ -20,6 +25,8 @@ export function LiveForecastDetailPage() {
   const [duration, setDuration] = useState<Awaited<ReturnType<typeof estimateMaintenanceDuration>>>();
   const [durationBusy, setDurationBusy] = useState(false);
   const [error, setError] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
+  const [visitRefresh, setVisitRefresh] = useState(0);
 
   useEffect(() => {
     if (!initial) getForecast(id).then((value) => value ? setForecast(value) : setMissing(true));
@@ -48,6 +55,10 @@ export function LiveForecastDetailPage() {
       setDurationBusy(false);
     }
   }
+  async function confirmSelectedForecast() {
+    if (!selectedTask || !duration) return;
+    try { await confirmForecast(id, { fixTitle: selectedTask, estimatedHours: duration.duration.estimatedHours, estimatedMinutes: duration.duration.estimatedMinutes, durationVariant: duration.model.variant, benchmark: duration.benchmark, targetType: duration.targetType }); setConfirmed(true); setVisitRefresh((n) => n + 1); } catch { setError('Unable to persist the confirmed forecast.'); }
+  }
 
   return <>
     <PageHeader title={`Forecast ${forecast.id}`} subtitle={`${forecast.registrationNo} · ${forecast.vehicle} · ${forecast.mileage.toLocaleString()} km`} documentTitle={forecast.id} actions={<><LiveBadge /><Link className="btn btn-light" to="/maintenance/forecasts">Back to forecasts</Link></>} />
@@ -60,9 +71,43 @@ export function LiveForecastDetailPage() {
         <Card icon="bi-list-check" title="Candidate repair tasks" subtitle="Select one task explicitly before requesting a labor-duration estimate.">
           <div className="p-3 pt-0">{tasks.length ? <><div className="list-group">{tasks.map((task) => <label className={`list-group-item list-group-item-action d-flex gap-2 align-items-start ${selectedTask === task.fixTitle ? 'active' : ''}`} key={task.fixTitle}><input className="form-check-input mt-1" type="radio" name="candidate-task" value={task.fixTitle} checked={selectedTask === task.fixTitle} onChange={() => setSelectedTask(task.fixTitle)} /><span><b>{task.fixTitle}</b><small className="d-block">{task.difficultyLevel} · catalogue rank {task.probabilityRank}</small></span></label>)}</div><div className="d-flex align-items-center gap-3 mt-3"><button className="btn btn-primary" type="button" disabled={!selectedTask || durationBusy} onClick={estimateSelectedTask}>{durationBusy ? 'Estimating labor duration...' : 'Estimate service duration'}</button>{!duration && <span className="small text-body-secondary">Select a repair task to estimate duration.</span>}</div>{error && <Alert>{error}</Alert>}</> : <p className="small text-body-secondary mb-0">No catalogue repair tasks are currently mapped to this predicted category.</p>}</div>
         </Card>
-        <Card icon="bi-hourglass-split" title="Estimated labor duration"><div className="p-3 pt-0"><b>{durationStatus === 'awaiting_task_selection' && !duration ? 'Awaiting task selection' : estimatedMinutes == null ? 'Not available yet' : `${estimatedMinutes} minutes (${estimatedHours ?? '—'} hours)`}</b><p className="small text-body-secondary mt-2 mb-0">{durationStatus === 'awaiting_task_selection' && !duration ? 'Select a repair task to estimate duration.' : 'Duration is a benchmark estimate based on estimated labor-hour data.'}</p>{duration && <span className="as-badge mt-2">{duration.model.variant}</span>}</div></Card>
+        <Card icon="bi-hourglass-split" title="Estimated labor duration"><div className="p-3 pt-0"><b>{durationStatus === 'awaiting_task_selection' && !duration ? 'Awaiting task selection' : estimatedMinutes == null ? 'Not available yet' : `${estimatedMinutes} minutes (${estimatedHours ?? '—'} hours)`}</b><p className="small text-body-secondary mt-2 mb-0">{durationStatus === 'awaiting_task_selection' && !duration ? 'Select a repair task to estimate duration.' : 'Duration is a benchmark estimate based on estimated labor-hour data.'}</p>{duration && <><span className="as-badge mt-2">{duration.model.variant}</span><button className="btn btn-primary btn-sm d-block mt-3" type="button" onClick={() => void confirmSelectedForecast()} disabled={confirmed}>{confirmed ? 'Forecast confirmed' : 'Confirm forecast'}</button></>}</div></Card>
       </div>
-      <div className="col-xl-4"><ForecastSourcesCard forecast={forecast} /><Card icon="bi-clipboard-check" title="Forecast status"><div className="p-3 pt-0"><dl className="as-detail-list"><dt>Task selection</dt><dd>{forecast.taskSelection?.required ? 'Required' : 'Not required'}</dd><dt>Duration</dt><dd>{durationStatus === 'awaiting_task_selection' ? 'Awaiting task selection' : durationStatus}</dd><dt>Maintenance required</dt><dd>Not evaluated</dd><dt>Assessment</dt><dd>{forecast.assessmentType ?? 'Enriched'}</dd></dl></div></Card></div>
+      <div className="col-xl-4"><VisitCard forecastId={id} refresh={visitRefresh} justConfirmed={confirmed} /><ForecastSourcesCard forecast={forecast} /><Card icon="bi-clipboard-check" title="Forecast status"><div className="p-3 pt-0"><dl className="as-detail-list"><dt>Task selection</dt><dd>{forecast.taskSelection?.required ? 'Required' : 'Not required'}</dd><dt>Duration</dt><dd>{durationStatus === 'awaiting_task_selection' ? 'Awaiting task selection' : durationStatus}</dd><dt>Maintenance required</dt><dd>Not evaluated</dd><dt>Assessment</dt><dd>{forecast.assessmentType ?? 'Enriched'}</dd></dl></div></Card></div>
     </div></div></div>
   </>;
+}
+
+type ForecastVisitRow = { job_id: number | null; job_no: string | null; job_stage: JobStage | null; registration_no: string; status: string };
+
+/**
+ * The visit this forecast belongs to and its next step in the service flow, so staff can carry on from here:
+ * Work done (the vehicle becomes ready for pickup) and Customer collected. A preliminary forecast has no visit yet.
+ */
+function VisitCard({ forecastId, refresh, justConfirmed }: { forecastId: string; refresh: number; justConfirmed: boolean }) {
+  const { data, reload } = useApi<ForecastVisitRow | null>(`/maintenance/forecasts/${encodeURIComponent(forecastId)}?r=${refresh}`);
+  if (!data) return null;
+  if (!data.job_id || !data.job_no || !data.job_stage) {
+    return <Card icon="bi-calendar-event" title="Preliminary forecast"><p className="small text-body-secondary px-3 pb-3 mb-0">Made from a booking before the vehicle arrived. After the damage inspection, the forecast for the visit is made from Vehicles &amp; jobs.</p></Card>;
+  }
+  const stage = STAGES[data.job_stage];
+  const planDone = data.status === 'confirmed' || justConfirmed;
+  return (
+    <Card icon="bi-car-front" title="This visit" subtitle={`${data.job_no} · ${data.registration_no}`}>
+      <div className="px-3 pb-3 d-grid gap-3">
+        <div className="d-flex align-items-center justify-content-between gap-2">
+          <span className="small text-body-secondary">Service flow</span>
+          <StatusPill tone={stage.tone}>{stage.label}</StatusPill>
+        </div>
+        {data.job_stage === 'inspected' && (
+          <p className="small text-body-secondary mb-0">
+            {planDone ? 'Maintenance plan confirmed. When the work is finished, mark it done: the customer sees the vehicle as ready for pickup.' : 'Confirm the maintenance plan first, then mark the work done when it is finished.'}
+          </p>
+        )}
+        {data.job_stage === 'ready' && <p className="small text-body-secondary mb-0">Ready for pickup. Mark it collected when the customer takes the vehicle.</p>}
+        {data.job_stage === 'completed' && <p className="small text-body-secondary mb-0">Collected by the customer. This visit is closed.</p>}
+        <JobActions job={{ jobId: data.job_id, jobNo: data.job_no, stage: data.job_stage, registrationNo: data.registration_no }} onDone={reload} size="md" showCancel={false} />
+      </div>
+    </Card>
+  );
 }

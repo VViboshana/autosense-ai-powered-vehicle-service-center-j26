@@ -172,7 +172,8 @@ export function myRoutes(pool: pg.Pool, uploadDir: string) {
     const me = user.customerId!;
     const vehicles = await pool.query(
       `SELECT v.vehicle_id, v.registration_no, v.make, v.model, v.year, v.colour, v.photo_key,
-              j.stage, j.checked_in_at, b.name AS bay, ${QUEUE_POSITION('j')} AS queue_position
+              j.stage, j.checked_in_at, b.name AS bay, ${QUEUE_POSITION('j')} AS queue_position,
+              EXISTS (SELECT 1 FROM maintenance.forecasts f WHERE f.job_id = j.job_id AND f.status = 'confirmed') AS plan_ready
        FROM workshop.vehicle_claims vc
        JOIN workshop.vehicles v ON v.vehicle_id = vc.vehicle_id
        LEFT JOIN LATERAL (
@@ -200,7 +201,7 @@ export function myRoutes(pool: pg.Pool, uploadDir: string) {
           registrationNo: r.registration_no,
           description: vehicleText(r),
           photoUrl: photoUrl(`/api/my/vehicles/${r.vehicle_id}/photo`, r.photo_key),
-          visit: r.stage ? { stage: r.stage, checkedInAt: r.checked_in_at, bay: r.bay, queuePosition: r.queue_position === null ? null : Number(r.queue_position) } : null,
+          visit: r.stage ? { stage: r.stage, checkedInAt: r.checked_in_at, bay: r.bay, queuePosition: r.queue_position === null ? null : Number(r.queue_position), planReady: Boolean(r.plan_ready) } : null,
           latestInspection: latest
             ? {
                 inspectionNo: latest.inspectionNo,
@@ -277,7 +278,10 @@ export function myRoutes(pool: pg.Pool, uploadDir: string) {
     let status = null;
     if (can('MY_VEHICLE_STATUS')) {
       const job = await pool.query(
-        `SELECT j.job_no, j.stage, j.checked_in_at, j.bay_entered_at, j.ready_at, st.name AS service, b.name AS bay,
+        `SELECT j.job_id, j.job_no, j.stage, j.checked_in_at, j.bay_entered_at, j.ready_at, st.name AS service, b.name AS bay,
+                (SELECT json_build_object('confirmedAt', f.confirmed_at, 'minutes', f.estimated_minutes)
+                 FROM maintenance.forecasts f WHERE f.job_id = j.job_id AND f.status = 'confirmed'
+                 ORDER BY f.confirmed_at DESC LIMIT 1) AS plan,
                 ${QUEUE_POSITION('j')} AS queue_position
          FROM workshop.jobs j
          JOIN workshop.service_types st ON st.service_type_id = j.service_type_id
@@ -297,13 +301,38 @@ export function myRoutes(pool: pg.Pool, uploadDir: string) {
             bayEnteredAt: j.bay_entered_at,
             readyAt: j.ready_at,
             queuePosition: j.queue_position === null ? null : Number(j.queue_position),
-            estimatedReadyAt: null, // shown once waiting-time estimates are validated
+            // The maintenance plan for this visit is confirmed (component 3): the journey's "Maintenance plan" step is done
+            planReady: Boolean(j.plan),
+            // From the confirmed plan's labour estimate, counted from when it was confirmed (the car is already in a bay)
+            estimatedReadyAt: j.plan?.minutes != null && j.stage !== 'ready'
+              ? new Date(new Date(j.plan.confirmedAt).getTime() + Number(j.plan.minutes) * 60_000).toISOString()
+              : null,
           }
         : null;
     }
 
     let inspections = null;
     if (can('MY_INSPECTIONS')) inspections = await confirmedInspections(id);
+
+    let maintenance = null;
+    if (can('MY_MAINTENANCE')) {
+      // The plan for the visit in progress first; otherwise the latest confirmed one, marked as from an earlier visit
+      const forecasts = await pool.query(
+        `SELECT f.predicted_category, f.selected_fix_title, f.estimated_hours, f.estimated_minutes, f.status, f.confirmed_at,
+                j.job_no, (j.stage NOT IN ('completed', 'cancelled')) AS this_visit, i.inspection_no
+         FROM maintenance.forecasts f
+         LEFT JOIN workshop.jobs j ON j.job_id = f.job_id
+         LEFT JOIN damage.inspections i ON i.inspection_id = f.inspection_id
+         WHERE f.vehicle_id = $1 AND f.status = 'confirmed'
+         ORDER BY (j.stage NOT IN ('completed', 'cancelled')) DESC NULLS LAST, f.confirmed_at DESC NULLS LAST, f.created_at DESC LIMIT 1`,
+        [id],
+      );
+      const f = forecasts.rows[0];
+      maintenance = f ? {
+        category: f.predicted_category, selectedTask: f.selected_fix_title, estimatedHours: f.estimated_hours, estimatedMinutes: f.estimated_minutes,
+        status: f.status, confirmedAt: f.confirmed_at, thisVisit: Boolean(f.this_visit), jobNo: f.job_no, inspectionNo: f.inspection_no,
+      } : null;
+    }
 
     sendOk(res, {
       vehicle: {
@@ -317,8 +346,8 @@ export function myRoutes(pool: pg.Pool, uploadDir: string) {
       sections: {
         status: can('MY_VEHICLE_STATUS') ? { available: true, data: status } : { available: false },
         inspections: can('MY_INSPECTIONS') ? { available: true, data: inspections } : { available: false },
-        // Filled when the maintenance and security components publish customer-safe results
-        maintenance: can('MY_MAINTENANCE') ? { available: true, connected: false, data: null } : { available: false },
+        // Confirmed (technician-checked) maintenance plans only; safety notices are filled when that component publishes them
+        maintenance: can('MY_MAINTENANCE') ? { available: true, connected: true, data: maintenance } : { available: false },
         safety: can('MY_SAFETY_NOTICES') ? { available: true, connected: false, data: null } : { available: false },
       },
     });

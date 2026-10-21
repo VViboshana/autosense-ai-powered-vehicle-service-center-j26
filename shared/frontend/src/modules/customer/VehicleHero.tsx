@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { STAGES } from '@/modules/dashboard/stages';
 import { CarArt, PlateText } from './art';
 import type { MyVehicles } from './customer.types';
-import { JOURNEY, ordinal, plural, PRIORITY_INFO, severityName, severityTone } from './customer.ui';
+import { JOURNEY, JOURNEY_STEPS, journeyStep, ordinal, plural, PRIORITY_INFO, severityName, severityTone } from './customer.ui';
 
 type Vehicle = MyVehicles['vehicles'][number];
 
@@ -15,7 +15,7 @@ function stageText(visit: Vehicle['visit']) {
     case 'waiting_for_bay': return 'Waiting for a free bay';
     case 'in_bay': return `Being serviced${visit.bay ? ` in ${visit.bay}` : ''}`;
     case 'inspecting': return `Damage inspection${visit.bay ? ` in ${visit.bay}` : ''}`;
-    case 'inspected': return 'Inspection done';
+    case 'inspected': return visit.planReady ? 'Maintenance plan ready' : 'Inspected · maintenance plan next';
     case 'ready': return 'Ready for pickup';
     default: return STAGES[visit.stage].label;
   }
@@ -23,13 +23,15 @@ function stageText(visit: Vehicle['visit']) {
 
 /**
  * A vehicle on the home page: the customer's photo (or a drawing until they add one), with the visit on top of it:
- * the step in large type, a five-step progress bar, and frosted chips for the latest inspection and the queue.
+ * the step in large type, a six-step progress bar, and frosted chips for the latest inspection and the queue.
  * The whole card opens the vehicle; the inspection chip opens its report; "Change photo" uploads a new one.
  */
 export function VehicleHero({ v, big, onChangePhoto }: { v: Vehicle; big: boolean; onChangePhoto: (file: File) => Promise<void> }) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  const step = v.visit ? STAGES[v.visit.stage].step : 0;
+  const step = v.visit ? journeyStep(v.visit.stage, v.visit.planReady) : 0;
+  // Plan confirmed: the work is in progress, so every step up to the plan is done and pickup is next, not current
+  const working = v.visit?.stage === 'inspected' && v.visit.planReady;
   const insp = v.latestInspection;
 
   async function change(file: File | undefined) {
@@ -76,9 +78,9 @@ export function VehicleHero({ v, big, onChangePhoto }: { v: Vehicle; big: boolea
           <div className="cp-hero-car">{v.description}</div>
           <div className="cp-hero-stage">{stageText(v.visit)}</div>
           {v.visit && big && (
-            <ol className="cp-steps" aria-label={`Step ${step} of 5`}>
+            <ol className="cp-steps" aria-label={`Step ${step} of ${JOURNEY_STEPS}`}>
               {JOURNEY.map((s, i) => (
-                <li key={s.label} className={i + 1 < step || step === 5 ? 'done' : i + 1 === step ? 'now' : ''} style={{ '--i': i } as CSSProperties}>
+                <li key={s.label} className={i + 1 < step || (step === JOURNEY_STEPS && !working) ? 'done' : i + 1 === step && !working ? 'now' : ''} style={{ '--i': i } as CSSProperties}>
                   <span>{s.label}</span>
                 </li>
               ))}

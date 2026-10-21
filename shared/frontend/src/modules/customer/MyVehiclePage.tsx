@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 import { formatDuration, formatTime, minutesSince } from '@/lib/format';
@@ -7,11 +7,12 @@ import { useApi } from '@/lib/useApi';
 import { STAGES } from '@/modules/dashboard/stages';
 import { CarArt, PlateText } from './art';
 import type { InspectionReport, MyVehicle } from './customer.types';
-import { JOURNEY, ordinal, plural } from './customer.ui';
+import { JOURNEY, JOURNEY_STEPS, journeyStep, ordinal, plural } from './customer.ui';
 import { InspectionReportView } from './InspectionReportView';
 import './customer.css';
 
 type Tab = 'status' | 'inspections' | 'maintenance' | 'safety';
+type Plan = NonNullable<Extract<MyVehicle['sections']['maintenance'], { available: true }>['data']>;
 type Status = Extract<MyVehicle['sections']['status'], { available: true }>['data'];
 
 /** One of my vehicles: status, confirmed inspection reports, recommendations, safety notices (tabs the admin allows). */
@@ -26,9 +27,11 @@ export function MyVehiclePage() {
         ['safety', 'Safety notices'],
       ] as const).filter(([key]) => data.data!.sections[key].available)
     : [];
-  // Opens on the report when the link asks for it (/my/vehicles/7#report), e.g. from the home page
-  const [tab, setTab] = useState<Tab | null>(() => (window.location.hash === '#report' ? 'inspections' : null));
+  // Opens on the report or the maintenance plan when the link asks for it (/my/vehicles/7#report, #plan)
+  const [tab, setTab] = useState<Tab | null>(() => (window.location.hash === '#report' ? 'inspections' : window.location.hash === '#plan' ? 'maintenance' : null));
   const [pick, setPick] = useState<number | null>(null);
+  const { hash } = useLocation();
+  useEffect(() => { if (hash === '#plan') setTab('maintenance'); else if (hash === '#report') setTab('inspections'); }, [hash]);
   const current = tab ?? tabs[0]?.[0] ?? null;
 
   useEffect(() => {
@@ -46,6 +49,7 @@ export function MyVehiclePage() {
   if (!data.data) return <div className="p-4"><Skeleton width="40%" /></div>;
   const { vehicle, sections } = data.data;
   const reports = sections.inspections.available ? sections.inspections.data : [];
+  const recommendation = sections.maintenance.available ? sections.maintenance.data : null;
   const report = reports.find((r) => r.inspectionId === pick) ?? reports[0];
 
   return (
@@ -72,7 +76,7 @@ export function MyVehiclePage() {
           ))}
         </div>
         {current === 'status' && sections.status.available && (
-          <div className="p-4"><StatusTab status={sections.status.data} latest={reports[0]} onReport={() => setTab('inspections')} /></div>
+          <div className="p-4"><StatusTab status={sections.status.data} latest={reports[0]} plan={recommendation?.thisVisit ? recommendation : null} onReport={() => setTab('inspections')} onPlan={() => setTab('maintenance')} /></div>
         )}
         {current === 'inspections' && reports.length === 0 && (
           <div className="p-4">
@@ -83,9 +87,7 @@ export function MyVehiclePage() {
         )}
         {current === 'maintenance' && (
           <div className="p-4">
-            <EmptyState icon="bi-wrench-adjustable" title="No recommendations yet">
-              Maintenance work the technician recommends for this vehicle will appear here.
-            </EmptyState>
+            {recommendation ? <PlanView plan={recommendation} /> : <EmptyState icon="bi-wrench-adjustable" title="No maintenance plan yet">After the damage inspection, the technician confirms the maintenance work your vehicle needs. It appears here.</EmptyState>}
           </div>
         )}
         {current === 'safety' && (
@@ -105,7 +107,7 @@ export function MyVehiclePage() {
   );
 }
 
-function StatusTab({ status, latest, onReport }: { status: Status; latest: InspectionReport | undefined; onReport: () => void }) {
+function StatusTab({ status, latest, plan, onReport, onPlan }: { status: Status; latest: InspectionReport | undefined; plan: Plan | null; onReport: () => void; onPlan: () => void }) {
   if (!status) {
     return (
       <EmptyState icon="bi-calendar-check" title="Not at the service centre">
@@ -113,12 +115,12 @@ function StatusTab({ status, latest, onReport }: { status: Status; latest: Inspe
       </EmptyState>
     );
   }
-  const step = STAGES[status.stage].step;
+  const step = journeyStep(status.stage, status.planReady);
   const headline =
     status.stage === 'waiting_for_bay' ? 'Waiting for a free bay'
     : status.stage === 'in_bay' ? `Being serviced${status.bay ? ` in ${status.bay}` : ''}`
     : status.stage === 'inspecting' ? `Damage inspection${status.bay ? ` in ${status.bay}` : ''}`
-    : status.stage === 'inspected' ? 'Inspection done, service continuing'
+    : status.stage === 'inspected' ? (status.planReady ? 'Maintenance plan ready, work in progress' : 'Inspection done, maintenance plan next')
     : status.stage === 'ready' ? 'Ready for pickup'
     : STAGES[status.stage].label;
 
@@ -133,11 +135,13 @@ function StatusTab({ status, latest, onReport }: { status: Status; latest: Inspe
           <span className="cp-pill cp-tone-warning">{status.queuePosition === 1 ? 'Next in line' : `${ordinal(status.queuePosition)} in line`}</span>
         )}
       </div>
-      <ol className="cp-journey" style={{ '--p': Math.max(0, step - 1) / 4 } as CSSProperties} aria-label={`Progress, step ${step} of 5`}>
+      <ol className="cp-journey" style={{ '--p': Math.max(0, step - 1) / (JOURNEY_STEPS - 1) } as CSSProperties} aria-label={`Progress, step ${step} of ${JOURNEY_STEPS}`}>
         <li className="cp-journey-fill" aria-hidden="true" />
         {JOURNEY.map((s, i) => {
-          const state = i + 1 < step || step === 5 ? 'done' : i + 1 === step ? 'now' : '';
-          const when = i === 0 ? formatTime(status.checkedInAt) : i === 2 && status.bayEnteredAt ? formatTime(status.bayEnteredAt) : i === 4 && status.readyAt ? formatTime(status.readyAt) : '';
+          // With the plan confirmed the work is in progress: every step up to the plan is done, pickup is next (not current)
+          const working = status.stage === 'inspected' && status.planReady;
+          const state = i + 1 < step || (step === JOURNEY_STEPS && !working) ? 'done' : i + 1 === step && !working ? 'now' : '';
+          const when = i === 0 ? formatTime(status.checkedInAt) : i === 2 && status.bayEnteredAt ? formatTime(status.bayEnteredAt) : i === 4 && plan ? formatTime(plan.confirmedAt) : i === 5 && status.readyAt ? formatTime(status.readyAt) : '';
           return (
             <li key={s.label} className={state} style={{ '--i': i } as CSSProperties} aria-current={state === 'now' ? 'step' : undefined}>
               <span className="node"><i className={`bi ${state === 'done' ? 'bi-check-lg' : s.icon}`} aria-hidden="true" /></span>
@@ -176,6 +180,41 @@ function StatusTab({ status, latest, onReport }: { status: Status; latest: Inspe
           </button>
         </div>
       )}
+      {plan && (
+        <div className="cp-cta cp-rise" style={{ '--i': 7 } as CSSProperties}>
+          <i className="bi bi-wrench-adjustable fs-3" style={{ color: 'var(--as-primary)' }} aria-hidden="true" />
+          <div className="t">
+            <b>The maintenance plan is ready</b>
+            <div className="small text-body-secondary">
+              {plan.selectedTask ?? plan.category}{plan.estimatedMinutes != null ? `, about ${formatDuration(plan.estimatedMinutes)} of work` : ''}. Checked by a technician.
+            </div>
+          </div>
+          <button type="button" className="btn btn-light" onClick={onPlan}>
+            See the plan <i className="bi bi-arrow-right ms-1" aria-hidden="true" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The confirmed maintenance plan: what the technician decided after the damage inspection, in plain words. */
+function PlanView({ plan }: { plan: Plan }) {
+  return (
+    <div className="d-grid gap-3">
+      <div>
+        <div className="small text-body-secondary">{plan.thisVisit ? `This visit${plan.jobNo ? ` · ${plan.jobNo}` : ''}` : 'From an earlier visit'} · confirmed {formatTime(plan.confirmedAt)}</div>
+        <h2 className="h4 mb-0">{plan.selectedTask ?? `${plan.category} work`}</h2>
+      </div>
+      <div className="cp-stats">
+        <div className="cp-stat"><div className="k">Type of work</div><div className="v">{plan.category}</div></div>
+        <div className="cp-stat"><div className="k">Estimated work time</div><div className="v">{plan.estimatedMinutes != null ? formatDuration(plan.estimatedMinutes) : <span className="text-body-secondary fs-6 fw-normal">Not estimated</span>}</div></div>
+        {plan.inspectionNo && <div className="cp-stat"><div className="k">Based on inspection</div><div className="v as-mono fs-6">{plan.inspectionNo}</div></div>}
+      </div>
+      <p className="small text-body-secondary mb-0">
+        <i className="bi bi-info-circle me-1" aria-hidden="true" />
+        An AI model suggested the type of work from your report, the service history and the damage inspection; a technician chose the task and confirmed it. The time is an estimate of the work itself, not a quote.
+      </p>
     </div>
   );
 }
