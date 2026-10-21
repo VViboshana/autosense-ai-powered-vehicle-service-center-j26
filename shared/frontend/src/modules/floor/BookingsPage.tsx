@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { Card } from '@/components/ui/Card';
 import { Alert } from '@/components/ui/Form';
 import { Modal } from '@/components/ui/Modal';
@@ -105,6 +106,7 @@ export function BookingsPage() {
                               {b.reviewedAt && <div className="text-body-secondary">{formatDate(b.reviewedAt)} {formatTime(b.reviewedAt)}{b.reviewedBy && ` · ${b.reviewedBy}`}</div>}
                             </td>
                             <td className="text-end text-nowrap">
+                              <Link className="btn btn-sm btn-light me-1" to={`/maintenance/forecasts/new?vehicleId=${b.vehicle.vehicleId}&bookingId=${b.bookingId}`}>Forecast</Link>
                               {b.status === 'pending' && (
                                 <>
                                   <button type="button" className="btn btn-sm btn-primary me-1" onClick={() => setDialog({ booking: b, action: 'confirm' })}>Confirm</button>

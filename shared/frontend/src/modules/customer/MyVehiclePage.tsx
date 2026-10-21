@@ -46,6 +46,7 @@ export function MyVehiclePage() {
   if (!data.data) return <div className="p-4"><Skeleton width="40%" /></div>;
   const { vehicle, sections } = data.data;
   const reports = sections.inspections.available ? sections.inspections.data : [];
+  const recommendation = sections.maintenance.available ? sections.maintenance.data : null;
   const report = reports.find((r) => r.inspectionId === pick) ?? reports[0];
 
   return (
@@ -83,9 +84,7 @@ export function MyVehiclePage() {
         )}
         {current === 'maintenance' && (
           <div className="p-4">
-            <EmptyState icon="bi-wrench-adjustable" title="No recommendations yet">
-              Maintenance work the technician recommends for this vehicle will appear here.
-            </EmptyState>
+            {recommendation ? <><h2 className="h5">Current maintenance recommendation</h2><p className="mb-2">Category: <b>{recommendation.category}</b></p><p className="mb-2">Recommended task: <b>{recommendation.selectedTask ?? 'Not specified'}</b></p>{recommendation.estimatedMinutes != null && <p className="mb-0">Estimated labor duration: <b>{recommendation.estimatedMinutes} minutes</b></p>}</> : <EmptyState icon="bi-wrench-adjustable" title="No recommendations yet">Maintenance work the technician recommends for this vehicle will appear here.</EmptyState>}
           </div>
         )}
         {current === 'safety' && (

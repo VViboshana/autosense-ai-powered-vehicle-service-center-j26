@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState, Skeleton } from '@/components/ui/States';
 import { ApiError } from '@/lib/api';
 import { PageHeader } from '@/layout/PageHeader';
-import { estimateMaintenanceDuration, getForecast } from './maintenance.api';
+import { confirmForecast, estimateMaintenanceDuration, getForecast } from './maintenance.api';
 import type { MaintenanceForecast } from './maintenance.types';
 import { ForecastSourcesCard, LiveBadge } from './MaintenanceComponents';
 import './maintenance.css';
@@ -20,6 +20,7 @@ export function LiveForecastDetailPage() {
   const [duration, setDuration] = useState<Awaited<ReturnType<typeof estimateMaintenanceDuration>>>();
   const [durationBusy, setDurationBusy] = useState(false);
   const [error, setError] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
 
   useEffect(() => {
     if (!initial) getForecast(id).then((value) => value ? setForecast(value) : setMissing(true));
@@ -48,6 +49,10 @@ export function LiveForecastDetailPage() {
       setDurationBusy(false);
     }
   }
+  async function confirmSelectedForecast() {
+    if (!selectedTask || !duration) return;
+    try { await confirmForecast(id, { fixTitle: selectedTask, estimatedHours: duration.duration.estimatedHours, estimatedMinutes: duration.duration.estimatedMinutes, durationVariant: duration.model.variant, benchmark: duration.benchmark, targetType: duration.targetType }); setConfirmed(true); } catch { setError('Unable to persist the confirmed forecast.'); }
+  }
 
   return <>
     <PageHeader title={`Forecast ${forecast.id}`} subtitle={`${forecast.registrationNo} · ${forecast.vehicle} · ${forecast.mileage.toLocaleString()} km`} documentTitle={forecast.id} actions={<><LiveBadge /><Link className="btn btn-light" to="/maintenance/forecasts">Back to forecasts</Link></>} />
@@ -60,7 +65,7 @@ export function LiveForecastDetailPage() {
         <Card icon="bi-list-check" title="Candidate repair tasks" subtitle="Select one task explicitly before requesting a labor-duration estimate.">
           <div className="p-3 pt-0">{tasks.length ? <><div className="list-group">{tasks.map((task) => <label className={`list-group-item list-group-item-action d-flex gap-2 align-items-start ${selectedTask === task.fixTitle ? 'active' : ''}`} key={task.fixTitle}><input className="form-check-input mt-1" type="radio" name="candidate-task" value={task.fixTitle} checked={selectedTask === task.fixTitle} onChange={() => setSelectedTask(task.fixTitle)} /><span><b>{task.fixTitle}</b><small className="d-block">{task.difficultyLevel} · catalogue rank {task.probabilityRank}</small></span></label>)}</div><div className="d-flex align-items-center gap-3 mt-3"><button className="btn btn-primary" type="button" disabled={!selectedTask || durationBusy} onClick={estimateSelectedTask}>{durationBusy ? 'Estimating labor duration...' : 'Estimate service duration'}</button>{!duration && <span className="small text-body-secondary">Select a repair task to estimate duration.</span>}</div>{error && <Alert>{error}</Alert>}</> : <p className="small text-body-secondary mb-0">No catalogue repair tasks are currently mapped to this predicted category.</p>}</div>
         </Card>
-        <Card icon="bi-hourglass-split" title="Estimated labor duration"><div className="p-3 pt-0"><b>{durationStatus === 'awaiting_task_selection' && !duration ? 'Awaiting task selection' : estimatedMinutes == null ? 'Not available yet' : `${estimatedMinutes} minutes (${estimatedHours ?? '—'} hours)`}</b><p className="small text-body-secondary mt-2 mb-0">{durationStatus === 'awaiting_task_selection' && !duration ? 'Select a repair task to estimate duration.' : 'Duration is a benchmark estimate based on estimated labor-hour data.'}</p>{duration && <span className="as-badge mt-2">{duration.model.variant}</span>}</div></Card>
+        <Card icon="bi-hourglass-split" title="Estimated labor duration"><div className="p-3 pt-0"><b>{durationStatus === 'awaiting_task_selection' && !duration ? 'Awaiting task selection' : estimatedMinutes == null ? 'Not available yet' : `${estimatedMinutes} minutes (${estimatedHours ?? '—'} hours)`}</b><p className="small text-body-secondary mt-2 mb-0">{durationStatus === 'awaiting_task_selection' && !duration ? 'Select a repair task to estimate duration.' : 'Duration is a benchmark estimate based on estimated labor-hour data.'}</p>{duration && <><span className="as-badge mt-2">{duration.model.variant}</span><button className="btn btn-primary btn-sm d-block mt-3" type="button" onClick={() => void confirmSelectedForecast()} disabled={confirmed}>{confirmed ? 'Forecast confirmed' : 'Confirm forecast'}</button></>}</div></Card>
       </div>
       <div className="col-xl-4"><ForecastSourcesCard forecast={forecast} /><Card icon="bi-clipboard-check" title="Forecast status"><div className="p-3 pt-0"><dl className="as-detail-list"><dt>Task selection</dt><dd>{forecast.taskSelection?.required ? 'Required' : 'Not required'}</dd><dt>Duration</dt><dd>{durationStatus === 'awaiting_task_selection' ? 'Awaiting task selection' : durationStatus}</dd><dt>Maintenance required</dt><dd>Not evaluated</dd><dt>Assessment</dt><dd>{forecast.assessmentType ?? 'Enriched'}</dd></dl></div></Card></div>
     </div></div></div>

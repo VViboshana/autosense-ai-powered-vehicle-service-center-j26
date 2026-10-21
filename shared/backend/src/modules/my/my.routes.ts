@@ -296,6 +296,17 @@ export function myRoutes(pool: pg.Pool, uploadDir: string) {
     let inspections = null;
     if (can('MY_INSPECTIONS')) inspections = await confirmedInspections(id);
 
+    let maintenance = null;
+    if (can('MY_MAINTENANCE')) {
+      const forecasts = await pool.query(
+        `SELECT predicted_category, selected_fix_title, estimated_hours, estimated_minutes, status, confirmed_at
+         FROM maintenance.forecasts WHERE vehicle_id = $1 AND status = 'confirmed' ORDER BY confirmed_at DESC NULLS LAST, created_at DESC LIMIT 1`,
+        [id],
+      );
+      const f = forecasts.rows[0];
+      maintenance = f ? { category: f.predicted_category, selectedTask: f.selected_fix_title, estimatedHours: f.estimated_hours, estimatedMinutes: f.estimated_minutes, status: f.status, confirmedAt: f.confirmed_at } : null;
+    }
+
     sendOk(res, {
       vehicle: {
         vehicleId: v.vehicle_id,
@@ -309,7 +320,7 @@ export function myRoutes(pool: pg.Pool, uploadDir: string) {
         status: can('MY_VEHICLE_STATUS') ? { available: true, data: status } : { available: false },
         inspections: can('MY_INSPECTIONS') ? { available: true, data: inspections } : { available: false },
         // Filled when the maintenance and security components publish customer-safe results
-        maintenance: can('MY_MAINTENANCE') ? { available: true, connected: false, data: null } : { available: false },
+        maintenance: can('MY_MAINTENANCE') ? { available: true, connected: true, data: maintenance } : { available: false },
         safety: can('MY_SAFETY_NOTICES') ? { available: true, connected: false, data: null } : { available: false },
       },
     });
