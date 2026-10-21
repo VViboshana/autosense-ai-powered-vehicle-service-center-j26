@@ -8,11 +8,13 @@ import { signedInUser } from '../../middleware/requireScreen.js';
 import { z } from 'zod';
 import type pg from 'pg';
 import { getForecast, listForecasts, searchVehicles, vehicleBootstrap } from './maintenance.repository.js';
-import { ValidationError } from '../../http/errors.js';
+import { NotFoundError, ValidationError } from '../../http/errors.js';
+import { audit } from '../../lib/audit.js';
 
 const idParam = z.object({ id: z.coerce.number().int().positive() });
 const searchQuery = z.object({ search: z.string().trim().min(1).max(60) });
 const bootstrapQuery = z.object({ vehicleId: z.coerce.number().int().positive(), bookingId: z.coerce.number().int().positive().optional() });
+export const vehicleYearBody = z.object({ year: z.coerce.number().int().min(1950, 'Enter a year from 1950.').max(new Date().getFullYear() + 1, 'That year is in the future.') });
 
 export function maintenanceRoutes(pool: pg.Pool, env: Env) {
   const router = Router();
@@ -26,6 +28,15 @@ export function maintenanceRoutes(pool: pg.Pool, env: Env) {
   router.get('/model', async (_req, res) => sendOk(res, await maintenanceModel(env.MAINTENANCE_ML_SERVICE_URL)));
   router.get('/vehicles/search', async (req, res) => sendOk(res, await searchVehicles(pool, parse(searchQuery, req.query).search)));
   router.get('/vehicles/bootstrap', async (req, res) => { const q = parse(bootstrapQuery, req.query); sendOk(res, await vehicleBootstrap(pool, q.vehicleId, q.bookingId)); });
+  router.patch('/vehicles/:id', async (req, res) => {
+    const user = signedInUser(req);
+    const id = parse(idParam, req.params).id;
+    const body = parse(vehicleYearBody, req.body);
+    const { rows } = await pool.query('UPDATE workshop.vehicles SET year = $2 WHERE vehicle_id = $1 RETURNING vehicle_id, year', [id, body.year]);
+    if (!rows[0]) throw new NotFoundError('Vehicle not found.');
+    await audit(pool, { table: 'workshop.vehicles', recordId: id, action: 'year updated', userId: user.userId, snapshot: { year: body.year } });
+    sendOk(res, { vehicleId: rows[0].vehicle_id, year: rows[0].year });
+  });
   router.get('/forecasts', async (_req, res) => sendOk(res, await listForecasts(pool)));
   router.get('/forecasts/:id', async (req, res) => { const row = await getForecast(pool, parse(idParam, req.params).id); sendOk(res, row); });
   router.post('/forecasts', async (req, res) => {

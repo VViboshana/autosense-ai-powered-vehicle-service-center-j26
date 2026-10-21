@@ -5,6 +5,7 @@ export type VehicleBootstrap = { vehicle: { vehicleId: number; registrationNo: s
 export type VehicleSearchResult = VehicleBootstrap['vehicle'];
 export function searchVehicles(search: string) { return apiGet<VehicleSearchResult[]>('/maintenance/vehicles/search', { search }); }
 export function getVehicleBootstrap(vehicleId: number, bookingId?: number) { return apiGet<VehicleBootstrap>('/maintenance/vehicles/bootstrap', { vehicleId, bookingId }); }
+export function updateVehicleYear(vehicleId: number, year: number) { return apiSend<{ vehicleId: number; year: number }>('PATCH', `/maintenance/vehicles/${vehicleId}`, { year }); }
 export function listForecasts(): Promise<MaintenanceForecast[]> { return apiGet<MaintenanceForecast[]>('/maintenance/forecasts'); }
 export async function getForecast(id: string): Promise<MaintenanceForecast | undefined> {
   const r = await apiGet<Record<string, unknown> | null>(`/maintenance/forecasts/${encodeURIComponent(id)}`);
