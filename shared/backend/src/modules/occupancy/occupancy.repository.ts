@@ -41,6 +41,8 @@ export type VideoJob = {
   totalFrames: number | null;
   error: string | null;
   modelVersion: string | null;
+  /** The general (COCO-pretrained) vehicle model ran, not the one fine-tuned on bays. */
+  modelGeneral: boolean;
   /** Whether the service masked outside the bays (null = not reported, e.g. jobs from before migration 0010). */
   roiMask: boolean | null;
   /** Replaying the video as a live camera until stopped (no end, no total frames). */
@@ -193,7 +195,7 @@ export async function bayEvents(db: Db, bayId: number, page: PageRequest): Promi
 const JOB_SELECT = `
   SELECT j.video_job_id AS "videoJobId", j.camera_id AS "cameraId", c.name AS "cameraName", j.source_path AS "sourcePath",
          j.sample_fps AS "sampleFps", j.status, j.frames_processed AS "framesProcessed", j.total_frames AS "totalFrames",
-         j.error, mv.version AS "modelVersion", j.roi_mask AS "roiMask", j.live, u.first_name || ' ' || u.last_name AS "createdBy", j.created_at AS "createdAt",
+         j.error, mv.version AS "modelVersion", COALESCE(mv.name = 'coco-pretrained', false) AS "modelGeneral", j.roi_mask AS "roiMask", j.live, u.first_name || ' ' || u.last_name AS "createdBy", j.created_at AS "createdAt",
          j.started_at AS "startedAt", j.finished_at AS "finishedAt",
          (SELECT count(*) FROM occupancy.bay_state_events e WHERE e.video_job_id = j.video_job_id)::int AS transitions
   FROM occupancy.video_jobs j
@@ -411,7 +413,7 @@ export async function modelVersionId(db: Db, version: string, placeholder: boole
      ON CONFLICT (component, name, version) DO UPDATE SET version = EXCLUDED.version
      RETURNING model_version_id`,
     [placeholder ? 'coco-pretrained' : 'yolo-vehicle-pklot', version,
-     placeholder ? 'COCO weights, not fine-tuned (placeholder)' : 'Registered by the first video job that used it'],
+     placeholder ? 'General vehicle model: COCO weights, not fine-tuned on bays' : 'Registered by the first video job that used it'],
   );
   return rows[0]!.model_version_id;
 }

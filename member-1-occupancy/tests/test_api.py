@@ -149,7 +149,7 @@ def test_pretrained_model_can_be_forced_and_is_reported_as_not_fine_tuned(tmp_pa
     monkeypatch.setattr(config, 'MODEL_CHOICE', 'pretrained')
     with TestClient(main.app) as c:
         model = c.get('/health').json()['model']
-    assert model['placeholder'] is True and model['version'] == 'coco-yolo11s-placeholder'
+    assert model['placeholder'] is True and model['version'] == 'AutoSense General Detection V1'
     assert model['roiMask']['default'] is (config.ROI_MASK == 'on')    # auto masking is off for the pretrained model
 
 

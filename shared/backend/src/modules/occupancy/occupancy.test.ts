@@ -118,7 +118,7 @@ describe('occupancy service client', () => {
   });
 
   it('reports the model and its masking default, for the settings screen', async () => {
-    const model = { version: 'pklot_yolo11s_1280', placeholder: false, imgsz: 1280, roiMask: { setting: 'auto', default: true, marginPx: 12 } };
+    const model = { version: 'AutoSense Bay Occupancy V1', placeholder: false, imgsz: 1280, roiMask: { setting: 'auto', default: true, marginPx: 12 } };
     vi.stubGlobal('fetch', reply(200, { status: 'up', model, jobsRunning: 0 }));
     expect(await occupancyModel('http://svc:8002')).toEqual(model);
     vi.stubGlobal('fetch', reply(503, {}));

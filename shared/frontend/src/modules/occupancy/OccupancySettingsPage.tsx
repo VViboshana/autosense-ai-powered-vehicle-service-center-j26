@@ -225,10 +225,10 @@ function ServiceCard() {
           <dl className="as-card-body as-occ-facts small">
             <dt>Model</dt>
             <dd>
-              <span className="as-mono">{data.version}</span>
+              <span className="fw-semibold">{data.version}</span>
               <div className="mt-1">
                 {data.placeholder
-                  ? <StatusPill tone="warning">Not fine-tuned (COCO placeholder)</StatusPill>
+                  ? <StatusPill tone="warning">General model (not fine-tuned on bays)</StatusPill>
                   : <StatusPill tone="success">Fine-tuned on PKLot</StatusPill>}
               </div>
             </dd>

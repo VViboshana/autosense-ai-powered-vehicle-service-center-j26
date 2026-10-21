@@ -40,6 +40,8 @@ export type VideoJob = {
   totalFrames: number | null;
   error: string | null;
   modelVersion: string | null;
+  /** The general (COCO-pretrained) vehicle model ran, not the one fine-tuned on bays. */
+  modelGeneral: boolean;
   /** Frames greyed out outside the bays before detection; null = not recorded (older jobs). */
   roiMask: boolean | null;
   /** Replaying the video as a live camera until stopped (no end, no total frames). */

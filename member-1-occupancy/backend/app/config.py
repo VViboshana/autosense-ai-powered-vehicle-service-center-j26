@@ -7,7 +7,7 @@ MODEL_DIR = COMPONENT_DIR / 'model'
 
 # The fine-tuned vehicle model (from Kaggle). Until it exists, the COCO model is used and reported as a placeholder.
 MODEL_PATH = Path(os.getenv('OCC_MODEL_PATH', MODEL_DIR / 'best.pt'))
-MODEL_VERSION = os.getenv('OCC_MODEL_VERSION', 'pklot_yolo11s_1280')
+MODEL_VERSION = os.getenv('OCC_MODEL_VERSION', 'AutoSense Bay Occupancy V1')  # training run pklot_yolo11s_1280
 COCO_MODEL_PATH = MODEL_DIR / 'yolo11s.pt'
 # Which model to run: auto = the fine-tuned one if model/best.pt exists, else the pretrained COCO model;
 # pretrained = always the COCO model (e.g. for simulated close-up footage, where the fine-tuned model fails).

@@ -153,18 +153,26 @@
   margin-bottom: 1rem;
   background: var(--as-surface-2);
 }
+/* Label column as wide as its longest label (kept on one line); the values take the rest and wrap inside the card */
 .as-occ-facts {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.4rem 1rem;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.6rem 1rem;
   margin: 0;
 }
 .as-occ-facts dt {
   font-weight: 500;
   color: var(--as-muted);
+  white-space: nowrap;
 }
 .as-occ-facts dd {
   margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.as-occ-facts .as-pill {
+  white-space: normal;
+  max-width: 100%;
 }
 
 /* Bay monitor: pick a bay to see its history */

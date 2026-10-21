@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useSession } from '@/app/session';
 import { Card } from '@/components/ui/Card';
@@ -18,6 +18,9 @@ import { useToasts } from './useToasts';
 import type { DamageLabel, Detection, InspectionDetail, RepairPlan, Severity } from './inspections.types';
 import { DAMAGE_LABELS, PRIORITY, REVIEW, SEVERITY, STATUS, VIEW_ANGLES, finalLabel, finalSeverity, hours, isFinding, isOpenSuggestion, percent } from './inspections.ui';
 import './inspections.css';
+
+/** What the damage model does with each photo, shown in order on the Model tile. */
+const AI_STEPS = ['Detect', 'Outline', 'Grade', 'Plan'];
 
 /**
  * One inspection: each photo with the damage outlines, and beside it the regions the model found. A technician
@@ -206,8 +209,13 @@ export function InspectionDetailPage() {
               <span className="as-kpi-value">{pending}{possible > 0 && <small>+ {possible} possible</small>}</span>
             </div>
             <div className="as-kpi">
-              <span className="as-kpi-label"><i className="bi bi-cpu" aria-hidden="true" />Model</span>
-              <span className="as-kpi-value as-mono" style={{ fontSize: '0.85rem' }}>{data.model ? data.model.version : '—'}</span>
+              <span className="as-kpi-label"><span className="as-ai-chip"><i className="bi bi-cpu" aria-hidden="true" /></span>Model</span>
+              <span className="as-kpi-value as-ai-name">{data.model ? data.model.version : '—'}</span>
+              {data.model && (
+                <ol className="as-ai-steps" aria-label="How the model reads each photo">
+                  {AI_STEPS.map((step, i) => <li key={step} style={{ '--i': i } as CSSProperties}>{step}</li>)}
+                </ol>
+              )}
             </div>
           </section>
 
@@ -624,7 +632,10 @@ function RegionItem({ d, no, serviceName, on, editable, busy, onSelect, onHover,
       ) : (
         <>
           <div className="as-dmg-facts">
-            <span>Confidence {percent(d.confidence)}</span>
+            <span className="as-conf">
+              Confidence {percent(d.confidence)}
+              <i className="as-conf-bar" aria-hidden="true"><b style={{ '--v': d.confidence } as CSSProperties} /></i>
+            </span>
             {d.areaRatioVehicle != null && <span>{percent(d.areaRatioVehicle, 1)} of vehicle</span>}
             {d.location && <span>{d.location}</span>}
           </div>

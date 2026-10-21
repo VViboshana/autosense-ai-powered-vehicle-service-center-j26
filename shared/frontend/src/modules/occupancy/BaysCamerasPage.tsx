@@ -327,7 +327,7 @@ function VideoJobs({ camera, canManage, canStart, onFinished }: { camera: Camera
                     <td className="small">
                       {j.modelVersion ?? '—'}
                       {j.roiMask !== null && <div className="text-body-secondary">{j.roiMask ? 'Bays only (outside masked)' : 'Full frame'}</div>}
-                      {j.modelVersion?.includes('placeholder') && <div><StatusPill tone="warning">Not fine-tuned</StatusPill></div>}
+                      {j.modelGeneral && <div><StatusPill tone="warning">General model</StatusPill></div>}
                     </td>
                     <td className="text-end">
                       {canManage && (j.status === 'queued' || j.status === 'running') && (
