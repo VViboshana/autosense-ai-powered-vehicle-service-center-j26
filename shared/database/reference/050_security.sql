@@ -43,3 +43,11 @@ INSERT INTO app.settings (setting_key, value, description, is_public) VALUES
      '{"persistenceSeconds": 2, "minConfidence": 0.45, "loiteringSeconds": 120, "touchSeconds": 10, "smokeCriticalSeconds": 10, "workerNearbyMetres": 3, "afterHours": {"from": "19:00", "to": "07:00"}}',
      'Security rule engine: how long a threat must be seen, minimum model confidence, loitering and touching times, smoke escalation, how near a worker must be, and the after-hours window', false)
 ON CONFLICT (setting_key) DO NOTHING;
+
+-- The trained model in use (member-4-anomaly-detection/service/models/component4_best.pt). Alerts from video
+-- analysis point to it, so every alert says which model produced it.
+INSERT INTO app.model_versions (component, name, version, notes, is_active)
+VALUES ('security', 'yolo11m-c4', 'c4_v3_yolo11m',
+        'YOLO11m, 9 classes: person, vehicle, weapon, fire, smoke, tampering, loitering, face_covered, worker. ByteTrack tracking and the rule engine in configs/threat_rules.yaml.',
+        true)
+ON CONFLICT (component, name, version) DO UPDATE SET notes = EXCLUDED.notes, is_active = true;

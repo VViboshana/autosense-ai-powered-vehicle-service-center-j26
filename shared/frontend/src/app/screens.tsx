@@ -15,6 +15,7 @@ import { AlertDetailPage } from '@/modules/security/AlertDetailPage';
 import { AlertRulesPage } from '@/modules/security/AlertRulesPage';
 import { AlertsPage } from '@/modules/security/AlertsPage';
 import { CamerasPage } from '@/modules/security/CamerasPage';
+import { VideoAnalysisPage } from '@/modules/security/VideoAnalysisPage';
 import { BaysCamerasPage } from '@/modules/occupancy/BaysCamerasPage';
 /**
  * Built staff screens: path -> page, guarded by the screen code from app.screens (database/reference/010_screens.sql).
@@ -54,6 +55,7 @@ export const SCREENS: ScreenRoute[] = [
   { code: 'SAFETY_ALERTS', path: '/safety/alerts', element: <AlertsPage /> },
   { code: 'SAFETY_ALERTS', path: '/safety/alerts/:id', element: <AlertDetailPage /> },
   { code: 'CAMERAS', path: '/safety/cameras', element: <CamerasPage /> },
+  { code: 'CAMERAS', also: ['SAFETY_ALERTS'], path: '/safety/videos/:id', element: <VideoAnalysisPage /> },
   { code: 'ALERT_RULES', path: '/setup/alert-rules', element: <AlertRulesPage /> },
   { code: 'DAMAGE_SETTINGS', path: '/setup/damage', element: <DamagePerformancePage /> },
 ];

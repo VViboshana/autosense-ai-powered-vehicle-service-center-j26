@@ -46,7 +46,7 @@ export function createApp(pool: pg.Pool, env: Env) {
   app.use('/api/vehicle-requests', claimsRoutes(pool, env.UPLOAD_DIR));
   app.use('/api/bookings', bookingsRoutes(pool));
   app.use('/api/inspections', inspectionsRoutes({ pool, damageServiceUrl: env.ML_DAMAGE_URL, uploadDir: env.UPLOAD_DIR }));
-  app.use('/api/security', securityRoutes(pool));
+  app.use('/api/security', securityRoutes({ pool, uploadDir: env.UPLOAD_DIR, serviceUrl: process.env.ML_SECURITY_URL || 'http://localhost:8004' }));
   app.use('/api/occupancy', occupancyRoutes({ pool, serviceUrl: env.ML_OCCUPANCY_URL }));
   app.use('/api/admin/users', usersRoutes(pool));
   app.use('/api/admin/roles', rolesRoutes(pool));
