@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchJobFrame, fetchVideoJob, occupancyModel, startVideoJob } from '../../integrations/ml/occupancyService.js';
+import { fetchJobFrame, fetchVideoJob, occupancyHealth, occupancyModel, startVideoJob } from '../../integrations/ml/occupancyService.js';
 import { area, bayBody, cameraBody, confirmBayBody, polygonSchema, rulesBody, sourceSchema } from './occupancy.routes.js';
 import { plateCore } from './occupancy.plates.js';
 import { autoConfirmChoice, chooseBayLink, pairBaysWithQueue, serviceJobId, transitionRows } from './occupancy.service.js';
@@ -123,6 +123,14 @@ describe('occupancy service client', () => {
     expect(await occupancyModel('http://svc:8002')).toEqual(model);
     vi.stubGlobal('fetch', reply(503, {}));
     await expect(occupancyModel('http://svc:8002')).rejects.toMatchObject({ status: 503 });
+  });
+
+  it("reads how many jobs the service is running, as 0 from services that do not say", async () => {
+    const model = { version: 'v', placeholder: false };
+    vi.stubGlobal('fetch', reply(200, { status: 'up', model, jobsRunning: 1 }));
+    expect((await occupancyHealth('http://svc:8002')).jobsRunning).toBe(1);
+    vi.stubGlobal('fetch', reply(200, { status: 'up', model }));
+    expect((await occupancyHealth('http://svc:8002')).jobsRunning).toBe(0);
   });
 
   it("passes on the service's reason when it refuses a job, and 503 when it is down or not set up", async () => {

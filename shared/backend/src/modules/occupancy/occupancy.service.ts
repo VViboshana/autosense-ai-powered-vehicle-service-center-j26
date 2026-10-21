@@ -5,7 +5,7 @@ import {
   cancelVideoJob as cancelOnService,
   fetchJobFrame,
   fetchVideoJob,
-  occupancyModel,
+  occupancyHealth,
   startVideoJob as startOnService,
   type OccupancyJob,
 } from '../../integrations/ml/occupancyService.js';
@@ -30,6 +30,9 @@ export type OccupancyRules = typeof DEFAULT_RULES & Partial<Record<'releaseThres
 /** The service knows a job by this id; the API's own id is the number in it. */
 export const serviceJobId = (videoJobId: number) => `VJ-${videoJobId}`;
 
+/** How long a new job may be unknown to the service before the sync takes that to mean the service restarted. */
+const START_GRACE_MS = 30_000;
+
 /**
  * Starts processing a camera's recorded video: the job row is created first (so its id names the job on the service),
  * then the service is asked to start. If the service refuses or is down, the job is marked failed with the reason
@@ -48,7 +51,11 @@ export async function startVideoJob(deps: OccupancyDeps, input: { cameraId: numb
     throw new BusinessRuleError('LIVE_CAMERA_RUNNING', `${running[0]!.cameraName} is running live. Stop it before processing another video.`);
   }
 
-  const model = await occupancyModel(deps.serviceUrl);
+  // The database can miss a job the service is still running (e.g. one marked failed by mistake): ask the service too
+  const { model, jobsRunning } = await occupancyHealth(deps.serviceUrl);
+  if (jobsRunning > 0) {
+    throw new BusinessRuleError('OCCUPANCY_SERVICE_BUSY', 'The occupancy service is still running another video. Restart it, then try again.');
+  }
   const rules = await getSetting<OccupancyRules>(deps.pool, 'occupancy.rules', DEFAULT_RULES);
   const sampleFps = input.sampleFps ?? rules.sampleFps;
   const { sampleFps: _s, autoConfirm: _a, plateLink: _p, ...stateRules } = rules;   // the service applies the state rules only
@@ -138,6 +145,8 @@ export async function syncOpenJobs(deps: OccupancyDeps): Promise<void> {
       if (job.cameraId) await repo.markCameraSeen(deps.pool, job.cameraId, false);
       return; // try again on the next pass
     }
+    // A job created moments ago may not have reached the service yet (startVideoJob inserts the row first): not a restart
+    if (!report && Date.now() - new Date(job.startedAt).getTime() < START_GRACE_MS) continue;
     await withTransaction(deps.pool, async (client) => {
       if (!report) {
         await repo.updateVideoJob(client, job.videoJobId, { status: 'failed', framesProcessed: 0, totalFrames: null, error: 'The occupancy service restarted while this video was being processed.' });

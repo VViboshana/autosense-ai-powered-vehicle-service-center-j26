@@ -43,7 +43,8 @@ const job = z.object({
   transitions: z.array(transition),
   transitionCount: z.number().int(),
 });
-const health = z.object({ status: z.literal('up'), model: modelInfo });
+/** `jobsRunning` is missing from older service versions. */
+const health = z.object({ status: z.literal('up'), model: modelInfo, jobsRunning: z.number().int().optional() });
 
 export type OccupancyTransition = z.infer<typeof transition>;
 export type OccupancyJob = z.infer<typeof job>;
@@ -84,10 +85,16 @@ function checked<S extends z.ZodType>(schema: S, body: unknown): z.infer<S> {
   return parsed.data;
 }
 
-export async function occupancyModel(url: string | undefined): Promise<OccupancyModel> {
+/** The service's model and how many jobs it is running right now (its own count, which can differ from the database). */
+export async function occupancyHealth(url: string | undefined): Promise<{ model: OccupancyModel; jobsRunning: number }> {
   const res = await call(new URL('/health', base(url)).href, { timeoutMs: 3000 });
   if (!res.ok) throw new ServiceUnavailableError('OCCUPANCY_SERVICE_UNAVAILABLE', NOT_RESPONDING);
-  return checked(health, await res.json().catch(() => null)).model;
+  const body = checked(health, await res.json().catch(() => null));
+  return { model: body.model, jobsRunning: body.jobsRunning ?? 0 };
+}
+
+export async function occupancyModel(url: string | undefined): Promise<OccupancyModel> {
+  return (await occupancyHealth(url)).model;
 }
 
 export async function startVideoJob(url: string | undefined, request: VideoJobRequest): Promise<OccupancyJob> {
