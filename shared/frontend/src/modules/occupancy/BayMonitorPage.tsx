@@ -216,6 +216,13 @@ function FeedTile({ bay, live, tag, selected, onSelect }: { bay: BayCard; live: 
           {bay.state === 'unknown' && 'No reading from the camera yet'}
         </span>
       )}
+      {bay.plate && bay.state !== 'free' && (
+        <span className="as-feed-plate" title={bay.plate.stable ? 'Number plate read by the camera' : 'Reading the number plate…'}>
+          <i className="bi bi-credit-card-2-front" aria-hidden="true" />
+          <span className="as-mono">{bay.plate.text}</span>
+          {!bay.plate.stable && <span className="text-body-secondary">reading…</span>}
+        </span>
+      )}
       <span className="as-feed-foot">{bay.since ? `${state.label} for ${formatDuration(minutesSince(bay.since))}` : ' '}</span>
     </button>
   );

@@ -14,7 +14,7 @@ import './occupancy.css';
  * Edits the occupancy.rules setting: when a bay counts as occupied, free or uncertain. The occupancy service applies
  * the rules to each video job when it starts, so a change affects jobs started after saving.
  */
-type Key = Exclude<keyof OccupancyRules, 'autoConfirm'>;
+type Key = Exclude<keyof OccupancyRules, 'autoConfirm' | 'plateLink'>;
 type Form = Record<Key, string>;
 
 /** What the service uses when a value is left empty (member-1-occupancy/backend/app/state_machine.py, Rules). */
@@ -88,9 +88,10 @@ function RulesCard() {
   const [message, setMessage] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [autoConfirm, setAutoConfirm] = useState(false);
+  const [plateLink, setPlateLink] = useState(true);
 
   useEffect(() => {
-    if (data) { setForm(toForm(data)); setAutoConfirm(!!data.autoConfirm); }
+    if (data) { setForm(toForm(data)); setAutoConfirm(!!data.autoConfirm); setPlateLink(data.plateLink !== false); }
   }, [data]);
 
   const set = (key: Key) => (e: { target: { value: string } }) => {
@@ -108,9 +109,10 @@ function RulesCard() {
     if (!rules) return;
     setSaving(true);
     try {
-      const saved = await apiSend<OccupancyRules>('PUT', '/occupancy/rules', { ...rules, autoConfirm });
+      const saved = await apiSend<OccupancyRules>('PUT', '/occupancy/rules', { ...rules, autoConfirm, plateLink });
       setForm(toForm(saved));
       setAutoConfirm(!!saved.autoConfirm);
+      setPlateLink(saved.plateLink !== false);
       setMessage({ tone: 'success', text: 'Saved. Video jobs started from now on use these rules.' });
     } catch (err) {
       setErrors(fieldErrors(err));
@@ -177,6 +179,16 @@ function RulesCard() {
 
         <h3 className="as-occ-group">Moving vehicles into bays</h3>
         <div className="form-check form-switch mb-1">
+          <input className="form-check-input" type="checkbox" role="switch" id="plate-link" checked={plateLink}
+            onChange={(e) => { setPlateLink(e.target.checked); setMessage(null); }} />
+          <label className="form-check-label" htmlFor="plate-link">Link vehicles by number plate</label>
+        </div>
+        <p className="small text-body-secondary mb-3">
+          When the camera reads the parked vehicle's number plate (several readings that agree) and exactly one waiting
+          vehicle has that plate, it is moved into the bay straight away ("Linked by number plate" in its history). A plate
+          that matches nobody waiting is shown to staff, never replaced by a guess. Only the plate text is stored.
+        </p>
+        <div className="form-check form-switch mb-1">
           <input className="form-check-input" type="checkbox" role="switch" id="auto-confirm" checked={autoConfirm}
             onChange={(e) => { setAutoConfirm(e.target.checked); setMessage(null); }} />
           <label className="form-check-label" htmlFor="auto-confirm">Auto-confirm when there is no doubt</label>
@@ -185,7 +197,7 @@ function RulesCard() {
           Off: the Bay monitor suggests the waiting vehicle and staff confirm it. On: when one bay fills and exactly one
           vehicle is waiting, it is moved into that bay straight away (marked "auto-confirmed" in its history; "Not this
           vehicle" puts it back in the queue). Two cars arriving, or several waiting, are always left for staff to confirm.
-          The camera cannot read number plates, so it cannot check that the car is really that vehicle.
+          Used only when no plate could be read, so the camera cannot check that the car is really that vehicle.
         </p>
 
         {message && <Alert tone={message.tone}>{message.text}</Alert>}
@@ -227,6 +239,12 @@ function ServiceCard() {
                 : data.roiMask.default ? `Greyed out before detection (margin ${data.roiMask.marginPx} px per 1280 px of width)`
                 : 'Not greyed out: the whole frame is analysed'}
               {data.roiMask && <div className="text-body-secondary">Set on the service (OCC_ROI_MASK={data.roiMask.setting}).</div>}
+            </dd>
+            <dt>Number plates</dt>
+            <dd>
+              {!data.plates ? 'Not reported by this service version'
+                : data.plates.enabled ? 'Read on parked vehicles (OCR, text only)'
+                : 'Not read (OCR not installed or switched off)'}
             </dd>
           </dl>
         )}

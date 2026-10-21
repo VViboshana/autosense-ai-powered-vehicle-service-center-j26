@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchJobFrame, fetchVideoJob, occupancyModel, startVideoJob } from '../../integrations/ml/occupancyService.js';
 import { area, bayBody, cameraBody, confirmBayBody, polygonSchema, rulesBody, sourceSchema } from './occupancy.routes.js';
-import { autoConfirmChoice, pairBaysWithQueue, serviceJobId, transitionRows } from './occupancy.service.js';
+import { plateCore } from './occupancy.plates.js';
+import { autoConfirmChoice, chooseBayLink, pairBaysWithQueue, serviceJobId, transitionRows } from './occupancy.service.js';
+
+const NO_PLATE = { plateText: null, plateCore: null, plateVotes: null, plateReads: null, plateStable: false, plateDone: false };
 
 const SQUARE: [number, number][] = [[0.1, 0.1], [0.4, 0.1], [0.4, 0.5], [0.1, 0.5]];
 
@@ -133,7 +136,7 @@ describe('occupancy service client', () => {
 });
 
 describe('suggesting which waiting vehicle is in an occupied bay', () => {
-  const bay = (bayId: number) => ({ bayId, code: `B${bayId}`, name: `Bay ${bayId}`, since: null, overlap: 0.8 });
+  const bay = (bayId: number) => ({ bayId, code: `B${bayId}`, name: `Bay ${bayId}`, since: null, overlap: 0.8, ...NO_PLATE });
   const job = (jobId: number) => ({
     jobId, jobNo: `JOB-${jobId}`, registrationNo: 'WP CAB-0001', vehicle: 'Toyota Aqua', service: 'Full service',
     stage: 'waiting_for_bay' as const, checkedInAt: '2026-10-20T03:00:00Z',
@@ -163,7 +166,7 @@ describe('which cameras may have jobs in their bays', () => {
 });
 
 describe('auto-confirm', () => {
-  const bay = (bayId: number) => ({ bayId, code: `B${bayId}`, name: `Bay ${bayId}`, since: null, overlap: 0.9 });
+  const bay = (bayId: number) => ({ bayId, code: `B${bayId}`, name: `Bay ${bayId}`, since: null, overlap: 0.9, ...NO_PLATE });
   const job = (jobId: number) => ({
     jobId, jobNo: `JOB-${jobId}`, registrationNo: 'WP CAB-0001', vehicle: 'Toyota Aqua', service: 'Full service',
     stage: 'waiting_for_bay' as const, checkedInAt: '2026-10-20T03:00:00Z',
@@ -185,5 +188,50 @@ describe('auto-confirm', () => {
     const base = { overlapThreshold: 0.4, confirmOccupiedSeconds: 3, confirmFreeSeconds: 5, sampleFps: 2 };
     expect(rulesBody.parse({ ...base, autoConfirm: true }).autoConfirm).toBe(true);
     expect(rulesBody.parse(base).autoConfirm).toBeUndefined();
+  });
+});
+
+describe('number plates', () => {
+  it('reduces Sri Lankan plates to the part that is matched, like the occupancy service', () => {
+    expect(plateCore('WP KP-0683')).toBe('KP0683');
+    expect(plateCore('WPKP0683')).toBe('KP0683');
+    expect(plateCore('KP-0683')).toBe('KP0683');
+    expect(plateCore('WP CAB-4521')).toBe('CAB4521');
+    expect(plateCore('19-1234')).toBe('191234');
+    expect(plateCore('HONDA')).toBeNull();
+    expect(plateCore(null)).toBeNull();
+  });
+
+  const job = (jobId: number, registrationNo: string) => ({
+    jobId, jobNo: `JOB-${jobId}`, registrationNo, vehicle: 'Honda Fit', service: 'Full service',
+    stage: 'waiting_for_bay' as const, checkedInAt: '2026-10-21T03:00:00Z',
+  });
+  const read = (text: string, stable = true, done = true) => ({
+    bayId: 7, code: 'SIM7', name: 'Bay 7', since: null, overlap: 0.9,
+    plateText: text, plateCore: plateCore(text), plateVotes: 3, plateReads: 4, plateStable: stable, plateDone: done,
+  });
+  const queue = [job(10, 'WP CAB-4521'), job(11, 'WP KP 0683')];
+
+  it('links the vehicle whose plate the camera read, even when it is not first in the queue', () => {
+    const link = chooseBayLink({}, 7, [read('WP KP-0683')], queue);
+    expect(link).toMatchObject({ jobId: 11, how: 'plate' });
+    expect(link!.note).toContain('WP KP-0683 (3 of 4 readings)');
+  });
+
+  it('never guesses when a read plate matches nobody waiting, and waits while reading', () => {
+    expect(chooseBayLink({ autoConfirm: true }, 7, [read('WP NB-1111')], [job(10, 'WP CAB-4521')])).toBeNull();
+    expect(chooseBayLink({ autoConfirm: true }, 7, [read('WP KP-0683', false, false)], [job(10, 'WP CAB-4521')])).toBeNull();
+  });
+
+  it('can be switched off, and falls back to auto-confirm only when no plate could be read', () => {
+    expect(chooseBayLink({ plateLink: false }, 7, [read('WP KP-0683')], queue)).toBeNull();
+    const unreadable = { ...read('x', false, true), plateText: null, plateCore: null, plateVotes: 0 };
+    expect(chooseBayLink({ autoConfirm: true }, 7, [unreadable], [job(10, 'WP CAB-4521')])).toMatchObject({ jobId: 10, how: 'auto' });
+  });
+
+  it('suggests the plate owner first, and the queue in order for bays without a read plate', () => {
+    const plain = { ...read('x'), bayId: 3, plateText: null, plateCore: null, plateStable: false };
+    const s = pairBaysWithQueue([plain, read('WP KP-0683')], queue);
+    expect(s.map((b) => [b.bayId, b.suggestedJobId, b.plateMatched])).toEqual([[3, 10, false], [7, 11, true]]);
   });
 });

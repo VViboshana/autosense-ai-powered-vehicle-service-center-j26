@@ -7,7 +7,7 @@ Each clip shows ONE service bay from a fixed camera: empty at the start, a car d
 the end. The car leaving is the same clip played backwards, so every bay cycles  empty -> arrive -> parked -> leave.
 
   check    run the detector(s) on a clip: is the parked car found, is the empty bay empty, where is the bay
-  compose  tile the clips (3 x 2) into one 1920x720 video with staggered timelines, plus <out>.bays.json with each
+  compose  tile the clips (3 x 2, or 4 x 2 for 7-8 clips) into one 1920x720 (2560x720) video with staggered timelines, plus <out>.bays.json with each
            bay's outline (normalised, from the parked car) and the expected state per second
 
 Usage (from member-1-occupancy/):
@@ -135,8 +135,9 @@ def timeline(frames: list[np.ndarray], clip_fps: float, seconds: float, seed: in
 def compose(clips: list[Path], weights: Path, out: Path, minutes: float,
             empty_s: tuple[int, int] = EMPTY_S, parked_s: tuple[int, int] = PARKED_S,
             first_s: tuple[int, int] | None = None) -> None:
-    if not 1 <= len(clips) <= COLS * ROWS:
-        raise SystemExit(f'Give 1 to {COLS * ROWS} clips.')
+    if not 1 <= len(clips) <= 8:
+        raise SystemExit('Give 1 to 8 clips.')
+    cols, rows = (3 if len(clips) <= 6 else 4), 2     # 3 x 2 panels for up to 6 bays, 4 x 2 for 7 or 8
     bays, views, panels, truth = {}, {}, [], {}
     for k, path in enumerate(clips):
         rep = check_clip(path, [weights])
@@ -144,11 +145,11 @@ def compose(clips: list[Path], weights: Path, out: Path, minutes: float,
             raise SystemExit(f"{path.name}: {rep['verdict']}")
         frames, fps = read_clip(path)
         seq, states = timeline(frames, fps, minutes * 60, seed=k, empty_s=empty_s, parked_s=parked_s, first_s=first_s)
-        col, row = k % COLS, k // COLS
+        col, row = k % cols, k // cols
         (x1, y1), _, (x2, y2), _ = rep['bay']
         # the panel's bay, in the coordinates of the whole 1920x720 picture
-        bx = lambda x: round((col + x) / COLS, 4)    # noqa: E731
-        by = lambda y: round((row + y) / ROWS, 4)    # noqa: E731
+        bx = lambda x: round((col + x) / cols, 4)    # noqa: E731
+        by = lambda y: round((row + y) / rows, 4)    # noqa: E731
         code = f'S{k + 1}'
         bays[code] = [[bx(x1), by(y1)], [bx(x2), by(y1)], [bx(x2), by(y2)], [bx(x1), by(y2)]]
         views[code] = [bx(0), by(0), bx(1), by(1)]   # the bay's own panel: live pictures are cropped inside it
@@ -157,13 +158,13 @@ def compose(clips: list[Path], weights: Path, out: Path, minutes: float,
         print(f'{code}: {path.name} ok ({rep["verdict"]})')
     blank = np.full((PANEL_H, PANEL_W, 3), 40, np.uint8)
     out.parent.mkdir(parents=True, exist_ok=True)
-    writer = cv2.VideoWriter(str(out), cv2.VideoWriter_fourcc(*'mp4v'), FPS, (PANEL_W * COLS, PANEL_H * ROWS))
+    writer = cv2.VideoWriter(str(out), cv2.VideoWriter_fourcc(*'mp4v'), FPS, (PANEL_W * cols, PANEL_H * rows))
     for i in range(int(minutes * 60 * FPS)):
-        tiles = [p[i] if p is not None else blank for p in panels] + [blank] * (COLS * ROWS - len(panels))
-        rows = [np.hstack(tiles[r * COLS:(r + 1) * COLS]) for r in range(ROWS)]
-        frame = np.vstack(rows)
+        tiles = [p[i] if p is not None else blank for p in panels] + [blank] * (cols * rows - len(panels))
+        lines = [np.hstack(tiles[r * cols:(r + 1) * cols]) for r in range(rows)]
+        frame = np.vstack(lines)
         for k in range(len(panels)):
-            col, row = k % COLS, k // COLS
+            col, row = k % cols, k // cols
             cv2.putText(frame, f'S{k + 1}  SIMULATED (AI-generated)', (col * PANEL_W + 8, row * PANEL_H + PANEL_H - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
         writer.write(frame)

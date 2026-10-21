@@ -24,6 +24,10 @@ CONFIDENCE = float(os.getenv('OCC_CONFIDENCE', '0.25'))     # detections below t
 ROI_MASK = os.getenv('OCC_ROI_MASK', 'auto').strip().lower()
 if ROI_MASK not in ('auto', 'on', 'off'):
     raise ValueError(f'OCC_ROI_MASK must be auto, on or off (got {ROI_MASK!r}).')
+# Number-plate reading (plates.py): auto = on when the OCR package is installed; on = required; off = never.
+PLATES = os.getenv('OCC_PLATES', 'auto').strip().lower()
+if PLATES not in ('auto', 'on', 'off'):
+    raise ValueError(f'OCC_PLATES must be auto, on or off (got {PLATES!r}).')
 # Margin around the bays, in pixels of a 1280 px wide frame (the PKLot/training size); scaled to the real frame
 # width, at least 4 px (roi.margin_for). 0 = no margin.
 ROI_MARGIN_PX = int(os.getenv('OCC_ROI_MARGIN_PX', '12'))

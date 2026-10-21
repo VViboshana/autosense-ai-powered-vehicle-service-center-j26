@@ -8,7 +8,13 @@ import { BusinessRuleError, ServiceUnavailableError } from '../../http/errors.js
  */
 const state = z.enum(['free', 'occupied', 'uncertain']);
 const roiMask = z.object({ setting: z.string(), default: z.boolean(), marginPx: z.number().int() });
-const modelInfo = z.object({ version: z.string(), placeholder: z.boolean(), imgsz: z.number().int().optional(), roiMask: roiMask.optional() });
+const plateReading = z.object({
+  text: z.string().nullable(), core: z.string().nullable(), votes: z.number().int(), reads: z.number().int(),
+  confidence: z.number().optional(), stable: z.boolean(), done: z.boolean(),
+});
+export type PlateReading = z.infer<typeof plateReading>;
+const modelInfo = z.object({ version: z.string(), placeholder: z.boolean(), imgsz: z.number().int().optional(), roiMask: roiMask.optional(),
+  plates: z.object({ setting: z.string(), enabled: z.boolean() }).optional() });
 const transition = z.object({
   bayId: z.string(),
   fromState: state,
@@ -29,7 +35,11 @@ const job = z.object({
   framesProcessed: z.number().int(),
   totalFrames: z.number().int().nullable(),
   streamSeconds: z.number(),
-  bays: z.record(z.string(), z.object({ state, confirming: state.nullable(), score: z.number(), trackId: z.number().int().nullable() })),
+  bays: z.record(z.string(), z.object({
+    state, confirming: state.nullable(), score: z.number(), trackId: z.number().int().nullable(),
+    /** The parked vehicle's number plate as read so far (plates.py); missing from older service versions. */
+    plate: plateReading.nullable().optional(),
+  })),
   transitions: z.array(transition),
   transitionCount: z.number().int(),
 });

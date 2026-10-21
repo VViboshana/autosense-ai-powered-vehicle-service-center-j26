@@ -66,8 +66,9 @@ def _transition_json(t: Transition) -> dict:
 
 
 class JobManager:
-    def __init__(self, detector):
+    def __init__(self, detector, plates=None):
         self.detector = detector
+        self.plates = plates          # plates.PlateReader, or None when plate reading is off
         self.jobs: dict[str, Job] = {}
         self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='video-job')
 
@@ -94,7 +95,7 @@ class JobManager:
                 job.progress = p
             process_video(job.source, job.bays, self.detector, job.rules, job.sample_fps, mask=job.mask, live=job.live,
                           on_transition=job.transitions.append, on_progress=on_progress, on_frame=job.set_latest,
-                          stop=job.stop)
+                          stop=job.stop, plates=self.plates)
             job.status = 'cancelled' if job.stop.is_set() else 'completed'
         except Exception as e:   # reported to the API; the service keeps running
             job.status, job.error = 'failed', str(e)[:500]

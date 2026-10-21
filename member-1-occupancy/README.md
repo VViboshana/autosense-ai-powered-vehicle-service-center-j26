@@ -34,7 +34,7 @@ Interactive docs: http://localhost:8002/docs. The AutoSense API finds it through
 `"placeholder": true`.
 
 Settings (environment variables): `OCC_MODEL_PATH`, `OCC_MODEL_VERSION`, `OCC_IMGSZ` (1280), `OCC_CONFIDENCE`
-(0.25), `OCC_VIDEO_DIR` (videos/), `OCC_ROI_MASK` (auto | on | off), `OCC_ROI_MARGIN_PX` (12), `OCC_MODEL` (auto |
+(0.25), `OCC_VIDEO_DIR` (videos/), `OCC_ROI_MASK` (auto | on | off), `OCC_ROI_MARGIN_PX` (12), `OCC_PLATES` (auto | on | off), `OCC_MODEL` (auto |
 pretrained: force the COCO model, reported as not fine-tuned). Occupancy rules come from the API with each video job (setting
 `occupancy.rules`): `overlapThreshold`, `releaseThreshold`, `confirmOccupiedSeconds`, `confirmFreeSeconds`,
 `toleranceSeconds`, `minSupport`, `staleAfterSeconds`.
@@ -59,6 +59,23 @@ masks every frame the same way before detection: the union of the job's bay poly
 Privacy: masking reduces processing of areas outside the bays before detection. It does not blur number plates or
 people inside the bays, and `/snapshot` still returns the full, unmasked frame for drawing bays. The service stores
 no frames, only bay states (through the API). NFR-11 (blurring retained footage) is **not met yet**.
+
+### Number-plate reading (identity-aware occupancy)
+When a bay is (becoming) occupied, the service reads the parked vehicle's number plate (`plates.py`) so its job can be
+linked by identity instead of by queue order.
+- Off-the-shelf OCR: RapidOCR (PaddleOCR models, Apache-2.0, `rapidocr-onnxruntime`); nothing trained by us. Setting
+  `OCC_PLATES` = auto (on when installed) | on | off; `/health` reports `model.plates`.
+- Plates are reduced to their core, the letters and digits (`WP KP-0683` -> `KP0683`); the province code is ignored
+  because OCR misreads it most. The same rule is in the API (`occupancy.plates.ts`).
+- One reading is never trusted: a plate counts when the same core was read at least 3 times and in 60% of the readings;
+  reading stops when settled or after 8 attempts. It is forgotten when the bay turns free.
+- The API stores the text (never the image) on `occupancy.bay_status` and the "occupied" event (migration 0013). With
+  "Link vehicles by number plate" on (Occupancy settings, default on), the ONE waiting vehicle with that plate is moved
+  into the bay ("Linked by number plate" in its history). A plate matching nobody waiting is shown to staff, never
+  replaced by a guess; auto-confirm is used only when no plate could be read.
+- Feasibility only so far (20/10/2026): one clear front-on photo read correctly down to about 50 px of plate width (a
+  digit was wrong at 35 px), and the simulated close-up clip `bay7_plate.mp4` read `WP KP-0683` in 3 of 4 readings.
+  Reading accuracy must still be measured on real plate photos. Plates are personal data: only the text is kept.
 
 ## In the web app
 - **Bay monitor** (`/floor/bays`): live bay states; pick a bay to see its history (state band over the last 100

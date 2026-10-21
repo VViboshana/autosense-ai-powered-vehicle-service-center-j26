@@ -6,6 +6,7 @@ import { ApiError, apiSend } from '@/lib/api';
 import { formatDuration, formatTime, minutesSince } from '@/lib/format';
 import { useApi } from '@/lib/useApi';
 import type { BayRelease, BaySuggestion, BaySuggestions as Data, QueuedJob } from './occupancy.types';
+import { NextStepPopup, PlateCheckIn } from './PlatePopups';
 import './occupancy.css';
 
 /**
@@ -14,6 +15,7 @@ import './occupancy.css';
  * confirm (function BAY_JOB_CONFIRM), which moves that job to "In bay". The other way round: when a bay with a job
  * turns free, it asks whether the vehicle left; confirming moves the job to "Ready". Shown as small pop-ups in the
  * bottom-right corner that never cover the page's content (they can be minimised); hidden when there is nothing to do.
+ * Plate pop-ups and next steps (send to inspection, start it, work done): PlatePopups.tsx.
  */
 const STAGE: Record<QueuedJob['stage'], string> = {
   waiting_for_bay: 'waiting for a bay',
@@ -23,15 +25,22 @@ const STAGE: Record<QueuedJob['stage'], string> = {
 export function BaySuggestions({ onConfirmed }: { onConfirmed: () => void }) {
   const { can } = useSession();
   const { data, error, reload } = useApi<Data>('/occupancy/bay-suggestions', undefined, { refreshMs: 5_000 });
-  const [hidden, setHidden] = useState<number[]>([]);
+  const [hidden, setHidden] = useState<string[]>([]);
+  const hide = (key: string) => setHidden((h) => [...h, key]);
   const [open, setOpen] = useState(true);
   const [all, setAll] = useState(false);
 
   // Only what staff can act on: a parked car while someone is waiting, or a bay that emptied with a job still in it.
   // (A car in a bay with nobody waiting is shown on the bay's tile instead.)
-  const shown = data && data.queue.length > 0 ? data.suggestions.filter((s) => !hidden.includes(s.bayId)) : [];
-  const releases = data?.releases.filter((r) => !hidden.includes(-r.jobId)) ?? [];
-  const total = shown.length + releases.length;
+  // A bay with a read plate is worth showing even with nobody waiting: staff see which vehicle is there
+  const shown = data ? data.suggestions.filter((s) => !hidden.includes(`b${s.bayId}`) && (data.queue.length > 0 || s.plateStable)) : [];
+  const releases = data?.releases.filter((r) => !hidden.includes(`r${r.jobId}`)) ?? [];
+  // A read plate whose vehicle is on record but not checked in: check it in straight into the bay
+  const plateCheckIns = shown.filter((s) => s.plateVehicle && !s.plateOpenJob);
+  const others = shown.filter((s) => !(s.plateVehicle && !s.plateOpenJob));
+  const nextSteps = data?.nextSteps.filter((n) => !hidden.includes(`n${n.jobId}-${n.stage}`)) ?? [];
+  const total = shown.length + releases.length + nextSteps.length;
+  const done = () => { reload(); onConfirmed(); };
 
   if (error && !data) {
     return (
@@ -46,13 +55,20 @@ export function BaySuggestions({ onConfirmed }: { onConfirmed: () => void }) {
   if (total === 0) return null;
 
   const items = [
+    ...plateCheckIns.map((sg) => (
+      <PlateCheckIn key={`p${sg.bayId}`} s={sg} canCheckIn={can('JOB_CHECK_IN') && can('BAY_JOB_CONFIRM')}
+        onHide={() => hide(`b${sg.bayId}`)} onDone={done} />
+    )),
+    ...nextSteps.map((n) => (
+      <NextStepPopup key={`n${n.jobId}-${n.stage}`} n={n} can={can} onHide={() => hide(`n${n.jobId}-${n.stage}`)} onDone={done} />
+    )),
     ...releases.map((r) => (
       <Release key={`r${r.jobId}`} release={r} canConfirm={can('BAY_JOB_CONFIRM')}
-        onHide={() => setHidden((h) => [...h, -r.jobId])} onConfirmed={() => { reload(); onConfirmed(); }} />
+        onHide={() => hide(`r${r.jobId}`)} onConfirmed={done} />
     )),
-    ...shown.map((sg) => (
+    ...others.map((sg) => (
       <Suggestion key={sg.bayId} suggestion={sg} queue={data!.queue} canConfirm={can('BAY_JOB_CONFIRM')}
-        onHide={() => setHidden((h) => [...h, sg.bayId])} onConfirmed={() => { reload(); onConfirmed(); }} />
+        onHide={() => hide(`b${sg.bayId}`)} onConfirmed={done} />
     )),
   ];
   const visible = all ? items : items.slice(0, 3);
@@ -61,7 +77,7 @@ export function BaySuggestions({ onConfirmed }: { onConfirmed: () => void }) {
     <aside className="as-toasts" aria-label="Camera suggestions" aria-live="polite">
       <button type="button" className="as-toasts-head" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <i className="bi bi-lightbulb" aria-hidden="true" />
-        <span>Suggested by the camera</span>
+        <span>Bay assistant</span>
         <span className="as-toasts-count">{total}</span>
         <i className={`bi ${open ? 'bi-chevron-down' : 'bi-chevron-up'} ms-auto`} aria-hidden="true" />
       </button>
@@ -161,6 +177,12 @@ function Suggestion({ suggestion: s, queue, canConfirm, onHide, onConfirmed }: {
           {s.overlap !== null && ` · vehicle covers ${Math.round(s.overlap * 100)}%`}
         </span>
       </div>
+      {s.plateStable && s.plateText && (
+        <p className="small mb-2">
+          <i className="bi bi-credit-card-2-front me-1" aria-hidden="true" />Plate read: <b className="as-mono">{s.plateText}</b>
+          {s.plateMatched ? ' · matches the vehicle below' : ' · no vehicle waiting has this plate'}
+        </p>
+      )}
 
       {queue.length === 0 ? (
         <p className="small mb-0">No vehicle is waiting for a bay. Check the vehicle in first, then confirm it here.</p>

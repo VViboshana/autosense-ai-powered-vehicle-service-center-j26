@@ -44,6 +44,8 @@ export type BayCard = {
   name: string;
   /** The camera that watches this bay (null when none is set) */
   camera: { cameraId: number; code: string; name: string } | null;
+  /** The number plate the camera read on the parked vehicle (stable = the readings agree) */
+  plate: { text: string; stable: boolean } | null;
   state: 'free' | 'occupied' | 'uncertain' | 'unknown';
   since: string | null;
   overlap: number | null;
@@ -70,7 +72,7 @@ export type BayBoard = {
 
 export async function getBayBoard(db: Db): Promise<BayBoard> {
   const bays = await db.query(
-    `SELECT b.bay_id, b.code, b.name, b.camera_id, s.state, s.since, s.overlap,
+    `SELECT b.bay_id, b.code, b.name, b.camera_id, s.state, s.since, s.overlap, s.plate_text, s.plate_stable,
             cam.code AS camera_code, cam.name AS camera_name, cam.status AS camera_status,
             j.job_id, j.job_no, j.stage AS job_stage, v.registration_no, v.make || ' ' || v.model AS vehicle, st.name AS service,
             j.bay_entered_at, j.estimated_minutes,
@@ -104,6 +106,7 @@ export async function getBayBoard(db: Db): Promise<BayBoard> {
       code: r.code,
       name: r.name,
       camera: r.camera_code ? { cameraId: r.camera_id, code: r.camera_code, name: r.camera_name } : null,
+      plate: r.plate_text ? { text: r.plate_text, stable: r.plate_stable } : null,
       state: r.state ?? 'unknown',
       since: r.since,
       overlap: r.overlap,

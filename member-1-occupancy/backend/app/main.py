@@ -29,7 +29,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from . import config, liveview, roi
+from . import config, liveview, plates, roi
 from .association import associate
 from .detector import Detector
 from .jobs import Job, JobManager
@@ -46,7 +46,8 @@ async def lifespan(_app: FastAPI):
     state['detector'] = Detector(config.COCO_MODEL_PATH if state['placeholder'] else config.MODEL_PATH)
     state['version'] = 'coco-yolo11s-placeholder' if state['placeholder'] else config.MODEL_VERSION
     state['mask'] = roi.mask_default(state['placeholder'])
-    state['jobs'] = JobManager(state['detector'])
+    state['plates'] = plates.make_reader(config.PLATES)
+    state['jobs'] = JobManager(state['detector'], state['plates'])
     yield
     state['jobs'].shutdown()
 
@@ -56,7 +57,8 @@ app = FastAPI(title='AutoSense occupancy service', version='0.1.0', lifespan=lif
 
 def model_info() -> dict:
     return {'version': state['version'], 'placeholder': state['placeholder'], 'imgsz': config.IMGSZ,
-            'roiMask': {'setting': config.ROI_MASK, 'default': state['mask'], 'marginPx': config.ROI_MARGIN_PX}}
+            'roiMask': {'setting': config.ROI_MASK, 'default': state['mask'], 'marginPx': config.ROI_MARGIN_PX},
+            'plates': {'setting': config.PLATES, 'enabled': state['plates'] is not None}}
 
 
 def use_mask(requested: bool | None) -> bool:
