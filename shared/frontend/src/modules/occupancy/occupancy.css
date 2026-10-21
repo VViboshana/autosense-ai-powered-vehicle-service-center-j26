@@ -137,3 +137,316 @@
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
 }
+
+/* Occupancy settings */
+.as-occ-group {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--as-muted);
+  margin: 0.25rem 0 0.75rem;
+}
+.as-occ-summary {
+  border-left: 3px solid var(--as-brand);
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+  background: var(--as-surface-2);
+}
+/* Label column as wide as its longest label (kept on one line); the values take the rest and wrap inside the card */
+.as-occ-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.6rem 1rem;
+  margin: 0;
+}
+.as-occ-facts dt {
+  font-weight: 500;
+  color: var(--as-muted);
+  white-space: nowrap;
+}
+.as-occ-facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.as-occ-facts .as-pill {
+  white-space: normal;
+  max-width: 100%;
+}
+
+/* Bay monitor: pick a bay to see its history */
+.as-bay-pick {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.as-bay-pick:hover {
+  border-color: var(--as-primary);
+}
+.as-bay-pick.on {
+  border-color: var(--as-primary);
+  box-shadow: inset 3px 0 0 var(--as-brand);
+}
+
+/* Bay history: one band per state between consecutive changes */
+.as-hist-strip {
+  display: flex;
+  height: 1.6rem;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--as-line);
+  transform-origin: left;
+  animation: as-grow-x 0.6s var(--as-ease) both;
+}
+.as-hist-strip > span {
+  min-width: 2px;
+}
+.as-hist-occupied { background: var(--as-brand); }
+.as-hist-free { background: var(--as-success); }
+.as-hist-uncertain { background: var(--as-info); }
+.as-hist-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.74rem;
+  color: var(--as-muted);
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.3rem;
+}
+.as-hist-shares {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+}
+.as-hist-shares i {
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 2px;
+  margin-right: 0.35rem;
+  vertical-align: -1px;
+}
+.as-hist-gap {
+  background: repeating-linear-gradient(135deg, var(--as-surface-2) 0 4px, var(--as-line) 4px 6px);
+}
+
+/* Bay monitor: camera suggestions (which waiting vehicle is in an occupied bay) */
+.as-sugg-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.as-sugg {
+  border: 1px solid var(--as-line);
+  border-left: 3px solid var(--as-info);
+  border-radius: 0.5rem;
+  padding: 0.75rem 0.9rem;
+}
+.as-sugg-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.as-sugg-act {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.as-sugg-act select {
+  width: auto;
+  max-width: 100%;
+  flex: 1 1 18rem;
+}
+
+/* Live bay pictures (Bay monitor tiles) */
+.as-bay-live {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--as-sidebar);
+}
+.as-bay-live img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.as-bay-live-wait {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  font-size: 0.8rem;
+  color: var(--as-sidebar-text);
+}
+.as-bay-live-tag {
+  position: absolute;
+  top: 0.4rem;
+  left: 0.4rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--as-surface);
+  background: var(--as-sidebar);
+  opacity: 0.85;
+}
+.as-bay-live-tag i {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--as-danger);
+  animation: as-beacon 2s ease-out infinite;
+}
+
+.as-sugg-release {
+  border-left-color: var(--as-success);
+}
+
+/* Bay monitor: the queue for a bay */
+.as-queue {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+.as-queue li {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.as-queue-no {
+  display: inline-grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: var(--as-warning-soft);
+  color: var(--as-warning);
+  flex: none;
+}
+
+/* Bay monitor: the live feed, one tile per bay (picture first) */
+.as-feed {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 0.9rem;
+}
+.as-feed-tile {
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  padding: 0.55rem;
+  border: 1px solid var(--as-line);
+  border-radius: 12px;
+  background: var(--as-surface);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  min-width: 0;
+}
+.as-feed-tile:hover {
+  border-color: var(--as-primary);
+}
+.as-feed-tile.on {
+  border-color: var(--as-primary);
+  box-shadow: 0 0 0 2px var(--as-primary-soft), inset 3px 0 0 var(--as-brand);
+}
+.as-feed-off {
+  display: grid;
+  place-items: center;
+  color: var(--as-sidebar-text);
+  font-size: 0.8rem;
+}
+.as-feed-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.15rem;
+}
+.as-feed-job {
+  font-size: 0.85rem;
+  padding: 0 0.15rem;
+  min-height: 2.6em;
+}
+.as-feed-foot {
+  font-size: 0.75rem;
+  color: var(--as-muted);
+  font-variant-numeric: tabular-nums;
+  padding: 0 0.15rem;
+}
+
+/* Bay monitor: the number plate the camera read on the parked vehicle */
+.as-feed-plate {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  justify-self: start;
+  margin: 0 0.15rem;
+  padding: 0.05rem 0.5rem;
+  border: 1px solid var(--as-line);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  background: var(--as-surface-2);
+}
+
+.as-sugg-plate { border-left-color: var(--as-brand); }
+.as-sugg-next { border-left-color: var(--as-primary); }
+
+/* Bay monitor: the number-plate pop-up, one card at a time (the only pop-up) */
+.as-plate-pop {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 1040;
+  width: min(380px, calc(100vw - 2rem));
+  border: 1px solid var(--as-line);
+  border-left: 3px solid var(--as-brand);
+  border-radius: 12px;
+  background: var(--as-surface);
+  box-shadow: var(--as-shadow-pop);
+  animation: as-rise 0.3s var(--as-ease) both;
+}
+.as-plate-pop-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.8rem;
+  border-bottom: 1px solid var(--as-line-soft);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.as-plate-pop-head .bi-credit-card-2-front { color: var(--as-brand); }
+.as-plate-pop-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 400;
+  color: var(--as-muted);
+}
+.as-plate-pop-body {
+  padding: 0.7rem 0.8rem 0.8rem;
+  font-size: 0.9rem;
+}
+.as-plate-pop-body .as-sugg-act select { flex-basis: 100%; }
+/* room at the end of the page, so the pop-up never covers the last content */
+.as-plate-space { height: 15rem; }

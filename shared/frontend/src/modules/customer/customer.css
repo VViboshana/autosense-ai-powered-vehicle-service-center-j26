@@ -167,9 +167,9 @@
 .cp-overall .cp-pill { font-size: 1rem; padding: 0.4rem 0.9rem; }
 @media (max-width: 640px) { .cp-rhead { grid-template-columns: 1fr; } .cp-overall { justify-items: start; } }
 .cp-how { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; font-size: 0.82rem; color: var(--as-ink-2); padding: 0 1.4rem 1.1rem; }
-.cp-how .st { display: inline-flex; align-items: center; gap: 0.45rem; background: var(--as-surface-2); border: 1px solid var(--as-line-soft); border-radius: 999px; padding: 0.25rem 0.7rem 0.25rem 0.3rem; }
-.cp-how .st i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--as-primary-soft); color: var(--as-primary); font-style: normal; font-size: 0.75rem; }
-.cp-how .st.ok i { background: var(--as-success-soft); color: var(--as-success); }
+.cp-how .cp-step { display: inline-flex; align-items: center; gap: 0.45rem; background: var(--as-surface-2); border: 1px solid var(--as-line-soft); border-radius: 999px; padding: 0.25rem 0.7rem 0.25rem 0.3rem; }
+.cp-how .cp-step i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--as-primary-soft); color: var(--as-primary); font-style: normal; font-size: 0.75rem; }
+.cp-how .cp-step.ok i { background: var(--as-success-soft); color: var(--as-success); }
 .cp-note { margin: 0 1.4rem 1.1rem; padding: 0.6rem 0.9rem; border-left: 3px solid var(--as-line); background: var(--as-surface-2); border-radius: 0 10px 10px 0; font-size: 0.9rem; color: var(--as-ink-2); }
 
 .cp-rgrid { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 1.1rem; align-items: start; }
@@ -294,3 +294,18 @@
   .as-print-target .cp-rside { position: static; }
   .as-print-target .cp-card, .as-print-target .cp-item { break-inside: avoid; }
 }
+
+/* ---------- What needs doing (repair guide, in customer words) ---------- */
+.cp-todo { margin: 0 1.4rem 1.2rem; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--t) 30%, transparent); background: linear-gradient(135deg, var(--t-soft), var(--as-surface) 75%); padding: 0.9rem 1rem; display: grid; gap: 0.7rem; }
+.cp-todo-head { display: flex; gap: 0.8rem; align-items: center; }
+.cp-todo-head b { display: block; font-size: 1.1rem; color: var(--t); }
+.cp-todo-ic { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--t); color: #fff; font-size: 1.25rem; flex: none; position: relative; }
+.cp-tone-danger .cp-todo-ic::after { content: ''; position: absolute; inset: -4px; border-radius: 14px; border: 2px solid var(--t); opacity: 0; animation: cp-ripple 2.2s ease-out 1s infinite; }
+.cp-todo-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+.cp-todo-list li { display: grid; grid-template-columns: auto auto 1fr auto; gap: 0.6rem; align-items: center; font-size: 0.9rem; padding: 0.45rem 0.6rem; border-radius: 10px; background: var(--as-surface); border: 1px solid var(--as-line-soft); animation: cp-rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(500ms + var(--i) * 80ms); }
+.cp-todo-list li .text-body-secondary { font-size: 0.8rem; }
+.cp-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--t); }
+.cp-todo-time { font-size: 0.8rem; font-weight: 600; color: var(--as-ink-2); white-space: nowrap; }
+.cp-todo-note { margin: 0; font-size: 0.78rem; color: var(--as-muted); }
+@media (max-width: 480px) { .cp-todo-list li { grid-template-columns: auto 1fr auto; } .cp-todo-list li .text-body-secondary { display: none; } }
+.cp-tag-prio { background: var(--t-soft); color: var(--t); font-weight: 600; display: inline-flex; align-items: center; gap: 0.25rem; }

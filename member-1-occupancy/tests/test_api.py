@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from app import config, main
+from app import config, main, roi
 from test_pipeline import BAY, BlobDetector, make_video
 
 
@@ -22,6 +22,7 @@ class FakeDetector(BlobDetector):
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(main, 'Detector', FakeDetector)
+    monkeypatch.setattr(config, 'PLATES', 'off')     # no OCR in API tests (tests/test_plates.py covers it)
     monkeypatch.setattr(config, 'VIDEO_DIR', tmp_path.resolve())
     make_video(tmp_path / 'park.avi', 16, lambda t: 85 if 2 <= t < 9 else None)
     with TestClient(main.app) as c:
@@ -50,6 +51,33 @@ def test_analyze_scores_each_bay(client):
     assert bay['id'] == 'B1' and bay['present'] and bay['score'] > 0.6
     r = client.post('/analyze', files={'image': ('f.jpg', jpeg(False), 'image/jpeg')}, data={'bays': BAYS})
     assert r.json()['bays'][0] == {'id': 'B1', 'score': 0.0, 'present': False, 'vehicle': None}
+
+
+def test_health_reports_the_mask_default(client):
+    model = client.get('/health').json()['model']
+    assert model['roiMask'] == {'setting': config.ROI_MASK, 'default': roi.mask_default(model['placeholder']),
+                                'marginPx': config.ROI_MARGIN_PX}
+
+
+def test_analyze_masks_outside_the_bays_when_asked(client):
+    img = np.zeros((180, 320, 3), np.uint8)
+    img[50:130, 85:155] = 255     # in B1
+    img[50:130, 250:320] = 255    # outside every bay
+    files = {'image': ('f.png', cv2.imencode('.png', img)[1].tobytes(), 'image/png')}
+    plain = client.post('/analyze', files=files, data={'bays': BAYS}, params={'mask': False}).json()
+    masked = client.post('/analyze', files=files, data={'bays': BAYS}, params={'mask': True}).json()
+    assert len(plain['vehicles']) == 2 and plain['roiMask'] == {'applied': False, 'marginPx': 0}
+    assert len(masked['vehicles']) == 1 and masked['roiMask']['applied']
+    assert masked['bays'][0]['present'] and masked['bays'][0]['score'] == plain['bays'][0]['score']
+
+
+def test_video_job_reports_whether_it_was_masked(client, monkeypatch):
+    body = {'jobId': 'J4', 'source': 'park.avi', 'bays': [{'id': 'B1', 'polygon': BAY.polygon}], 'mask': True}
+    assert client.post('/video-jobs', json=body).json()['roiMask'] is True
+    monkeypatch.setitem(main.state, 'mask', False)    # the service default is used when the request does not say
+    body = {**body, 'jobId': 'J5'}
+    del body['mask']
+    assert client.post('/video-jobs', json=body).json()['roiMask'] is False
 
 
 def test_analyze_rejects_bad_input(client):
@@ -89,3 +117,47 @@ def test_invalid_rules_are_rejected(client):
 def test_snapshot_returns_a_jpeg_frame(client):
     r = client.get('/snapshot', params={'source': 'park.avi', 'at': 3})
     assert r.status_code == 200 and r.headers['content-type'] == 'image/jpeg' and r.headers['x-frame-width'] == '320'
+
+
+def test_live_job_serves_the_latest_picture_of_each_bay(client):
+    body = {'jobId': 'L1', 'source': 'park.avi', 'bays': [{'id': 'B1', 'polygon': BAY.polygon}], 'live': True}
+    job = client.post('/video-jobs', json=body).json()
+    assert job['live'] is True and job['totalFrames'] is None
+    for _ in range(100):
+        r = client.get('/video-jobs/L1/frame', params={'bay': 'B1', 'width': 200})
+        if r.status_code == 200:
+            break
+        time.sleep(0.05)
+    assert r.status_code == 200 and r.headers['content-type'] == 'image/jpeg' and r.headers['cache-control'] == 'no-store'
+    assert client.get('/video-jobs/L1/frame', params={'bay': 'B9'}).status_code == 404
+    assert client.get('/video-jobs/L1').json()['status'] == 'running'     # a live job keeps going
+    client.post('/video-jobs/L1/cancel')
+    for _ in range(100):
+        if client.get('/video-jobs/L1').json()['status'] == 'cancelled':
+            break
+        time.sleep(0.05)
+    assert client.get('/video-jobs/L1').json()['status'] == 'cancelled'
+
+
+def test_live_replay_is_refused_for_camera_streams(client):
+    body = {'jobId': 'L2', 'source': 'rtsp://cam/1', 'bays': [{'id': 'B1', 'polygon': BAY.polygon}], 'live': True}
+    assert client.post('/video-jobs', json=body).status_code == 422
+
+
+def test_pretrained_model_can_be_forced_and_is_reported_as_not_fine_tuned(tmp_path, monkeypatch):
+    monkeypatch.setattr(main, 'Detector', FakeDetector)
+    monkeypatch.setattr(config, 'MODEL_CHOICE', 'pretrained')
+    with TestClient(main.app) as c:
+        model = c.get('/health').json()['model']
+    assert model['placeholder'] is True and model['version'] == 'AutoSense General Detection V1'
+    assert model['roiMask']['default'] is (config.ROI_MASK == 'on')    # auto masking is off for the pretrained model
+
+
+def test_composed_simulation_video_crops_each_bay_inside_its_panel(tmp_path):
+    video = tmp_path / 'sim.mp4'
+    video.write_bytes(b'')
+    poly = [[0.1, 0.6], [0.2, 0.6], [0.2, 0.7], [0.1, 0.7]]
+    (tmp_path / 'sim.bays.json').write_text(json.dumps({'bays': {'S4': poly}, 'views': {'S4': [0, 0.5, 0.3333, 1]}}))
+    bays = [main.Bay(id='31', polygon=poly), main.Bay(id='32', polygon=[[0.5, 0.1], [0.6, 0.1], [0.6, 0.2]])]
+    assert main.bay_views(str(video), bays) == {'31': [0, 0.5, 0.3333, 1]}
+    assert main.bay_views(str(tmp_path / 'other.mp4'), bays) == {}

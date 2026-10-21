@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useSession } from '@/app/session';
 import { Card } from '@/components/ui/Card';
@@ -15,9 +15,12 @@ import { DamagePhoto } from './DamagePhoto';
 import { PhotoViewer } from './PhotoViewer';
 import { Toasts } from './Toasts';
 import { useToasts } from './useToasts';
-import type { DamageLabel, Detection, InspectionDetail, Severity } from './inspections.types';
-import { DAMAGE_LABELS, REVIEW, SEVERITY, STATUS, VIEW_ANGLES, finalLabel, finalSeverity, isFinding, isOpenSuggestion, percent } from './inspections.ui';
+import type { DamageLabel, Detection, InspectionDetail, RepairPlan, Severity } from './inspections.types';
+import { DAMAGE_LABELS, PRIORITY, REVIEW, SEVERITY, STATUS, VIEW_ANGLES, finalLabel, finalSeverity, hours, isFinding, isOpenSuggestion, percent } from './inspections.ui';
 import './inspections.css';
+
+/** What the damage model does with each photo, shown in order on the Model tile. */
+const AI_STEPS = ['Detect', 'Outline', 'Grade', 'Plan'];
 
 /**
  * One inspection: each photo with the damage outlines, and beside it the regions the model found. A technician
@@ -206,10 +209,17 @@ export function InspectionDetailPage() {
               <span className="as-kpi-value">{pending}{possible > 0 && <small>+ {possible} possible</small>}</span>
             </div>
             <div className="as-kpi">
-              <span className="as-kpi-label"><i className="bi bi-cpu" aria-hidden="true" />Model</span>
-              <span className="as-kpi-value as-mono" style={{ fontSize: '0.85rem' }}>{data.model ? data.model.version : '—'}</span>
+              <span className="as-kpi-label"><span className="as-ai-chip"><i className="bi bi-cpu" aria-hidden="true" /></span>Model</span>
+              <span className="as-kpi-value as-ai-name">{data.model ? data.model.version : '—'}</span>
+              {data.model && (
+                <ol className="as-ai-steps" aria-label="How the model reads each photo">
+                  {AI_STEPS.map((step, i) => <li key={step} style={{ '--i': i } as CSSProperties}>{step}</li>)}
+                </ol>
+              )}
             </div>
           </section>
+
+          <RepairGuide plan={data.repair} reviewing={data.status === 'awaiting_review'} />
 
           {editable && (
             <ReviewProgress
@@ -279,21 +289,23 @@ export function InspectionDetailPage() {
               )}
               <div className="row g-3">
                 <div className="col-lg-7">
-                  <DamagePhoto
-                    image={image}
-                    numbers={numbers}
-                    selected={selected}
-                    hovered={hovered}
-                    onSelect={setSelected}
-                    onHover={setHovered}
-                    onExpand={() => setViewerIndex(data.images.indexOf(image))}
-                    drawing={drawingImage === image.imageId}
-                    intro={data.status === 'awaiting_review'}
-                    onDrawn={(bbox) => {
-                      setDrawingImage(null);
-                      setAdding({ imageId: image.imageId, bbox });
-                    }}
-                  />
+                  <div className="as-dmg-stick">
+                    <DamagePhoto
+                      image={image}
+                      numbers={numbers}
+                      selected={selected}
+                      hovered={hovered}
+                      onSelect={setSelected}
+                      onHover={setHovered}
+                      onExpand={() => setViewerIndex(data.images.indexOf(image))}
+                      drawing={drawingImage === image.imageId}
+                      intro={data.status === 'awaiting_review'}
+                      onDrawn={(bbox) => {
+                        setDrawingImage(null);
+                        setAdding({ imageId: image.imageId, bbox });
+                      }}
+                    />
+                  </div>
                 </div>
                 <div className="col-lg-5">
                   {(() => {
@@ -302,6 +314,7 @@ export function InspectionDetailPage() {
                         key={d.detectionId}
                         d={d}
                         no={numbers.get(d.detectionId) ?? ''}
+                        serviceName={data.repair.services.find((s) => s.code === d.repair?.service)?.name ?? null}
                         on={selected === d.detectionId || hovered === d.detectionId}
                         editable={editable}
                         busy={busyId === d.detectionId}
@@ -427,6 +440,69 @@ function withDecision(inspection: InspectionDetail, detectionId: number, decisio
   };
 }
 
+/**
+ * Repair guide for the inspection (repair-v0): how urgent, which services, and roughly how many workshop hours. It
+ * follows the final damage type and severity, so it updates as regions are reviewed or corrected. The hours are
+ * proposed values not yet confirmed by the technician: a guide for planning, not a quote.
+ */
+function RepairGuide({ plan, reviewing }: { plan: RepairPlan; reviewing: boolean }) {
+  const top = plan.priority ? PRIORITY[plan.priority] : null;
+  return (
+    <Card
+      className="mb-3 as-repair"
+      icon="bi-tools"
+      title="Repair guide"
+      subtitle={`${reviewing ? 'From the regions found so far; it updates as you review' : 'From the confirmed damage'} · ${plan.method}`}
+      actions={top && <StatusPill tone={top.tone}><i className={`bi ${top.icon} me-1`} aria-hidden="true" />{top.label}</StatusPill>}
+    >
+      {plan.services.length === 0 ? (
+        <div className="as-card-body text-body-secondary small">No damage counted, so no repair is suggested.</div>
+      ) : (
+        <>
+          <div className="table-responsive">
+            <table className="table as-table mb-0">
+              <thead>
+                <tr><th>Service</th><th className="text-end">Areas</th><th>Priority</th><th className="text-end">Estimated time</th></tr>
+              </thead>
+              <tbody>
+                {plan.services.map((s) => (
+                  <tr key={s.code}>
+                    <td className="fw-semibold">{s.name}</td>
+                    <td className="text-end as-num">{s.areas}</td>
+                    <td><StatusPill tone={PRIORITY[s.priority].tone}>{PRIORITY[s.priority].label}</StatusPill></td>
+                    <td className="text-end as-num">{hours(s.effortHours)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={3} className="fw-semibold">Total workshop time{plan.notEstimated > 0 && <span className="text-body-secondary fw-normal"> · {plan.notEstimated} not graded, not estimated</span>}</td>
+                  <td className="text-end as-num fw-semibold">{hours(plan.effortHours)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p className="as-card-note mb-0">
+            {plan.validated ? '' : "Proposed hours, not yet confirmed by the service centre's technician: a guide for planning, not a quote. "}
+            Overlapping regions of one damage count once; areas are repaired one after another.
+          </p>
+        </>
+      )}
+    </Card>
+  );
+}
+
+/** One region's repair line: priority, the service that fixes it, and its estimated time. */
+function RegionRepair({ repair, serviceName }: { repair: NonNullable<Detection['repair']>; serviceName: string | null }) {
+  return (
+    <div className="as-dmg-repair" title={repair.why}>
+      <StatusPill tone={PRIORITY[repair.priority].tone}>{PRIORITY[repair.priority].label}</StatusPill>
+      {serviceName && <span><i className="bi bi-tools me-1" aria-hidden="true" />{serviceName}</span>}
+      {repair.effortHours && <span className="as-num">{hours(repair.effortHours)}</span>}
+    </div>
+  );
+}
+
 function ReviewProgress({ reviewed, total, possible, canConfirm }: { reviewed: number; total: number; possible: number; canConfirm: boolean }) {
   const done = reviewed === total;
   return (
@@ -496,9 +572,10 @@ function photoFacts(image: InspectionDetail['images'][number]) {
   return parts.join(' · ');
 }
 
-function RegionItem({ d, no, on, editable, busy, onSelect, onHover, onConfirm, onReject, onRemove, onCorrect }: {
+function RegionItem({ d, no, serviceName, on, editable, busy, onSelect, onHover, onConfirm, onReject, onRemove, onCorrect }: {
   d: Detection;
   no: string;
+  serviceName: string | null;
   on: boolean;
   editable: boolean;
   busy: boolean;
@@ -555,11 +632,15 @@ function RegionItem({ d, no, on, editable, busy, onSelect, onHover, onConfirm, o
       ) : (
         <>
           <div className="as-dmg-facts">
-            <span>Confidence {percent(d.confidence)}</span>
+            <span className="as-conf">
+              Confidence {percent(d.confidence)}
+              <i className="as-conf-bar" aria-hidden="true"><b style={{ '--v': d.confidence } as CSSProperties} /></i>
+            </span>
             {d.areaRatioVehicle != null && <span>{percent(d.areaRatioVehicle, 1)} of vehicle</span>}
             {d.location && <span>{d.location}</span>}
           </div>
           {d.severityReason && <p className="as-dmg-reason">{d.severityReason}</p>}
+          {d.repair && <RegionRepair repair={d.repair} serviceName={serviceName} />}
           {d.reviewedBy && d.reviewStatus !== 'pending' && (
             <p className="as-dmg-reason">{REVIEW[d.reviewStatus].label} by {d.reviewedBy}</p>
           )}

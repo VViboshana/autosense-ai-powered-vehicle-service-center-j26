@@ -38,7 +38,7 @@ describe('damage service client', () => {
   const reply = (status: number, body: unknown) => vi.fn(async () => new Response(JSON.stringify(body), { status }));
 
   const result = {
-    model: { version: 'expA_yolo11n_640', placeholder: false },
+    model: { version: 'AutoSense Damage Detection V1', placeholder: false },
     image: { width: 640, height: 480 },
     quality: { passed: true, blurVar: 512.3, brightness: 121.4, warnings: [] },
     vehicle: null,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeWhere, groupRegions, type Region } from './reportAreas.js';
+import { describeWhere, groupRegions, type Region } from './inspections.areas.js';
 
 const region = (label: string, bbox: number[], severity = 'moderate', source: Region['source'] = 'model'): Region => ({
   label,

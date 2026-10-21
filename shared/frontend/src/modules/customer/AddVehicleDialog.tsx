@@ -2,6 +2,7 @@ import { useEffect, useState, type DragEvent, type FormEvent } from 'react';
 import { Alert, Field } from '@/components/ui/Form';
 import { Modal } from '@/components/ui/Modal';
 import { ApiError, apiUpload, fieldErrors } from '@/lib/api';
+import { formatPlate } from '@/lib/format';
 import { shrinkPhoto } from './customer.ui';
 
 /**
@@ -48,7 +49,7 @@ export function AddVehicleDialog({ onClose, onAdded }: { onClose: () => void; on
     form.append('photo', photo.blob, 'vehicle.jpg');
     try {
       await apiUpload('/my/vehicle-requests', form);
-      onAdded(plate.trim().toUpperCase());
+      onAdded(plate);
     } catch (err) {
       setError(err);
       setBusy(false);
@@ -98,10 +99,13 @@ export function AddVehicleDialog({ onClose, onAdded }: { onClose: () => void; on
               className="cp-plate-field mb-0"
               label="Number plate"
               value={plate}
-              onChange={(e) => setPlate(e.target.value)}
+              onChange={(e) => setPlate(formatPlate(e.target.value))}
               error={errors.registrationNo}
               placeholder="WP CAB-4521"
               autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              maxLength={12}
               required
             />
           </div>

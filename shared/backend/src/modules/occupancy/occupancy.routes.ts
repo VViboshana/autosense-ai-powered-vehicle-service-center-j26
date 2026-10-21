@@ -4,12 +4,13 @@ import { sendOk } from '../../http/envelope.js';
 import { ConflictError, NotFoundError } from '../../http/errors.js';
 import { pageQuery } from '../../http/pagination.js';
 import { parse } from '../../http/validate.js';
-import { fetchSnapshot } from '../../integrations/ml/occupancyService.js';
+import { fetchSnapshot, occupancyModel } from '../../integrations/ml/occupancyService.js';
 import { audit } from '../../lib/audit.js';
 import { clearSettingsCache, getSetting } from '../../lib/settings.js';
 import { requireScreen, signedInUser } from '../../middleware/requireScreen.js';
 import * as repo from './occupancy.repository.js';
-import { cancelVideoJob, DEFAULT_RULES, startVideoJob, type OccupancyDeps, type OccupancyRules } from './occupancy.service.js';
+import { checkInBody } from '../jobs/jobs.routes.js';
+import { baySuggestions, cancelVideoJob, checkInIntoBay, confirmJobInBay, confirmJobLeftBay, DEFAULT_RULES, liveBayPicture, startVideoJob, type OccupancyDeps, type OccupancyRules } from './occupancy.service.js';
 
 const VIEW = ['BAY_MONITOR', 'BAYS_CAMERAS', 'OCCUPANCY_SETTINGS'] as const;
 const SETUP = 'BAYS_CAMERAS';
@@ -62,17 +63,26 @@ export const bayBody = z.object({
   isActive: z.boolean().optional(),
 });
 
-/** occupancy.rules; the same limits as the service accepts. */
+/** A number between `min` and `max`, with a message staff can act on (`exclusive`: min itself is not allowed). */
+const between = (min: number, max: number, exclusive = false) => {
+  const message = exclusive ? `Enter a number above ${min} and up to ${max}.` : `Enter a number from ${min} to ${max}.`;
+  const n = z.number({ error: 'Enter a number.' });
+  return (exclusive ? n.gt(min, message) : n.min(min, message)).max(max, message);
+};
+
+/** occupancy.rules; the same limits as the service accepts (member-1-occupancy/backend/app/main.py, RulesIn). */
 export const rulesBody = z
   .object({
-    overlapThreshold: z.number().min(0.05).max(0.95),
-    releaseThreshold: z.number().min(0).max(0.95).optional(),
-    confirmOccupiedSeconds: z.number().gt(0).max(120),
-    confirmFreeSeconds: z.number().gt(0).max(120),
-    toleranceSeconds: z.number().min(0).max(30).optional(),
-    minSupport: z.number().gt(0.5).max(1).optional(),
-    staleAfterSeconds: z.number().gt(0).max(600).optional(),
-    sampleFps: z.number().gt(0).max(15),
+    overlapThreshold: between(0.05, 0.95),
+    releaseThreshold: between(0, 0.95).optional(),
+    confirmOccupiedSeconds: between(0, 120, true),
+    confirmFreeSeconds: between(0, 120, true),
+    toleranceSeconds: between(0, 30).optional(),
+    minSupport: between(0.5, 1, true).optional(),
+    staleAfterSeconds: between(0, 600, true).optional(),
+    sampleFps: between(0, 15, true),
+    autoConfirm: z.boolean().optional(),
+    plateLink: z.boolean().optional(),
   })
   .refine((r) => r.releaseThreshold === undefined || r.releaseThreshold <= r.overlapThreshold, {
     message: 'The release threshold must not be above the overlap threshold.',
@@ -82,7 +92,12 @@ export const rulesBody = z
 const idParam = z.object({ id: z.coerce.number().int().positive() });
 const baysQuery = z.object({ cameraId: z.coerce.number().int().positive().optional() });
 const snapshotQuery = z.object({ at: z.coerce.number().min(0).max(86_400).default(0) });
-const jobBody = z.object({ cameraId: z.number().int().positive(), sampleFps: z.number().gt(0).max(15).optional() });
+export const checkInIntoBayBody = z.object({ bayId: z.number().int().positive() }).passthrough();
+export const confirmBayBody = z.object({
+  bayId: z.number({ error: 'Pick a bay.' }).int().positive(),
+  jobId: z.number({ error: 'Pick the vehicle that is in the bay.' }).int().positive(),
+});
+const jobBody = z.object({ cameraId: z.number().int().positive(), sampleFps: z.number().gt(0).max(15).optional(), live: z.boolean().optional() });
 
 /**
  * Bay occupancy (component 1): cameras, bay outlines, video jobs and bay history. The occupancy service does the
@@ -94,9 +109,17 @@ const jobBody = z.object({ cameraId: z.number().int().positive(), sampleFps: z.n
  *   GET   /api/occupancy/bays?cameraId=            list with current state
  *   POST  /api/occupancy/bays                      add            PATCH /api/occupancy/bays/:id      change (incl. outline)
  *   GET   /api/occupancy/bays/:id/events           history of confirmed changes (paged)
+ *   GET   /api/occupancy/bays/:id/live.jpg         latest live picture around the bay (JPEG; 404 when not live)
+ *   GET   /api/occupancy/live                      cameras running live, with their bays
  *   GET   /api/occupancy/video-jobs                list (paged)   GET /api/occupancy/video-jobs/:id  one
  *   POST  /api/occupancy/video-jobs                process the camera's video   POST /api/occupancy/video-jobs/:id/cancel
  *   GET   /api/occupancy/rules                     PUT /api/occupancy/rules (setting occupancy.rules)
+ *   GET   /api/occupancy/service                   the model the occupancy service runs, and whether it masks frames
+ *   GET   /api/occupancy/bay-suggestions           occupied bays without a job, each with the next vehicle in the queue
+ *   POST  /api/occupancy/bay-suggestions/confirm   staff confirm which vehicle is in the bay: the job moves to in_bay
+ *   POST  /api/occupancy/bay-suggestions/release   staff confirm the vehicle left a bay the camera sees free: job -> ready
+ *   POST  /api/occupancy/bay-suggestions/check-in  plate read, vehicle not checked in: check it in (today's booking or
+ *                                                  walk-in) straight into the bay (JOB_CHECK_IN and BAY_JOB_CONFIRM)
  */
 export function occupancyRoutes(deps: OccupancyDeps) {
   const router = Router();
@@ -177,6 +200,20 @@ export function occupancyRoutes(deps: OccupancyDeps) {
     sendOk(res, await repo.bayEvents(pool, id, parse(pageQuery, req.query)));
   });
 
+  // ---- live cameras (a recorded video replayed as a live camera) and their bay pictures
+  router.get('/live', requireScreen(...VIEW), async (_req, res) => {
+    sendOk(res, await repo.liveCameras(pool));
+  });
+
+  router.get('/bays/:id/live.jpg', requireScreen(...VIEW), async (req, res) => {
+    const { id } = parse(idParam, req.params);
+    const jpeg = await liveBayPicture(deps, id);
+    if (!jpeg) throw new NotFoundError('No live picture for this bay right now.');
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.send(jpeg);
+  });
+
   // ---- video jobs
   router.get('/video-jobs', requireScreen(...VIEW), async (req, res) => {
     sendOk(res, await repo.listVideoJobs(pool, parse(pageQuery, req.query)));
@@ -206,6 +243,37 @@ export function occupancyRoutes(deps: OccupancyDeps) {
   // ---- rules (setting occupancy.rules)
   router.get('/rules', requireScreen(...VIEW), async (_req, res) => {
     sendOk(res, await getSetting<OccupancyRules>(pool, 'occupancy.rules', DEFAULT_RULES));
+  });
+
+  // ---- the occupancy service's model (for the settings screen); 503 when the service is not running
+  router.get('/service', requireScreen(...VIEW), async (_req, res) => {
+    sendOk(res, await occupancyModel(deps.serviceUrl));
+  });
+
+  // ---- camera suggestions: which waiting vehicle is in an occupied bay (staff confirm)
+  router.get('/bay-suggestions', requireScreen('BAY_MONITOR'), async (_req, res) => {
+    sendOk(res, await baySuggestions(pool));
+  });
+
+  router.post('/bay-suggestions/confirm', requireScreen('BAY_JOB_CONFIRM'), async (req, res) => {
+    const me = signedInUser(req);
+    const body = parse(confirmBayBody, req.body);
+    await confirmJobInBay(pool, { ...body, userId: me.userId });
+    sendOk(res, await baySuggestions(pool));
+  });
+
+  router.post('/bay-suggestions/check-in', requireScreen('JOB_CHECK_IN'), requireScreen('BAY_JOB_CONFIRM'), async (req, res) => {
+    const me = signedInUser(req);
+    const { bayId, ...rest } = parse(checkInIntoBayBody, req.body);
+    const result = await checkInIntoBay(pool, { ...parse(checkInBody, rest), bayId }, me.userId);
+    sendOk(res, result, 201);
+  });
+
+  router.post('/bay-suggestions/release', requireScreen('BAY_JOB_CONFIRM'), async (req, res) => {
+    const me = signedInUser(req);
+    const body = parse(confirmBayBody, req.body);
+    await confirmJobLeftBay(pool, { ...body, userId: me.userId });
+    sendOk(res, await baySuggestions(pool));
   });
 
   router.put('/rules', requireScreen('OCCUPANCY_SETTINGS'), async (req, res) => {

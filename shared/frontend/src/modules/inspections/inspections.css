@@ -3,16 +3,24 @@
  * Outline colour comes from the .as-tone-* class on each shape (severity), via currentColor.
  */
 
-/* Card content that is not a table (tables pad their own first and last columns): the same inset as the card head */
-.as-card-body {
-  padding: 0 1.25rem 1.25rem;
-}
 .as-card-note {
   padding: 0.75rem 1.25rem 1.1rem;
   margin: 0;
 }
 
 /* ---------- Photo with damage outlines ---------- */
+/* Beside the region list (wide screens), the photo stays in view while the technician scrolls through the regions */
+@media (min-width: 992px) {
+  .as-dmg-stick {
+    position: sticky;
+    top: calc(var(--as-header-h, 3.5rem) + 1rem);
+    z-index: 1;
+  }
+}
+/* A region scrolled into view (picked on the photo) stops below the top bar, not under it */
+[data-detection] {
+  scroll-margin: calc(var(--as-header-h, 3.5rem) + 1rem) 0 1rem;
+}
 .as-dmg-photo {
   position: relative;
   width: 100%;
@@ -897,3 +905,117 @@
 }
 .as-heat-row:nth-child(3) .as-heat-cell { animation-delay: 400ms; }
 .as-heat-row:nth-child(n + 4) .as-heat-cell { animation-delay: 500ms; }
+
+/* Repair guide: the region's line under its facts */
+.as-dmg-repair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--as-ink-2);
+}
+.as-repair tfoot td {
+  border-bottom: 0;
+}
+
+/*
+ * "The model at work", kept subtle: on the Model tile the four steps it runs on each photo light up in order once,
+ * and the chip icon breathes slowly; each region's confidence fills in as a short bar. Still for reduced motion.
+ */
+.as-ai-chip {
+  display: inline-grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 6px;
+  background: var(--as-primary-soft);
+  color: var(--as-primary);
+  animation: as-ai-breathe 2.8s ease-in-out 1.8s infinite;
+}
+.as-ai-chip .bi {
+  margin: 0;
+  color: inherit;
+  font-size: 0.8rem;
+}
+@keyframes as-ai-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(242 106 27 / 0%); }
+  50% { box-shadow: 0 0 0 4px rgb(242 106 27 / 14%); }
+}
+.as-ai-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.as-ai-steps {
+  list-style: none;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.as-ai-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--as-muted);
+  animation: as-ai-step 0.45s ease both;
+  animation-delay: calc(0.35s + var(--i) * 0.35s);
+}
+.as-ai-steps li::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--as-primary);
+}
+.as-ai-steps li + li::after {
+  order: -1;
+  content: '';
+  width: 0.7rem;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.45;
+}
+@keyframes as-ai-step {
+  from { color: var(--as-line); }
+  60% { color: var(--as-primary); }
+  to { color: var(--as-ink-2); }
+}
+.as-conf {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.as-conf-bar {
+  width: 2.75rem;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--as-line-soft);
+  overflow: hidden;
+}
+.as-conf-bar b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--as-primary);
+  transform: scaleX(var(--v));
+  transform-origin: left;
+  animation: as-conf-fill 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) 0.3s both;
+}
+@keyframes as-conf-fill {
+  from { transform: scaleX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .as-ai-chip,
+  .as-ai-steps li,
+  .as-conf-bar b {
+    animation: none;
+  }
+}

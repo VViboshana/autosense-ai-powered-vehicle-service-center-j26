@@ -225,3 +225,16 @@
 .pt-notes-page .pt-note { padding: 0.85rem; }
 .pt-notes-page li + li { border-top: 1px solid var(--as-line-soft); }
 .pt .min-w-0 { min-width: 0; }
+
+/* Home › Service centre now: the service bays, busy or free (component 1, bay occupancy) */
+.cp-bays { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 7.5rem), 1fr)); gap: 0.5rem; }
+.cp-bay { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 0.1rem 0.5rem; padding: 0.55rem 0.7rem; border: 1px solid var(--as-line); border-radius: 12px; background: var(--as-surface); }
+.cp-bay-dot { grid-row: span 2; width: 0.75rem; height: 0.75rem; border-radius: 50%; background: var(--as-muted); }
+.cp-bay-name { font-weight: 600; font-size: 0.9rem; }
+.cp-bay-state { font-size: 0.78rem; color: var(--as-muted); }
+.cp-bay-occupied .cp-bay-dot { background: var(--as-primary); }
+.cp-bay-free .cp-bay-dot { background: var(--as-success); }
+.cp-bay-updating .cp-bay-dot { background: var(--as-line); }
+.cp-bay.mine { border-color: var(--as-primary); box-shadow: inset 3px 0 0 var(--as-brand); }
+.cp-bay.mine .cp-bay-state { color: var(--as-primary); font-weight: 600; }
+.cp-bay-mine { margin: 0.75rem 0 0; padding-left: 1.1rem; font-size: 0.9rem; }

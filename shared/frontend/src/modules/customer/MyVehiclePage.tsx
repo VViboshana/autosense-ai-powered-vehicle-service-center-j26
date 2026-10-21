@@ -117,6 +117,8 @@ function StatusTab({ status, latest, onReport }: { status: Status; latest: Inspe
   const headline =
     status.stage === 'waiting_for_bay' ? 'Waiting for a free bay'
     : status.stage === 'in_bay' ? `Being serviced${status.bay ? ` in ${status.bay}` : ''}`
+    : status.stage === 'inspecting' ? `Damage inspection${status.bay ? ` in ${status.bay}` : ''}`
+    : status.stage === 'inspected' ? 'Inspection done, service continuing'
     : status.stage === 'ready' ? 'Ready for pickup'
     : STAGES[status.stage].label;
 
@@ -135,7 +137,7 @@ function StatusTab({ status, latest, onReport }: { status: Status; latest: Inspe
         <li className="cp-journey-fill" aria-hidden="true" />
         {JOURNEY.map((s, i) => {
           const state = i + 1 < step || step === 5 ? 'done' : i + 1 === step ? 'now' : '';
-          const when = i === 0 ? formatTime(status.checkedInAt) : i === 3 && status.bayEnteredAt ? formatTime(status.bayEnteredAt) : i === 4 && status.readyAt ? formatTime(status.readyAt) : '';
+          const when = i === 0 ? formatTime(status.checkedInAt) : i === 2 && status.bayEnteredAt ? formatTime(status.bayEnteredAt) : i === 4 && status.readyAt ? formatTime(status.readyAt) : '';
           return (
             <li key={s.label} className={state} style={{ '--i': i } as CSSProperties} aria-current={state === 'now' ? 'step' : undefined}>
               <span className="node"><i className={`bi ${state === 'done' ? 'bi-check-lg' : s.icon}`} aria-hidden="true" /></span>

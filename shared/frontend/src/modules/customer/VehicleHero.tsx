@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { STAGES } from '@/modules/dashboard/stages';
 import { CarArt, PlateText } from './art';
 import type { MyVehicles } from './customer.types';
-import { JOURNEY, ordinal, plural, severityName, severityTone } from './customer.ui';
+import { JOURNEY, ordinal, plural, PRIORITY_INFO, severityName, severityTone } from './customer.ui';
 
 type Vehicle = MyVehicles['vehicles'][number];
 
@@ -12,9 +12,10 @@ function stageText(visit: Vehicle['visit']) {
   if (!visit) return 'Not at the service centre';
   switch (visit.stage) {
     case 'checked_in': return 'Checked in';
-    case 'inspected': return 'Inspected';
     case 'waiting_for_bay': return 'Waiting for a free bay';
     case 'in_bay': return `Being serviced${visit.bay ? ` in ${visit.bay}` : ''}`;
+    case 'inspecting': return `Damage inspection${visit.bay ? ` in ${visit.bay}` : ''}`;
+    case 'inspected': return 'Inspection done';
     case 'ready': return 'Ready for pickup';
     default: return STAGES[visit.stage].label;
   }
@@ -88,12 +89,12 @@ export function VehicleHero({ v, big, onChangePhoto }: { v: Vehicle; big: boolea
           <div className="cp-chips" style={{ position: 'relative', zIndex: 2 }}>
             {insp && (
               <Link to={`/my/vehicles/${v.vehicleId}#report`} className="cp-glass cp-chip text-decoration-none">
-                <span className={`cp-chip-ic cp-tone-${insp.areas ? severityTone(insp.overallSeverity) : 'success'}`}>
+                <span className={`cp-chip-ic cp-tone-${!insp.areas ? 'success' : insp.priority ? PRIORITY_INFO[insp.priority].tone : severityTone(insp.overallSeverity)}`}>
                   <i className={`bi ${insp.areas ? 'bi-exclamation-triangle' : 'bi-check-lg'}`} aria-hidden="true" />
                 </span>
                 <span>
                   <b>{insp.areas ? `${plural(insp.areas, 'damaged area')}` : 'No damage found'}</b>
-                  <small>Inspection report{insp.areas && insp.overallSeverity ? ` · ${severityName(insp.overallSeverity).toLowerCase()}` : ''}</small>
+                  <small>{insp.priority ? PRIORITY_INFO[insp.priority].name : 'Inspection report'}{insp.areas && insp.overallSeverity ? ` · ${severityName(insp.overallSeverity).toLowerCase()}` : ''}</small>
                 </span>
               </Link>
             )}

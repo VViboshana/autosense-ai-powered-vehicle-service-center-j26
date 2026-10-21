@@ -8,6 +8,7 @@ import { initials } from '@/lib/format';
 export function TopBar({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const { me, signOut } = useSession();
   const search = useRef<HTMLInputElement>(null);
+  const bar = useRef<HTMLElement>(null);
 
   // Ctrl+K (Cmd+K on a Mac) jumps to search, as the hint in the box says.
   useEffect(() => {
@@ -21,8 +22,21 @@ export function TopBar({ onToggleSidebar }: { onToggleSidebar: () => void }) {
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
+  // Publish the bar's height as --as-header-h, so sticky panels (e.g. the inspection photo) stop just below it.
+  useEffect(() => {
+    const el = bar.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const observer = new ResizeObserver(() => root.style.setProperty('--as-header-h', `${el.offsetHeight}px`));
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty('--as-header-h');
+    };
+  }, []);
+
   return (
-    <nav className="app-header navbar navbar-expand">
+    <nav className="app-header navbar navbar-expand" ref={bar}>
       <div className="container-fluid gap-2">
         <button type="button" className="as-icon-btn" onClick={onToggleSidebar} aria-label="Show or hide the menu">
           <i className="bi bi-list fs-5" aria-hidden="true" />

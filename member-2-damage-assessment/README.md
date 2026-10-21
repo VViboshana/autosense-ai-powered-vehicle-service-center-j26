@@ -37,7 +37,7 @@ Without `model/best.pt` the service uses the COCO model (`yolo11n-seg.pt`, downl
 `POST /predict` (multipart field `image`, optional query `confidence`, default 0.25):
 ```json
 {
-  "model": { "version": "expA_yolo11n_640", "placeholder": false },
+  "model": { "version": "AutoSense Damage Detection V1", "placeholder": false },
   "image": { "width": 1280, "height": 960 },
   "quality": { "passed": true, "blurVar": 512.3, "brightness": 121.4, "warnings": [] },
   "vehicle": { "label": "car", "confidence": 0.91, "bbox": [x1, y1, x2, y2], "polygon": [[x, y], ...],
@@ -92,7 +92,7 @@ visible part only. The thresholds are a proposal until checked with the technici
 | Setting | Default |
 |---|---|
 | `DAMAGE_MODEL_PATH` | `model/best.pt` |
-| `DAMAGE_MODEL_VERSION` | `expA_yolo11n_640` |
+| `DAMAGE_MODEL_VERSION` | `AutoSense Damage Detection V1` (training run `expA_yolo11n_640`) |
 | `DAMAGE_IMGSZ` | `640` (must match training) |
 | `DAMAGE_CONFIDENCE` | `0.25` |
 | `DAMAGE_MAX_UPLOAD_MB` | `15` |

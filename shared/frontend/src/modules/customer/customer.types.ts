@@ -1,4 +1,5 @@
 import type { JobStage } from '@/modules/dashboard/dashboard.types';
+import type { AreaRepair, Priority, RepairPlan } from '@/modules/inspections/inspections.types';
 
 export type ViewAngle = 'front' | 'rear' | 'left' | 'right' | 'other';
 
@@ -10,7 +11,7 @@ export type MyVehicles = {
     description: string;
     photoUrl: string | null;
     visit: { stage: JobStage; checkedInAt: string; bay: string | null; queuePosition: number | null } | null;
-    latestInspection: { inspectionNo: string; confirmedAt: string; overallSeverity: string | null; areas: number } | null;
+    latestInspection: { inspectionNo: string; confirmedAt: string; overallSeverity: string | null; areas: number; priority: Priority | null } | null;
   }[];
   requests: {
     claimId: number;
@@ -26,7 +27,7 @@ export type MyVehicles = {
 
 /**
  * One damaged area a technician checked: overlapping regions of the same damage on a photo are joined into one
- * (backend reportAreas.ts). Numbered across the report: the same number on the photo, the map and the list.
+ * (backend inspections.areas.ts). Numbered across the report: the same number on the photo, the map and the list.
  */
 export type ReportArea = {
   no: number;
@@ -41,6 +42,8 @@ export type ReportArea = {
   outlines: number[][][];
   marks: number;
   addedByTechnician: boolean;
+  /** How urgent, which service fixes it, and its estimated effort (repair-v0) */
+  repair: AreaRepair;
 };
 
 /** A confirmed inspection, as the customer sees it: checked areas only, no model confidence. */
@@ -52,6 +55,8 @@ export type InspectionReport = {
   notes: string | null;
   photos: { imageId: number; viewAngle: ViewAngle; width: number; height: number; url: string; areas: ReportArea[] }[];
   areas: (ReportArea & { viewAngle: ViewAngle; imageId: number })[];
+  /** What needs doing: most urgent priority, the services with their areas, the total estimated effort */
+  repair: RepairPlan;
 };
 
 type Section<T> = { available: false } | { available: true; connected?: boolean; data: T };
@@ -83,7 +88,7 @@ export type MyVehicle = {
   };
 };
 
-export type BookingStatus = 'pending' | 'confirmed' | 'declined' | 'cancelled';
+export type BookingStatus = 'pending' | 'confirmed' | 'declined' | 'cancelled' | 'checked_in';
 
 /** A service booking (/api/my/bookings). date is 'YYYY-MM-DD' and time 'HH:MM', in the service centre's time. */
 export type Booking = {

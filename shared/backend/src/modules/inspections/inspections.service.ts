@@ -5,6 +5,7 @@ import { withTransaction } from '../../db/pool.js';
 import { BusinessRuleError, NotFoundError, ServiceUnavailableError, ValidationError } from '../../http/errors.js';
 import { analysePhoto, type DamagePrediction, type PhotoUpload } from '../../integrations/ml/damageService.js';
 import { audit } from '../../lib/audit.js';
+import { moveStage } from '../jobs/jobs.repository.js';
 import * as repo from './inspections.repository.js';
 import type { ReviewDecision, ViewAngle } from './inspections.repository.js';
 import { extensionFor, finalSeverity, formatInspectionNo, isDamageLabel, worstSeverity, type DamageLabel, type Severity } from './inspections.rules.js';
@@ -57,6 +58,10 @@ export async function createInspection(
         modelVersionId: await repo.modelVersionId(client, first.model.version),
         userId: input.userId,
       });
+      // Service flow: a vehicle in a bay that was not sent for inspection yet is now being inspected
+      if (target.jobId && target.jobStage === 'in_bay') {
+        await moveStage(client, { jobId: target.jobId, from: ['in_bay'], to: 'inspecting', userId: input.userId, note: `Damage inspection ${inspectionNo} started` });
+      }
       await mkdir(path.resolve(deps.uploadDir, folder), { recursive: true });
 
       for (const [n, result] of results.entries()) {
@@ -210,6 +215,13 @@ export async function confirmInspection(pool: pg.Pool, c: { inspectionId: number
       kept.map((d) => finalSeverity({ reviewStatus: d.review_status, severity: d.severity, correctedSeverity: d.corrected_severity })),
     );
     await repo.markConfirmed(client, { inspectionId: c.inspectionId, overallSeverity, notes: c.notes, userId: c.userId });
+    // Service flow: the job's damage inspection is done (the vehicle stays in its bay until it is ready)
+    if (inspection.job_id) {
+      await moveStage(client, {
+        jobId: inspection.job_id, from: ['in_bay', 'inspecting'], to: 'inspected', userId: c.userId,
+        note: `Damage inspection ${inspection.inspection_no} confirmed`,
+      });
+    }
     await client.query(
       `INSERT INTO app.events (event_type, source, payload, occurred_at) VALUES ('inspection.report', 'api.inspections', $1, now())`,
       [JSON.stringify({

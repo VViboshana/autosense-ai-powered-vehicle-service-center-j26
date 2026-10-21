@@ -29,7 +29,7 @@ export function EmptyState({ icon = 'bi-inbox', art, title, children, action }: 
 
 /** A request failed: what went wrong, a retry button and the reference to quote when reporting it. */
 export function ErrorState({ error, onRetry, title, inline = false }: {
-  error: ApiError;
+  error: Pick<ApiError, 'code' | 'message' | 'requestId' | 'details'> & { status?: number };
   onRetry?: () => void;
   title?: string;
   inline?: boolean;

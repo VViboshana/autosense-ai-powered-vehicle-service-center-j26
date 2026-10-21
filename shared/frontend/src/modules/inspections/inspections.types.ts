@@ -6,6 +6,20 @@ export type InspectionStatus = 'draft' | 'processing' | 'awaiting_review' | 'con
 export type ViewAngle = 'front' | 'rear' | 'left' | 'right' | 'other';
 export type ReviewStatus = 'pending' | 'confirmed' | 'corrected' | 'rejected';
 
+/** Repair guide (backend inspections.repair.ts, repair-v0): from the final damage type and severity. */
+export type Priority = 'before_driving' | 'soon' | 'planned' | 'cosmetic';
+export type Hours = [number, number];
+export type AreaRepair = { priority: Priority; why: string; service: string | null; effortHours: Hours | null };
+export type RepairPlan = {
+  method: string;
+  /** False until the service centre's technician has confirmed the rules and the hours */
+  validated: boolean;
+  priority: Priority | null;
+  services: { code: string; name: string; areas: number; priority: Priority; effortHours: Hours | null }[];
+  effortHours: Hours | null;
+  notEstimated: number;
+};
+
 export type InspectionListItem = {
   inspectionId: number;
   inspectionNo: string;
@@ -43,6 +57,8 @@ export type Detection = {
   correctedSeverity: Severity | null;
   reviewedBy: string | null;
   reviewedAt: string | null;
+  /** Null for rejected regions and undecided possible damage */
+  repair: AreaRepair | null;
 };
 
 export type InspectionImage = {
@@ -73,6 +89,8 @@ export type InspectionDetail = {
   reviewedAt: string | null;
   reviewNotes: string | null;
   images: InspectionImage[];
+  /** For the whole inspection, from its damaged areas (overlapping regions of one damage count once) */
+  repair: RepairPlan;
 };
 
 export type VehicleOption = {
@@ -83,6 +101,8 @@ export type VehicleOption = {
   vehicle: string;
   customer: string | null;
   stage: string;
+  /** The bay the vehicle is in, while it is in one */
+  bay: string | null;
   checkedInAt: string;
   inspectionCount: number;
 };

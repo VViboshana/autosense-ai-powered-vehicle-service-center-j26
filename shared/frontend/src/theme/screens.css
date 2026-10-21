@@ -173,13 +173,17 @@
   color: #ffd2b8;
 }
 .as-auth-panel {
-  display: grid;
-  place-items: center;
-  padding: 2rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.25rem 1.25rem 2.5rem;
 }
 .as-auth-form {
   width: 100%;
   max-width: 24rem;
+  /* Centred in the space left under the back link; a tall form (sign-up) simply starts below it */
+  margin: auto 0;
+  padding-top: 1.5rem;
 }
 .as-auth-form h2 {
   font-size: 1.5rem;
@@ -448,8 +452,7 @@ a.as-vehicle-card:hover {
 }
 
 /* "Back to the website" on the sign-in and sign-up pages */
-.as-auth-panel { position: relative; }
-.as-auth-home { position: absolute; top: 1.25rem; left: 1.5rem; display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--as-muted); text-decoration: none; }
+.as-auth-home { align-self: flex-start; margin-left: 0.25rem; display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--as-muted); text-decoration: none; }
 .as-auth-home:hover { color: var(--as-primary); }
 .as-auth-home .bi { transition: transform 0.2s; }
 .as-auth-home:hover .bi { transform: translateX(-3px); }

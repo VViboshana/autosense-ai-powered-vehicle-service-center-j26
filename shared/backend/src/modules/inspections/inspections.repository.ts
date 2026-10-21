@@ -1,6 +1,8 @@
 import type { Db } from '../../db/pool.js';
 import { offsetOf, toPage, type Page, type PageRequest } from '../../http/pagination.js';
 import { PLATE_KEY } from '../claims/claims.routes.js';
+import { groupRegions } from './inspections.areas.js';
+import { repairFor, repairPlan, type AreaRepair, type RepairPlan } from './inspections.repair.js';
 import type { DamageLabel, INSPECTION_STATUSES, OverallSeverity, REVIEW_DECISIONS, Severity, VIEW_ANGLES } from './inspections.rules.js';
 
 export type InspectionStatus = (typeof INSPECTION_STATUSES)[number];
@@ -46,6 +48,8 @@ export type DetectionView = {
   correctedSeverity: Severity | null;
   reviewedBy: string | null;
   reviewedAt: string | null;
+  /** Repair guide for this region from its final type and severity; null for rejected or undecided possible damage */
+  repair: AreaRepair | null;
 };
 
 export type InspectionDetail = Omit<InspectionListItem, 'imageCount' | 'thumbnailUrl' | 'detectionCount' | 'pendingCount' | 'possibleCount' | 'vehicle'> & {
@@ -66,7 +70,20 @@ export type InspectionDetail = Omit<InspectionListItem, 'imageCount' | 'thumbnai
     url: string;
     detections: DetectionView[];
   }[];
+  /** Repair guide for the whole inspection, from its damaged areas (overlapping regions of one damage count once) */
+  repair: RepairPlanView;
 };
+
+export type RepairPlanView = Omit<RepairPlan, 'services'> & { services: (RepairPlan['services'][number] & { name: string })[] };
+
+/** The plan with service names (workshop.service_types), for showing it. */
+export async function withServiceNames(db: Db, plan: RepairPlan): Promise<RepairPlanView> {
+  if (!plan.services.length) return { ...plan, services: [] };
+  const { rows } = await db.query<{ code: string; name: string }>('SELECT code, name FROM workshop.service_types WHERE code = ANY($1)', [
+    plan.services.map((s) => s.code),
+  ]);
+  return { ...plan, services: plan.services.map((s) => ({ ...s, name: rows.find((r) => r.code === s.code)?.name ?? s.code })) };
+}
 
 export type InspectionFilter = PageRequest & { status?: InspectionStatus; search?: string };
 
@@ -167,7 +184,24 @@ export async function getInspection(db: Db, id: number): Promise<InspectionDetai
     [id],
   );
 
+  // Counts as damage now: not rejected, and a finding or an accepted suggestion. Judged by the final type and severity.
+  const counts = (d: { review_status: string; is_suggestion: boolean }) =>
+    d.review_status !== 'rejected' && (!d.is_suggestion || d.review_status === 'confirmed' || d.review_status === 'corrected');
+  const finalOf = (d: { label: string; corrected_label: string | null; severity: string | null; corrected_severity: string | null }) => ({
+    label: d.corrected_label ?? d.label,
+    severity: d.corrected_severity ?? d.severity,
+  });
+  const areas = images.rows.flatMap((im) =>
+    groupRegions(
+      detections.rows.filter((d) => d.image_id === im.image_id && counts(d)).map((d) => ({ ...finalOf(d), bbox: d.bbox, polygon: d.polygon, source: d.source })),
+      im.view_angle,
+      im.width ?? 1280,
+      im.height ?? 960,
+    ),
+  );
+
   return {
+    repair: await withServiceNames(db, repairPlan(areas)),
     inspectionId: h.inspection_id,
     inspectionNo: h.inspection_no,
     status: h.status,
@@ -212,6 +246,7 @@ export async function getInspection(db: Db, id: number): Promise<InspectionDetai
           correctedSeverity: d.corrected_severity,
           reviewedBy: d.reviewed_by_name,
           reviewedAt: d.reviewed_at,
+          repair: counts(d) ? repairFor(finalOf(d).label, finalOf(d).severity) : null,
         })),
     })),
   };
@@ -225,11 +260,16 @@ export type VehicleOption = {
   vehicle: string;
   customer: string | null;
   stage: string;
+  /** The bay the vehicle is in (in_bay, inspecting or inspected), or null. */
+  bay: string | null;
   checkedInAt: string;
   inspectionCount: number;
 };
 
-/** Open jobs to start an inspection for (newest first), optionally matched by plate or job number. */
+/**
+ * Open jobs to start an inspection for, optionally matched by plate or job number: first the vehicles the bay operator
+ * sent for damage inspection, then other vehicles in a bay, then the rest (newest first).
+ */
 export async function vehicleOptions(db: Db, search?: string): Promise<VehicleOption[]> {
   const params: unknown[] = [];
   let filter = '';
@@ -239,13 +279,15 @@ export async function vehicleOptions(db: Db, search?: string): Promise<VehicleOp
   }
   const { rows } = await db.query(
     `SELECT j.job_id, j.job_no, v.vehicle_id, v.registration_no, v.make || ' ' || v.model || coalesce(' · ' || v.year, '') AS vehicle,
-            c.full_name AS customer, j.stage, j.checked_in_at,
+            c.full_name AS customer, j.stage, b.name AS bay, j.checked_in_at,
             (SELECT count(*) FROM damage.inspections i WHERE i.job_id = j.job_id) AS inspection_count
      FROM workshop.jobs j
      JOIN workshop.vehicles v ON v.vehicle_id = j.vehicle_id
      LEFT JOIN workshop.customers c ON c.customer_id = j.customer_id
+     LEFT JOIN occupancy.bays b ON b.bay_id = j.bay_id AND j.stage IN ('in_bay', 'inspecting', 'inspected')
      WHERE j.stage NOT IN ('completed', 'cancelled') ${filter}
-     ORDER BY j.checked_in_at DESC, j.job_id DESC
+     ORDER BY CASE j.stage WHEN 'inspecting' THEN 0 WHEN 'in_bay' THEN 1 WHEN 'inspected' THEN 2 ELSE 3 END,
+              j.checked_in_at DESC, j.job_id DESC
      LIMIT 20`,
     params,
   );
@@ -257,6 +299,7 @@ export async function vehicleOptions(db: Db, search?: string): Promise<VehicleOp
     vehicle: r.vehicle,
     customer: r.customer,
     stage: r.stage,
+    bay: r.bay,
     checkedInAt: r.checked_in_at,
     inspectionCount: r.inspection_count,
   }));

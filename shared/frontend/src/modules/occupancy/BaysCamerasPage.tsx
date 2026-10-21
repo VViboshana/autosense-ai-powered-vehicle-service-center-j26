@@ -279,9 +279,22 @@ function VideoJobs({ camera, canManage, canStart, onFinished }: { camera: Camera
       subtitle="The occupancy service finds vehicles in the camera's video and confirms each bay change"
       className="mt-3"
       actions={canStart && (
-        <button type="button" className="btn btn-primary btn-sm" disabled={busy || active} onClick={() => void run('/occupancy/video-jobs', { cameraId: camera.cameraId })}>
-          <i className="bi bi-play-fill me-1" aria-hidden="true" />Process video
-        </button>
+        <>
+          <button type="button" className="btn btn-primary btn-sm" disabled={busy || active} onClick={() => void run('/occupancy/video-jobs', { cameraId: camera.cameraId })}>
+            <i className="bi bi-play-fill me-1" aria-hidden="true" />Process video
+          </button>
+          {!camera.sourceUrl?.startsWith('rtsp') && (
+            <button
+              type="button"
+              className="btn btn-light btn-sm"
+              disabled={busy || active}
+              title="Play the video in real time on a loop, like a live camera, until you stop it. The Bay monitor shows each bay's live picture."
+              onClick={() => void run('/occupancy/video-jobs', { cameraId: camera.cameraId, live: true })}
+            >
+              <i className="bi bi-broadcast me-1" aria-hidden="true" />Run as live camera
+            </button>
+          )}
+        </>
       )}
     >
       {error && <Alert>{error}</Alert>}
@@ -298,7 +311,12 @@ function VideoJobs({ camera, canManage, canStart, onFinished }: { camera: Camera
                     <td className="small">{formatDate(j.createdAt)} {formatTime(j.createdAt)}<div className="text-body-secondary">{j.createdBy ?? ''}</div></td>
                     <td><StatusPill tone={JOB[j.status].tone}>{JOB[j.status].label}</StatusPill>{j.error && <div className="small text-danger mt-1">{j.error}</div>}</td>
                     <td style={{ minWidth: '9rem' }}>
-                      {j.totalFrames ? (
+                      {j.live ? (
+                        <span className="small">
+                          <StatusPill tone="brand">Live replay</StatusPill>
+                          <span className="d-block text-body-secondary mt-1">{j.framesProcessed} frames analysed</span>
+                        </span>
+                      ) : j.totalFrames ? (
                         <>
                           <div className="as-meter"><i style={{ width: `${Math.min(100, (j.framesProcessed / j.totalFrames) * 100)}%` }} /></div>
                           <span className="small text-body-secondary">{j.framesProcessed} / {j.totalFrames} frames</span>
@@ -306,7 +324,11 @@ function VideoJobs({ camera, canManage, canStart, onFinished }: { camera: Camera
                       ) : <span className="small">{j.framesProcessed} frames</span>}
                     </td>
                     <td>{j.transitions}</td>
-                    <td className="small">{j.modelVersion ?? '—'}{j.modelVersion?.includes('placeholder') && <div><StatusPill tone="warning">Not fine-tuned</StatusPill></div>}</td>
+                    <td className="small">
+                      {j.modelVersion ?? '—'}
+                      {j.roiMask !== null && <div className="text-body-secondary">{j.roiMask ? 'Bays only (outside masked)' : 'Full frame'}</div>}
+                      {j.modelGeneral && <div><StatusPill tone="warning">General model</StatusPill></div>}
+                    </td>
                     <td className="text-end">
                       {canManage && (j.status === 'queued' || j.status === 'running') && (
                         <button type="button" className="btn btn-light btn-sm" disabled={busy} onClick={() => void run(`/occupancy/video-jobs/${j.videoJobId}/cancel`)}>Stop</button>

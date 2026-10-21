@@ -140,7 +140,7 @@ export function HomePage() {
             <div className="st-report">
               <div className="st-report-head">
                 <div>
-                  <small>Inspection report · sample</small>
+                  <small>Inspection report</small>
                   <b>Toyota Aqua · WP CAB-4521</b>
                 </div>
                 <div className="st-ring" style={{ '--p': 55 } as CSSProperties}><span>Mod.</span></div>
