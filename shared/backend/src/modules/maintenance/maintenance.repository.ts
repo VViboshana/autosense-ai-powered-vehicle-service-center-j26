@@ -54,7 +54,8 @@ export async function vehicleBootstrap(db: Db, vehicleId: number, bookingId?: nu
 export async function listBookingsAwaitingForecast(db: Db) {
   const { rows } = await db.query(
     `SELECT b.booking_id, b.booking_no, b.vehicle_id, v.registration_no, v.make, v.model,
-            c.full_name AS customer_name, st.name AS service, b.booking_date, b.slot_time,
+            c.full_name AS customer_name, st.name AS service, to_char(b.booking_date, 'YYYY-MM-DD') AS booking_date,
+            to_char(b.slot_time, 'HH24:MI') AS slot_time,
             b.status, b.customer_notes
      FROM workshop.bookings b
      JOIN workshop.vehicles v ON v.vehicle_id = b.vehicle_id
