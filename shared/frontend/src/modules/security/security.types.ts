@@ -58,6 +58,8 @@ export type AlertDetail = AlertListItem & {
   resolvedAt: string | null;
   model: { name: string; version: string } | null;
   actions: { action: AlertActionKind; note: string | null; by: string | null; at: string }[];
+  /** Set when the alert was found in a recorded video. */
+  video: { videoAnalysisId: number; fileName: string; timeS: number } | null;
 };
 
 export type SecuritySummary = {
@@ -104,3 +106,26 @@ export type SecurityRules = {
   };
   notificationMatrix: { severity: Severity; notify: string[]; how: string }[];
 };
+
+/** Recorded video analysis (GET /api/security/videos). */
+export type VideoAnalysis = {
+  videoAnalysisId: number;
+  fileName: string;
+  fileSize: number;
+  camera: { cameraId: number; code: string; name: string; zone: string | null };
+  startTime: string | null;
+  shortTimings: boolean;
+  status: 'running' | 'done' | 'failed';
+  error: string | null;
+  summary: { video_s?: number; processing_s?: number; frames?: number; tracked_people?: number; workers?: number; alerts?: number } | null;
+  alertCount: number;
+  hasVideo: boolean;
+  createdBy: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+};
+
+export type VideoAlert = AlertListItem & { videoTimeS: number; hasSnapshot: boolean; reasons: string[]; personRole: string | null };
+export type VideoAnalysisDetail = VideoAnalysis & { alerts: VideoAlert[]; serviceReachable: boolean };
+
+export type SecurityService = { online: boolean; modelFound: boolean; runningJobs: number; version: string | null };

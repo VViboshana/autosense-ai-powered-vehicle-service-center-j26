@@ -48,6 +48,8 @@ export type AlertDetail = AlertListItem & {
   resolvedAt: string | null;
   model: { name: string; version: string } | null;
   actions: AlertAction[];
+  /** Set when the alert was found in a recorded video: which analysis, and how many seconds into the clip. */
+  video: { videoAnalysisId: number; fileName: string; timeS: number } | null;
 };
 
 export type AlertView = 'active' | 'resolved' | 'all';
@@ -131,8 +133,10 @@ export async function getAlert(db: Db, id: number): Promise<AlertDetail | null> 
             z.code AS zone_code, z.zone_type, a.vehicle_id, v.make || ' ' || v.model || coalesce(' · ' || v.colour, '') AS vehicle_desc,
             cu.full_name AS owner_name, j.job_no, a.detections, a.notify_roles, a.snapshot_key IS NOT NULL AS has_snapshot,
             a.resolution_note, a.acknowledged_at, a.resolved_at, ${USER_NAME('au')} AS acknowledged_by, ${USER_NAME('ru')} AS resolved_by,
-            mv.name AS model_name, mv.version AS model_version
+            mv.name AS model_name, mv.version AS model_version,
+            a.video_analysis_id, a.video_time_s, va.file_name AS video_file_name
      ${LIST_JOINS}
+     LEFT JOIN security.video_analyses va ON va.video_analysis_id = a.video_analysis_id
      LEFT JOIN workshop.customers cu ON cu.customer_id = v.customer_id
      LEFT JOIN workshop.jobs j ON j.job_id = a.job_id
      LEFT JOIN app.users au ON au.user_id = a.acknowledged_by
@@ -174,7 +178,14 @@ export async function getAlert(db: Db, id: number): Promise<AlertDetail | null> 
     resolvedAt: r.resolved_at,
     model: r.model_name ? { name: r.model_name, version: r.model_version } : null,
     actions: actions.rows.map((a) => ({ action: a.action, note: a.note, by: a.by, at: a.at })),
+    video: r.video_analysis_id ? { videoAnalysisId: r.video_analysis_id, fileName: r.video_file_name, timeS: r.video_time_s } : null,
   };
+}
+
+/** Where an alert's stored snapshot is, relative to UPLOAD_DIR; null when it has none. */
+export async function alertSnapshotKey(db: Db, id: number): Promise<string | null> {
+  const { rows } = await db.query<{ snapshot_key: string | null }>('SELECT snapshot_key FROM security.alerts WHERE alert_id = $1', [id]);
+  return rows[0]?.snapshot_key ?? null;
 }
 
 /** The alert's state, locked for the rest of the transaction (two guards pressing a button at once). */
@@ -333,4 +344,104 @@ export async function securityRules(db: Db) {
     settings: await getSetting(db, 'security.rules', DEFAULT_RULES),
     notificationMatrix: NOTIFICATION_MATRIX,
   };
+}
+
+// ---------------------------------------------------------------- recorded video analysis
+
+export type VideoAnalysisStatus = 'running' | 'done' | 'failed';
+export type VideoAnalysis = {
+  videoAnalysisId: number;
+  fileName: string;
+  fileSize: number;
+  camera: { cameraId: number; code: string; name: string; zone: string | null };
+  startTime: string | null;
+  shortTimings: boolean;
+  status: VideoAnalysisStatus;
+  error: string | null;
+  summary: { video_s?: number; processing_s?: number; frames?: number; tracked_people?: number; workers?: number; alerts?: number } | null;
+  alertCount: number;
+  hasVideo: boolean;
+  createdBy: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+};
+
+const VIDEO_COLUMNS = `
+  va.video_analysis_id, va.file_name, va.file_size, va.start_time, va.short_timings, va.status, va.error, va.summary,
+  va.alert_count, va.video_key IS NOT NULL AS has_video, va.created_at, va.finished_at,
+  c.camera_id, c.code AS camera_code, c.name AS camera_name, z.name AS zone_name, ${USER_NAME('u')} AS created_by
+  FROM security.video_analyses va
+  JOIN security.cameras c ON c.camera_id = va.camera_id
+  LEFT JOIN security.zones z ON z.zone_id = c.zone_id
+  LEFT JOIN app.users u ON u.user_id = va.created_by`;
+
+function toVideo(r: pg.QueryResultRow): VideoAnalysis {
+  return {
+    videoAnalysisId: r.video_analysis_id,
+    fileName: r.file_name,
+    fileSize: r.file_size,
+    camera: { cameraId: r.camera_id, code: r.camera_code, name: r.camera_name, zone: r.zone_name },
+    startTime: r.start_time,
+    shortTimings: r.short_timings,
+    status: r.status,
+    error: r.error,
+    summary: r.summary,
+    alertCount: r.alert_count,
+    hasVideo: r.has_video,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    finishedAt: r.finished_at,
+  };
+}
+
+export async function cameraForVideo(db: Db, cameraId: number) {
+  const { rows } = await db.query<{ code: string }>('SELECT code FROM security.cameras WHERE camera_id = $1 AND is_active', [cameraId]);
+  return rows[0] ?? null;
+}
+
+export async function insertVideoAnalysis(
+  db: Db,
+  v: { cameraId: number; fileName: string; fileSize: number; startTime: string | null; shortTimings: boolean; serviceJobId: string; userId: number },
+): Promise<number> {
+  const { rows } = await db.query<{ id: number }>(
+    `INSERT INTO security.video_analyses (camera_id, file_name, file_size, start_time, short_timings, service_job_id, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING video_analysis_id AS id`,
+    [v.cameraId, v.fileName.slice(0, 200), v.fileSize, v.startTime, v.shortTimings, v.serviceJobId, v.userId],
+  );
+  return rows[0]!.id;
+}
+
+export async function listVideoAnalyses(db: Db, limit = 10): Promise<VideoAnalysis[]> {
+  const { rows } = await db.query(`SELECT ${VIDEO_COLUMNS} ORDER BY va.created_at DESC LIMIT $1`, [limit]);
+  return rows.map(toVideo);
+}
+
+export async function runningVideoIds(db: Db): Promise<number[]> {
+  const { rows } = await db.query<{ id: number }>("SELECT video_analysis_id AS id FROM security.video_analyses WHERE status = 'running'");
+  return rows.map((r) => r.id);
+}
+
+export async function getVideoAnalysis(db: Db, id: number) {
+  const { rows } = await db.query(`SELECT ${VIDEO_COLUMNS} WHERE va.video_analysis_id = $1`, [id]);
+  if (!rows[0]) return null;
+  const alerts = await db.query(
+    `SELECT ${LIST_COLUMNS}, a.video_time_s, a.snapshot_key IS NOT NULL AS has_snapshot, a.escalation_reasons, a.person_role
+     ${LIST_JOINS} WHERE a.video_analysis_id = $1 ORDER BY a.video_time_s, a.alert_id`,
+    [id],
+  );
+  return {
+    ...toVideo(rows[0]),
+    alerts: alerts.rows.map((r) => ({
+      ...toListItem(r),
+      videoTimeS: r.video_time_s as number,
+      hasSnapshot: r.has_snapshot as boolean,
+      reasons: r.escalation_reasons as string[],
+      personRole: r.person_role as string | null,
+    })),
+  };
+}
+
+export async function videoKey(db: Db, id: number): Promise<string | null> {
+  const { rows } = await db.query<{ video_key: string | null }>('SELECT video_key FROM security.video_analyses WHERE video_analysis_id = $1', [id]);
+  return rows[0]?.video_key ?? null;
 }

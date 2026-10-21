@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSession } from '@/app/session';
 import { Card } from '@/components/ui/Card';
@@ -8,11 +9,12 @@ import { PageHeader } from '@/layout/PageHeader';
 import { formatDate, formatDuration, formatTime, minutesSince } from '@/lib/format';
 import { useApi } from '@/lib/useApi';
 import { SeverityPill } from './SecurityParts';
-import type { SecurityCamera } from './security.types';
+import type { SecurityCamera, SecurityService, VideoAnalysis } from './security.types';
 import { ZONE_TYPE } from './security.ui';
+import { RecentVideos, ServiceStatus, VideoUploadDialog } from './VideoParts';
 import './security.css';
 
-function CameraTile({ camera, canSeeAlerts }: { camera: SecurityCamera; canSeeAlerts: boolean }) {
+function CameraTile({ camera, canSeeAlerts, onAnalyse }: { camera: SecurityCamera; canSeeAlerts: boolean; onAnalyse?: () => void }) {
   const offline = camera.status === 'offline';
   return (
     <div className={`as-sec-cam${offline ? ' offline' : ''}`}>
@@ -50,11 +52,18 @@ function CameraTile({ camera, canSeeAlerts }: { camera: SecurityCamera; canSeeAl
         ) : (
           <span className="text-body-secondary">No active alerts</span>
         )}
-        {canSeeAlerts && (
-          <Link to={`/safety/alerts?camera=${camera.cameraId}`} className="small">
-            Alerts <i className="bi bi-chevron-right" aria-hidden="true" />
-          </Link>
-        )}
+        <span className="d-flex align-items-center gap-3">
+          {onAnalyse && (
+            <button type="button" className="btn btn-link btn-sm p-0 small" onClick={onAnalyse} title={`Analyse a recorded video from ${camera.name}`}>
+              <i className="bi bi-film me-1" aria-hidden="true" />Video
+            </button>
+          )}
+          {canSeeAlerts && (
+            <Link to={`/safety/alerts?camera=${camera.cameraId}`} className="small">
+              Alerts <i className="bi bi-chevron-right" aria-hidden="true" />
+            </Link>
+          )}
+        </span>
       </div>
     </div>
   );
@@ -68,6 +77,11 @@ export function CamerasPage() {
   const { can } = useSession();
   const { data, error, loading, reload } = useApi<SecurityCamera[]>('/security/cameras', undefined, { refreshMs: 30_000 });
   const offline = data?.filter((c) => c.status === 'offline').length ?? 0;
+  const service = useApi<SecurityService>('/security/service', undefined, { refreshMs: 15_000 });
+  const videos = useApi<VideoAnalysis[]>('/security/videos', undefined, { refreshMs: 5_000 });
+  // undefined = closed; null = open without a camera chosen; a number = open for that camera
+  const [uploadFor, setUploadFor] = useState<number | null | undefined>(undefined);
+  const canUpload = Boolean(data && data.length > 0);
 
   return (
     <>
@@ -85,16 +99,26 @@ export function CamerasPage() {
           )
         }
         actions={
-          can('SAFETY_ALERTS') && (
-            <Link className="btn btn-light" to="/safety/alerts">
-              <i className="bi bi-shield-exclamation me-1" aria-hidden="true" />
-              Alerts
-            </Link>
-          )
+          <>
+            <ServiceStatus service={service} />
+            {can('SAFETY_ALERTS') && (
+              <Link className="btn btn-light" to="/safety/alerts">
+                <i className="bi bi-shield-exclamation me-1" aria-hidden="true" />
+                Alerts
+              </Link>
+            )}
+            {canUpload && (
+              <button type="button" className="btn btn-primary" onClick={() => setUploadFor(null)}>
+                <i className="bi bi-upload me-1" aria-hidden="true" />
+                Analyse a video
+              </button>
+            )}
+          </>
         }
       />
       <div className="app-content">
         <div className="container-fluid">
+          <RecentVideos videos={videos} onUpload={() => setUploadFor(null)} canUpload={canUpload} />
           <Card icon="bi-camera-video" title="Premises cameras" subtitle="Bay cameras for occupancy are in Bays & cameras">
             {error && !data ? (
               <ErrorState inline error={error} onRetry={reload} title="Cameras couldn't be loaded" />
@@ -125,13 +149,17 @@ export function CamerasPage() {
                   </div>
                 )}
                 <div className="as-sec-cams">
-                  {data.map((c) => <CameraTile key={c.cameraId} camera={c} canSeeAlerts={can('SAFETY_ALERTS')} />)}
+                  {data.map((c) => <CameraTile key={c.cameraId} camera={c} canSeeAlerts={can('SAFETY_ALERTS')} onAnalyse={() => setUploadFor(c.cameraId)} />)}
                 </div>
               </>
             )}
           </Card>
         </div>
       </div>
+      {uploadFor !== undefined && data && (
+        <VideoUploadDialog cameras={data} initialCameraId={uploadFor ?? undefined} serviceOnline={service.data?.online ?? false}
+          onClose={() => setUploadFor(undefined)} />
+      )}
     </>
   );
 }

@@ -148,7 +148,20 @@ export function AlertDetailPage() {
             <div className="col-xl-7">
               <Card icon="bi-camera-video" title="What the camera saw" subtitle={data.summary || undefined}>
                 <div className="as-sec-body">
-                  <AlertFrame detections={data.detections} cameraName={data.camera} />
+                  {data.hasSnapshot ? (
+                    <img className="as-sec-snapshot" src={`/api/security/alerts/${data.alertId}/snapshot`}
+                      alt={`Evidence frame of ${data.alertNo}: ${data.threatName}`} />
+                  ) : (
+                    <AlertFrame detections={data.detections} cameraName={data.camera} />
+                  )}
+                  {data.video && (
+                    <p className="small mt-2 mb-0">
+                      <i className="bi bi-film me-1" aria-hidden="true" />
+                      From recorded video <b>{data.video.fileName}</b> at {Math.floor(data.video.timeS / 60)}:{String(Math.floor(data.video.timeS % 60)).padStart(2, '0')}.{' '}
+                      <Link to={`/safety/videos/${data.video.videoAnalysisId}?t=${Math.max(0, Math.floor(data.video.timeS) - 1)}`}>Watch this moment</Link>
+                    </p>
+                  )}
+                  {data.detections.length > 0 && (
                   <div className="table-responsive mt-3">
                     <table className="table as-table mb-0">
                       <thead>
@@ -167,6 +180,7 @@ export function AlertDetailPage() {
                       </tbody>
                     </table>
                   </div>
+                  )}
                 </div>
               </Card>
 

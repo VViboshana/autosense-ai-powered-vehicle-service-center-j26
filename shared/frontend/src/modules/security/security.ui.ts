@@ -39,6 +39,8 @@ export const ROLES: Record<string, string> = {
   fire_service: 'Fire service',
   police: 'Police',
   emergency_services: 'Emergency services',
+  emergency_call_after_staff_confirm: 'Emergency services (after staff confirm)',
+  log_only: 'Logged only',
 };
 export const roleLabel = (r: string) => ROLES[r] ?? r.replace(/_/g, ' ');
 
@@ -87,3 +89,13 @@ export function formatSeconds(s: number | null | undefined) {
   const m = Math.floor(s / 60);
   return s % 60 ? `${m} min ${s % 60} s` : `${m} min`;
 }
+
+/** Status of a recorded video analysis. */
+export const VIDEO_STATUS: Record<'running' | 'done' | 'failed', { label: string; tone: Tone }> = {
+  running: { label: 'Analysing', tone: 'brand' },
+  done: { label: 'Done', tone: 'success' },
+  failed: { label: 'Failed', tone: 'danger' },
+};
+
+export const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+
