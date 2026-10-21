@@ -3,8 +3,10 @@ import type { ForecastDraft, MaintenanceDurationResponse, MaintenanceForecast, M
 export const MAINTENANCE_SAMPLE_MODE = false;
 export type VehicleBootstrap = { vehicle: { vehicleId: number; registrationNo: string; make: string; model: string; year: number | null; latestMileage: number | null; customer: { customerId: number; name: string } | null }; bookings: { bookingId: number; bookingNo: string; date: string; time: string; status: string; service: string; notes: string | null }[]; serviceHistory: ServiceHistoryRecord[]; inspections: { inspectionId: number; inspectionNo: string; status: string; severity: string | null; notes: string | null; reviewedAt: string | null }[] };
 export type VehicleSearchResult = VehicleBootstrap['vehicle'];
+export type AwaitingForecastBooking = { bookingId: number; bookingNo: string; vehicleId: number; registrationNo: string; make: string; model: string; customer: string; service: string; date: string; time: string; status: string; notes: string | null };
 export function searchVehicles(search: string) { return apiGet<VehicleSearchResult[]>('/maintenance/vehicles/search', { search }); }
 export function getVehicleBootstrap(vehicleId: number, bookingId?: number) { return apiGet<VehicleBootstrap>('/maintenance/vehicles/bootstrap', { vehicleId, bookingId }); }
+export function listBookingsAwaitingForecast() { return apiGet<AwaitingForecastBooking[]>('/maintenance/bookings/awaiting-forecast'); }
 export function updateVehicleYear(vehicleId: number, year: number) { return apiSend<{ vehicleId: number; year: number }>('PATCH', `/maintenance/vehicles/${vehicleId}`, { year }); }
 export function listForecasts(): Promise<MaintenanceForecast[]> { return apiGet<MaintenanceForecast[]>('/maintenance/forecasts'); }
 export async function getForecast(id: string): Promise<MaintenanceForecast | undefined> {

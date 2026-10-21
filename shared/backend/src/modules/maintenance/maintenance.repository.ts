@@ -51,6 +51,35 @@ export async function vehicleBootstrap(db: Db, vehicleId: number, bookingId?: nu
   };
 }
 
+export async function listBookingsAwaitingForecast(db: Db) {
+  const { rows } = await db.query(
+    `SELECT b.booking_id, b.booking_no, b.vehicle_id, v.registration_no, v.make, v.model,
+            c.full_name AS customer_name, st.name AS service, b.booking_date, b.slot_time,
+            b.status, b.customer_notes
+     FROM workshop.bookings b
+     JOIN workshop.vehicles v ON v.vehicle_id = b.vehicle_id
+     JOIN workshop.customers c ON c.customer_id = b.customer_id
+     JOIN workshop.service_types st ON st.service_type_id = b.service_type_id
+     LEFT JOIN maintenance.forecasts f ON f.booking_id = b.booking_id
+     WHERE b.status IN ('pending', 'confirmed') AND f.forecast_id IS NULL
+     ORDER BY b.booking_date ASC, b.slot_time ASC, b.booking_id ASC`,
+  );
+  return rows.map((r) => ({
+    bookingId: r.booking_id,
+    bookingNo: r.booking_no,
+    vehicleId: r.vehicle_id,
+    registrationNo: r.registration_no,
+    make: r.make,
+    model: r.model,
+    customer: r.customer_name,
+    service: r.service,
+    date: r.booking_date,
+    time: r.slot_time,
+    status: r.status,
+    notes: r.customer_notes,
+  }));
+}
+
 export async function listForecasts(db: Db) {
   const { rows } = await db.query(
     `SELECT f.forecast_id, f.status, f.created_at, f.predicted_category, f.model_score, f.estimated_minutes,

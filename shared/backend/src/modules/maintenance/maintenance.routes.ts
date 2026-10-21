@@ -7,7 +7,7 @@ import { parse } from '../../http/validate.js';
 import { signedInUser } from '../../middleware/requireScreen.js';
 import { z } from 'zod';
 import type pg from 'pg';
-import { getForecast, listForecasts, searchVehicles, vehicleBootstrap } from './maintenance.repository.js';
+import { getForecast, listBookingsAwaitingForecast, listForecasts, searchVehicles, vehicleBootstrap } from './maintenance.repository.js';
 import { NotFoundError, ValidationError } from '../../http/errors.js';
 import { audit } from '../../lib/audit.js';
 
@@ -28,6 +28,7 @@ export function maintenanceRoutes(pool: pg.Pool, env: Env) {
   router.get('/model', async (_req, res) => sendOk(res, await maintenanceModel(env.MAINTENANCE_ML_SERVICE_URL)));
   router.get('/vehicles/search', async (req, res) => sendOk(res, await searchVehicles(pool, parse(searchQuery, req.query).search)));
   router.get('/vehicles/bootstrap', async (req, res) => { const q = parse(bootstrapQuery, req.query); sendOk(res, await vehicleBootstrap(pool, q.vehicleId, q.bookingId)); });
+  router.get('/bookings/awaiting-forecast', async (_req, res) => sendOk(res, await listBookingsAwaitingForecast(pool)));
   router.patch('/vehicles/:id', async (req, res) => {
     const user = signedInUser(req);
     const id = parse(idParam, req.params).id;
