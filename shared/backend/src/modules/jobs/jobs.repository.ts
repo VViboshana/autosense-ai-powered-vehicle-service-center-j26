@@ -60,8 +60,11 @@ export async function listJobs(db: Db, f: JobFilter): Promise<Page<JobListItem>>
      SELECT j.job_id, j.job_no, v.registration_no,
             v.make || ' ' || v.model || coalesce(' · ' || v.year, '') AS vehicle,
             c.full_name AS customer, st.name AS service, j.stage, b.name AS bay, j.checked_in_at,
-            j.estimated_minutes, j.estimate_lkr,
-            u.first_name || ' ' || left(u.last_name, 1) || '.' AS advisor
+            j.estimated_minutes, j.estimate_lkr, j.vehicle_id,
+            u.first_name || ' ' || left(u.last_name, 1) || '.' AS advisor,
+            (SELECT json_build_object('forecastId', f.forecast_id, 'status', f.status, 'category', f.predicted_category,
+                                      'task', f.selected_fix_title, 'estimatedMinutes', f.estimated_minutes)
+             FROM maintenance.forecasts f WHERE f.job_id = j.job_id ORDER BY f.created_at DESC LIMIT 1) AS forecast
      ${from}
      ORDER BY j.checked_in_at, j.job_id
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
@@ -82,6 +85,9 @@ export async function listJobs(db: Db, f: JobFilter): Promise<Page<JobListItem>>
       estimatedMinutes: r.estimated_minutes,
       estimateLkr: r.estimate_lkr,
       advisor: r.advisor,
+      vehicleId: r.vehicle_id,
+      // This visit's maintenance forecast (component 3), if one was made
+      forecast: r.forecast as { forecastId: number; status: string; category: string; task: string | null; estimatedMinutes: number | null } | null,
     })),
     total.rows[0].n,
     f,
