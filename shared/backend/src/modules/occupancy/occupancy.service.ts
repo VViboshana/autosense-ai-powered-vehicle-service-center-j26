@@ -12,6 +12,8 @@ import {
 import { audit } from '../../lib/audit.js';
 import { logger } from '../../lib/logger.js';
 import { getSetting } from '../../lib/settings.js';
+import { centreToday, checkIn, type CheckIn } from '../jobs/jobs.service.js';
+import { plateCore } from './occupancy.plates.js';
 import * as repo from './occupancy.repository.js';
 
 export type OccupancyDeps = { pool: pg.Pool; serviceUrl?: string };
@@ -21,6 +23,8 @@ export const DEFAULT_RULES = { overlapThreshold: 0.4, confirmOccupiedSeconds: 3,
 export type OccupancyRules = typeof DEFAULT_RULES & Partial<Record<'releaseThreshold' | 'toleranceSeconds' | 'minSupport' | 'staleAfterSeconds', number>> & {
   /** Move the only waiting vehicle into the only newly occupied bay without asking (off unless switched on). */
   autoConfirm?: boolean;
+  /** Link the vehicle whose number plate the camera read (on unless switched off). */
+  plateLink?: boolean;
 };
 
 /** The service knows a job by this id; the API's own id is the number in it. */
@@ -47,7 +51,7 @@ export async function startVideoJob(deps: OccupancyDeps, input: { cameraId: numb
   const model = await occupancyModel(deps.serviceUrl);
   const rules = await getSetting<OccupancyRules>(deps.pool, 'occupancy.rules', DEFAULT_RULES);
   const sampleFps = input.sampleFps ?? rules.sampleFps;
-  const { sampleFps: _s, autoConfirm: _a, ...stateRules } = rules;   // the service applies the state rules only
+  const { sampleFps: _s, autoConfirm: _a, plateLink: _p, ...stateRules } = rules;   // the service applies the state rules only
 
   const id = await withTransaction(deps.pool, async (client) => {
     const videoJobId = await repo.insertVideoJob(client, {
@@ -139,10 +143,20 @@ export async function syncOpenJobs(deps: OccupancyDeps): Promise<void> {
         await repo.updateVideoJob(client, job.videoJobId, { status: 'failed', framesProcessed: 0, totalFrames: null, error: 'The occupancy service restarted while this video was being processed.' });
         return;
       }
+      // Bays to try linking to a job: newly occupied ones, and ones whose plate reading changed
+      const touched = new Set<number>();
       for (const row of transitionRows(report, job.videoJobId, new Date(job.startedAt))) {
         await repo.applyTransition(client, row);
-        if (row.toState === 'occupied') await maybeAutoConfirm(client, row.bayId);
+        if (row.toState === 'occupied') touched.add(row.bayId);
       }
+      for (const [id, bay] of Object.entries(report.bays)) {
+        const bayId = Number(id);
+        if (!Number.isInteger(bayId) || bayId <= 0 || !bay.plate) continue;
+        if (await repo.recordPlate(client, bayId, job.videoJobId, bay.plate)) touched.add(bayId);
+      }
+      // Also bays whose plate was read before the vehicle was checked in: link as soon as its job is waiting
+      for (const bay of await repo.occupiedBaysWithoutJob(client)) if (bay.plateStable) touched.add(bay.bayId);
+      for (const bayId of touched) await linkBay(client, bayId);
       await repo.updateVideoJob(client, job.videoJobId, {
         status: report.status, framesProcessed: report.framesProcessed, totalFrames: report.totalFrames, error: report.error,
       });
@@ -161,21 +175,49 @@ export function autoConfirmChoice(enabled: boolean, bayId: number, unlinked: rep
   return queue[0]!.jobId;
 }
 
-/** Called by the sync when a bay turns occupied: moves the job in when auto-confirm is on and the match is certain. */
-async function maybeAutoConfirm(client: pg.PoolClient, bayId: number): Promise<void> {
-  const rules = await getSetting<OccupancyRules>(client, 'occupancy.rules', DEFAULT_RULES);
-  if (!rules.autoConfirm) return;
-  await repo.lockBay(client, bayId);
-  const [unlinked, queue] = await Promise.all([repo.occupiedBaysWithoutJob(client), repo.jobsReadyForBay(client, 2)]);
-  const jobId = autoConfirmChoice(true, bayId, unlinked, queue);
-  if (!jobId) return;
-  const bay = unlinked[0]!;
-  const moved = await repo.moveJobIntoBay(client, {
-    jobId, bayId, userId: null,
+/** The waiting vehicles whose registration has this plate core (normally 0 or 1). */
+export const plateMatches = (core: string | null, queue: repo.QueuedJob[]) =>
+  core ? queue.filter((q) => plateCore(q.registrationNo) === core) : [];
+
+/**
+ * Which job to move into `bayId` without asking staff, and why; null leaves it as a suggestion.
+ * 1. The camera read a plate and the readings agree (plateLink, on unless switched off): the ONE waiting vehicle with
+ *    that plate. A read plate that matches nobody waiting is never replaced by a guess.
+ * 2. While the plate is still being read: wait.
+ * 3. No readable plate: auto-confirm (off unless switched on), only when there is no doubt (autoConfirmChoice).
+ */
+export function chooseBayLink(rules: Pick<OccupancyRules, 'autoConfirm' | 'plateLink'>, bayId: number, unlinked: repo.UnlinkedBay[], queue: repo.QueuedJob[]):
+  { jobId: number; how: 'plate' | 'auto'; note: string } | null {
+  const bay = unlinked.find((b) => b.bayId === bayId);
+  if (!bay) return null;                                       // not occupied, or a job is already in it
+  if (bay.plateStable && rules.plateLink !== false) {
+    const matches = plateMatches(bay.plateCore, queue);
+    if (matches.length !== 1) return null;
+    return {
+      jobId: matches[0]!.jobId, how: 'plate',
+      note: `Linked by number plate: the camera read ${bay.plateText} (${bay.plateVotes} of ${bay.plateReads} readings) in ${bay.name}`,
+    };
+  }
+  if (bay.plateStable || ((bay.plateReads ?? 0) > 0 && !bay.plateDone)) return null;
+  const jobId = autoConfirmChoice(!!rules.autoConfirm, bayId, unlinked, queue);
+  return jobId ? {
+    jobId, how: 'auto',
     note: `Auto-confirmed by the camera: ${bay.name} occupied and ${queue[0]!.registrationNo} was the only vehicle waiting`,
-  });
-  if (moved) {
-    await audit(client, { table: 'workshop.jobs', recordId: jobId, action: 'auto_move_to_bay', userId: null, snapshot: { bayId, source: 'occupancy_auto_confirm' } });
+  } : null;
+}
+
+/** Called by the sync for a bay that turned occupied or got a plate reading: links its job when there is no doubt. */
+async function linkBay(client: pg.PoolClient, bayId: number): Promise<void> {
+  const rules = await getSetting<OccupancyRules>(client, 'occupancy.rules', DEFAULT_RULES);
+  await repo.lockBay(client, bayId);
+  const [unlinked, queue] = await Promise.all([repo.occupiedBaysWithoutJob(client), repo.jobsReadyForBay(client)]);
+  const link = chooseBayLink(rules, bayId, unlinked, queue);
+  if (!link) return;
+  if (await repo.moveJobIntoBay(client, { jobId: link.jobId, bayId, userId: null, note: link.note })) {
+    await audit(client, {
+      table: 'workshop.jobs', recordId: link.jobId, action: link.how === 'plate' ? 'plate_move_to_bay' : 'auto_move_to_bay', userId: null,
+      snapshot: { bayId, source: link.how === 'plate' ? 'occupancy_plate' : 'occupancy_auto_confirm' },
+    });
   }
 }
 
@@ -184,12 +226,56 @@ async function maybeAutoConfirm(client: pg.PoolClient, bayId: number): Promise<v
  * (the bay occupied longest gets the first one). Only a suggestion: staff confirm it, or pick another vehicle.
  */
 export function pairBaysWithQueue(bays: repo.UnlinkedBay[], queue: repo.QueuedJob[]) {
-  return bays.map((bay, i) => ({ ...bay, suggestedJobId: queue[i]?.jobId ?? null }));
+  let next = 0;   // bays without a read plate get the queue in order
+  return bays.map((bay) => {
+    if (bay.plateStable) {
+      // A read plate decides: its vehicle, or nobody (staff then see which plate is in the bay)
+      const match = plateMatches(bay.plateCore, queue);
+      return { ...bay, suggestedJobId: match.length === 1 ? match[0]!.jobId : null, plateMatched: match.length === 1 };
+    }
+    return { ...bay, suggestedJobId: queue[next++]?.jobId ?? null, plateMatched: false };
+  });
 }
 
 export async function baySuggestions(pool: pg.Pool) {
-  const [bays, queue, releases] = await Promise.all([repo.occupiedBaysWithoutJob(pool), repo.jobsReadyForBay(pool), repo.freeBaysWithJob(pool)]);
-  return { suggestions: pairBaysWithQueue(bays, queue), queue, releases };
+  const [bays, queue, releases, nextSteps, today] = await Promise.all([
+    repo.occupiedBaysWithoutJob(pool), repo.jobsReadyForBay(pool), repo.freeBaysWithJob(pool), repo.nextStepJobs(pool), centreToday(pool),
+  ]);
+  const suggestions = await Promise.all(pairBaysWithQueue(bays, queue).map(async (s) => ({ ...s, ...(await plateContext(pool, s, today)) })));
+  return { suggestions, queue, releases, nextSteps };
+}
+
+/**
+ * For a bay whose plate was read but whose vehicle is not waiting: the vehicle on record with that plate, its booking for
+ * today (not checked in yet) and any open job, so staff can check it in straight into the bay.
+ */
+async function plateContext(pool: pg.Pool, s: { plateStable: boolean; plateCore: string | null; plateMatched: boolean }, today: string) {
+  const none = { plateVehicle: null, plateBooking: null, plateOpenJob: null };
+  if (!s.plateStable || !s.plateCore || s.plateMatched) return none;
+  const vehicles = (await repo.vehiclesLikePlate(pool, s.plateCore)).filter((v) => plateCore(v.registrationNo) === s.plateCore);
+  if (vehicles.length !== 1) return none;
+  const vehicle = vehicles[0]!;
+  const [plateBooking, plateOpenJob] = await Promise.all([
+    repo.openBookingToday(pool, vehicle.vehicleId, today), repo.openJobOfVehicle(pool, vehicle.vehicleId),
+  ]);
+  return { plateVehicle: vehicle, plateBooking, plateOpenJob };
+}
+
+/**
+ * Staff confirmed the camera's plate reading: check the vehicle in (from today's booking, or as a walk-in) and move it
+ * straight into the bay. Two steps, each in its own transaction: if the bay was taken meanwhile, the vehicle stays checked
+ * in and waits in the queue.
+ */
+export async function checkInIntoBay(pool: pg.Pool, input: CheckIn & { bayId: number }, userId: number) {
+  const { bayId, ...checkin } = input;
+  const job = await checkIn(pool, checkin, userId);
+  try {
+    await confirmJobInBay(pool, { bayId, jobId: job.jobId, userId });
+    return { ...job, inBay: true };
+  } catch (err) {
+    if (err instanceof BusinessRuleError || err instanceof NotFoundError) return { ...job, inBay: false, reason: err.message };
+    throw err;
+  }
 }
 
 /** Staff confirmed that the vehicle left the bay (the camera saw it free): the job moves to ready and frees the bay. */

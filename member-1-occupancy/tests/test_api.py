@@ -22,6 +22,7 @@ class FakeDetector(BlobDetector):
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(main, 'Detector', FakeDetector)
+    monkeypatch.setattr(config, 'PLATES', 'off')     # no OCR in API tests (tests/test_plates.py covers it)
     monkeypatch.setattr(config, 'VIDEO_DIR', tmp_path.resolve())
     make_video(tmp_path / 'park.avi', 16, lambda t: 85 if 2 <= t < 9 else None)
     with TestClient(main.app) as c:

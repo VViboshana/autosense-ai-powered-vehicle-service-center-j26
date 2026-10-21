@@ -14,6 +14,8 @@ export type BayCard = {
   name: string;
   /** The camera that watches this bay (null when none is set) */
   camera: { cameraId: number; code: string; name: string } | null;
+  /** The number plate the camera read on the parked vehicle (stable = the readings agree) */
+  plate: { text: string; stable: boolean } | null;
   state: 'free' | 'occupied' | 'uncertain' | 'unknown';
   since: string | null;
   overlap: number | null;

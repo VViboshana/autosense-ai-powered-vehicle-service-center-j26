@@ -21,8 +21,13 @@ import numpy as np
 
 from .association import Method, associate, to_polygon
 from .detector import Vehicle
+from .plates import PlateVotes
 from .roi import apply_mask, bay_mask
 from .state_machine import BayTracker, Rules, Transition
+
+
+class PlateSource(Protocol):
+    def read(self, frame: np.ndarray, bbox: tuple[float, float, float, float]) -> tuple[str, str, float] | None: ...
 
 
 class VehicleSource(Protocol):
@@ -105,9 +110,12 @@ def process_video(
     on_progress: Callable[[Progress], None] = lambda p: None,
     on_frame: Callable[[np.ndarray, list[Vehicle], float], None] = lambda f, v, t: None,
     stop: threading.Event | None = None,
+    plates: PlateSource | None = None,
 ) -> Progress:
     """`live=True` replays a recorded video as a live camera (see _sampled_frames); it runs until `stop` is set.
-    `on_frame` gets every analysed frame as the camera saw it (before masking), its vehicles and its time."""
+    `on_frame` gets every analysed frame as the camera saw it (before masking), its vehicles and its time.
+    With `plates`, the number plate of the vehicle in a bay is read while the bay is (becoming) occupied, from the
+    unmasked frame, until the readings agree (plates.PlateVotes); it is forgotten when the bay turns free."""
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
         raise ValueError(f'Cannot open video source: {source}')
@@ -118,6 +126,7 @@ def process_video(
         step = max(1, round(fps / sample_fps))
         polys = {b.bay_id: scale_polygon(b.polygon, width, height) for b in bays}
         trackers = {b.bay_id: BayTracker(b.bay_id, rules) for b in bays}
+        votes = {b.bay_id: PlateVotes() for b in bays}
         progress = Progress(total_frames=(n + step - 1) // step if n and not live else None)
         first = True
         roi = None   # built from the first frame's real size (some streams report no size before decoding)
@@ -135,9 +144,14 @@ def process_video(
                 tr = trackers[m.bay_id].observe(t, m.score, track_id)
                 if tr:
                     on_transition(tr)
-                progress.states[m.bay_id] = {'state': trackers[m.bay_id].state,
-                                             'confirming': trackers[m.bay_id].confirming,
-                                             'score': round(m.score, 3), 'trackId': track_id}
+                    if tr.to_state == 'free':
+                        votes[m.bay_id] = PlateVotes()   # the vehicle left: its plate no longer applies
+                tracker, v = trackers[m.bay_id], votes[m.bay_id]
+                parked = tracker.state == 'occupied' or tracker.confirming == 'occupied'
+                if plates is not None and m.present and m.detection is not None and parked and not v.done:
+                    v.add(plates.read(seen, vehicles[m.detection].bbox))
+                progress.states[m.bay_id] = {'state': tracker.state, 'confirming': tracker.confirming,
+                                             'score': round(m.score, 3), 'trackId': track_id, 'plate': v.view()}
             progress.frames_processed += 1
             progress.stream_s = round(t, 2)
             on_frame(seen, vehicles, t)

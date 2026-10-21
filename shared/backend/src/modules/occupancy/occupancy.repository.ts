@@ -290,7 +290,14 @@ export async function applyTransition(
   await db.query(
     `INSERT INTO occupancy.bay_status (bay_id, state, since, track_id, overlap, updated_at) VALUES ($1, $2, $3, $4, $5, now())
      ON CONFLICT (bay_id) DO UPDATE SET state = EXCLUDED.state, since = EXCLUDED.since, track_id = EXCLUDED.track_id,
-       overlap = EXCLUDED.overlap, updated_at = now()`,
+       overlap = EXCLUDED.overlap, updated_at = now(),
+       -- the vehicle left: its plate no longer applies
+       plate_text   = CASE WHEN EXCLUDED.state = 'free' THEN NULL  ELSE occupancy.bay_status.plate_text END,
+       plate_core   = CASE WHEN EXCLUDED.state = 'free' THEN NULL  ELSE occupancy.bay_status.plate_core END,
+       plate_votes  = CASE WHEN EXCLUDED.state = 'free' THEN NULL  ELSE occupancy.bay_status.plate_votes END,
+       plate_reads  = CASE WHEN EXCLUDED.state = 'free' THEN NULL  ELSE occupancy.bay_status.plate_reads END,
+       plate_stable = CASE WHEN EXCLUDED.state = 'free' THEN false ELSE occupancy.bay_status.plate_stable END,
+       plate_done   = CASE WHEN EXCLUDED.state = 'free' THEN false ELSE occupancy.bay_status.plate_done END`,
     [t.bayId, t.toState, t.at, t.trackId, t.overlap],
   );
   await db.query(
@@ -298,6 +305,96 @@ export async function applyTransition(
     [JSON.stringify({ bayId: t.bayId, from: t.fromState, to: t.toState, trackId: t.trackId, overlap: t.overlap,
                       evidence: t.evidence, videoJobId: t.videoJobId }), t.at],
   );
+}
+
+/**
+ * The plate the service read on the vehicle in a bay: stored on the bay's current status and on the "occupied" event of
+ * this video job it belongs to (evidence). Only writes when something changed; true when the stored plate changed.
+ */
+export async function recordPlate(
+  db: Db,
+  bayId: number,
+  videoJobId: number,
+  p: { text: string | null; core: string | null; votes: number; reads: number; stable: boolean; done: boolean },
+): Promise<boolean> {
+  const { rowCount } = await db.query(
+    `UPDATE occupancy.bay_status SET plate_text = $2, plate_core = $3, plate_votes = $4, plate_reads = $5,
+            plate_stable = $6, plate_done = $7
+     WHERE bay_id = $1 AND state <> 'free'
+       AND (plate_core IS DISTINCT FROM $3 OR plate_votes IS DISTINCT FROM $4 OR plate_reads IS DISTINCT FROM $5
+            OR plate_stable <> $6 OR plate_done <> $7)`,
+    [bayId, p.text, p.core, p.votes, p.reads, p.stable, p.done],
+  );
+  if (!rowCount) return false;
+  await db.query(
+    `UPDATE occupancy.bay_state_events SET plate_text = $3, plate_votes = $4, plate_reads = $5
+     WHERE event_id = (SELECT max(event_id) FROM occupancy.bay_state_events
+                       WHERE bay_id = $1 AND video_job_id = $2 AND to_state = 'occupied')`,
+    [bayId, videoJobId, p.text, p.votes, p.reads],
+  );
+  return true;
+}
+
+// ---------------------------------------------------------------- what a read plate tells about the vehicle
+
+export type PlateVehicle = { vehicleId: number; registrationNo: string; vehicle: string; customer: string | null };
+export type PlateBooking = { bookingId: number; bookingNo: string; status: 'pending' | 'confirmed'; slotTime: string; serviceTypeId: number; service: string };
+
+/** Vehicles whose registration contains the plate core (the caller keeps those whose core is exactly equal). */
+export async function vehiclesLikePlate(db: Db, core: string): Promise<PlateVehicle[]> {
+  const { rows } = await db.query<PlateVehicle>(
+    `SELECT v.vehicle_id AS "vehicleId", v.registration_no AS "registrationNo",
+            v.make || ' ' || v.model || coalesce(' · ' || v.year, '') AS vehicle, c.full_name AS customer
+     FROM workshop.vehicles v LEFT JOIN workshop.customers c ON c.customer_id = v.customer_id
+     WHERE upper(regexp_replace(v.registration_no, '[^A-Za-z0-9]', '', 'g')) LIKE '%' || $1
+     LIMIT 10`,
+    [core],
+  );
+  return rows;
+}
+
+/** The vehicle's booking for `today` that is not checked in yet (pending or confirmed), if any. */
+export async function openBookingToday(db: Db, vehicleId: number, today: string): Promise<PlateBooking | null> {
+  const { rows } = await db.query<PlateBooking>(
+    `SELECT b.booking_id AS "bookingId", b.booking_no AS "bookingNo", b.status, to_char(b.slot_time, 'HH24:MI') AS "slotTime",
+            b.service_type_id AS "serviceTypeId", st.name AS service
+     FROM workshop.bookings b JOIN workshop.service_types st ON st.service_type_id = b.service_type_id
+     WHERE b.vehicle_id = $1 AND b.booking_date = $2::date AND b.status IN ('pending', 'confirmed')
+     ORDER BY b.slot_time LIMIT 1`,
+    [vehicleId, today],
+  );
+  return rows[0] ?? null;
+}
+
+/** The vehicle's open job, if it already has one. */
+export async function openJobOfVehicle(db: Db, vehicleId: number): Promise<{ jobId: number; jobNo: string; stage: string } | null> {
+  const { rows } = await db.query<{ jobId: number; jobNo: string; stage: string }>(
+    `SELECT job_id AS "jobId", job_no AS "jobNo", stage FROM workshop.jobs
+     WHERE vehicle_id = $1 AND stage NOT IN ('completed', 'cancelled') LIMIT 1`,
+    [vehicleId],
+  );
+  return rows[0] ?? null;
+}
+
+export type NextStep = {
+  jobId: number; jobNo: string; stage: 'in_bay' | 'inspecting' | 'inspected'; registrationNo: string; vehicle: string;
+  bayId: number; bayName: string; plateLinked: boolean;
+};
+
+/** Vehicles in a bay and their next step: in the bay (send to damage inspection), waiting for inspection (start it), inspected (work done). */
+export async function nextStepJobs(db: Db): Promise<NextStep[]> {
+  const { rows } = await db.query<NextStep>(
+    `SELECT j.job_id AS "jobId", j.job_no AS "jobNo", j.stage, v.registration_no AS "registrationNo",
+            v.make || ' ' || v.model AS vehicle, b.bay_id AS "bayId", b.name AS "bayName",
+            EXISTS (SELECT 1 FROM workshop.job_stage_history h WHERE h.job_id = j.job_id AND h.stage = 'in_bay'
+                    AND h.note LIKE 'Linked by number plate%') AS "plateLinked"
+     FROM workshop.jobs j
+     JOIN workshop.vehicles v ON v.vehicle_id = j.vehicle_id
+     JOIN occupancy.bays b ON b.bay_id = j.bay_id AND b.is_active
+     WHERE j.stage IN ('in_bay', 'inspecting', 'inspected')
+     ORDER BY j.updated_at`,
+  );
+  return rows;
 }
 
 export async function saveRules(db: Db, rules: Record<string, number | boolean>, userId: number): Promise<void> {
@@ -326,7 +423,12 @@ export const BAY_READY_STAGES = ['waiting_for_bay', 'checked_in'] as const;
 /** Stages in which a job's vehicle is in its bay (jobs.repository IN_BAY_STAGES). */
 const IN_BAY = `('in_bay', 'inspecting', 'inspected')`;
 
-export type UnlinkedBay = { bayId: number; code: string; name: string; since: string | null; overlap: number | null };
+export type UnlinkedBay = {
+  bayId: number; code: string; name: string; since: string | null; overlap: number | null;
+  /** The parked vehicle's plate as read by the camera (migration 0013); stable = the readings agree. */
+  plateText: string | null; plateCore: string | null; plateVotes: number | null; plateReads: number | null;
+  plateStable: boolean; plateDone: boolean;
+};
 export type QueuedJob = {
   jobId: number;
   jobNo: string;
@@ -352,7 +454,9 @@ export const cameraTakesJobs = (code: string | null | undefined) =>
  */
 export async function occupiedBaysWithoutJob(db: Db): Promise<UnlinkedBay[]> {
   const { rows } = await db.query<UnlinkedBay>(
-    `SELECT b.bay_id AS "bayId", b.code, b.name, s.since, s.overlap
+    `SELECT b.bay_id AS "bayId", b.code, b.name, s.since, s.overlap,
+            s.plate_text AS "plateText", s.plate_core AS "plateCore", s.plate_votes AS "plateVotes",
+            s.plate_reads AS "plateReads", s.plate_stable AS "plateStable", s.plate_done AS "plateDone"
      FROM occupancy.bays b JOIN occupancy.bay_status s ON s.bay_id = b.bay_id
      LEFT JOIN occupancy.cameras c ON c.camera_id = b.camera_id
      WHERE b.is_active AND s.state = 'occupied'

@@ -9,7 +9,8 @@ import { audit } from '../../lib/audit.js';
 import { clearSettingsCache, getSetting } from '../../lib/settings.js';
 import { requireScreen, signedInUser } from '../../middleware/requireScreen.js';
 import * as repo from './occupancy.repository.js';
-import { baySuggestions, cancelVideoJob, confirmJobInBay, confirmJobLeftBay, DEFAULT_RULES, liveBayPicture, startVideoJob, type OccupancyDeps, type OccupancyRules } from './occupancy.service.js';
+import { checkInBody } from '../jobs/jobs.routes.js';
+import { baySuggestions, cancelVideoJob, checkInIntoBay, confirmJobInBay, confirmJobLeftBay, DEFAULT_RULES, liveBayPicture, startVideoJob, type OccupancyDeps, type OccupancyRules } from './occupancy.service.js';
 
 const VIEW = ['BAY_MONITOR', 'BAYS_CAMERAS', 'OCCUPANCY_SETTINGS'] as const;
 const SETUP = 'BAYS_CAMERAS';
@@ -81,6 +82,7 @@ export const rulesBody = z
     staleAfterSeconds: between(0, 600, true).optional(),
     sampleFps: between(0, 15, true),
     autoConfirm: z.boolean().optional(),
+    plateLink: z.boolean().optional(),
   })
   .refine((r) => r.releaseThreshold === undefined || r.releaseThreshold <= r.overlapThreshold, {
     message: 'The release threshold must not be above the overlap threshold.',
@@ -90,6 +92,7 @@ export const rulesBody = z
 const idParam = z.object({ id: z.coerce.number().int().positive() });
 const baysQuery = z.object({ cameraId: z.coerce.number().int().positive().optional() });
 const snapshotQuery = z.object({ at: z.coerce.number().min(0).max(86_400).default(0) });
+export const checkInIntoBayBody = z.object({ bayId: z.number().int().positive() }).passthrough();
 export const confirmBayBody = z.object({
   bayId: z.number({ error: 'Pick a bay.' }).int().positive(),
   jobId: z.number({ error: 'Pick the vehicle that is in the bay.' }).int().positive(),
@@ -115,6 +118,8 @@ const jobBody = z.object({ cameraId: z.number().int().positive(), sampleFps: z.n
  *   GET   /api/occupancy/bay-suggestions           occupied bays without a job, each with the next vehicle in the queue
  *   POST  /api/occupancy/bay-suggestions/confirm   staff confirm which vehicle is in the bay: the job moves to in_bay
  *   POST  /api/occupancy/bay-suggestions/release   staff confirm the vehicle left a bay the camera sees free: job -> ready
+ *   POST  /api/occupancy/bay-suggestions/check-in  plate read, vehicle not checked in: check it in (today's booking or
+ *                                                  walk-in) straight into the bay (JOB_CHECK_IN and BAY_JOB_CONFIRM)
  */
 export function occupancyRoutes(deps: OccupancyDeps) {
   const router = Router();
@@ -255,6 +260,13 @@ export function occupancyRoutes(deps: OccupancyDeps) {
     const body = parse(confirmBayBody, req.body);
     await confirmJobInBay(pool, { ...body, userId: me.userId });
     sendOk(res, await baySuggestions(pool));
+  });
+
+  router.post('/bay-suggestions/check-in', requireScreen('JOB_CHECK_IN'), requireScreen('BAY_JOB_CONFIRM'), async (req, res) => {
+    const me = signedInUser(req);
+    const { bayId, ...rest } = parse(checkInIntoBayBody, req.body);
+    const result = await checkInIntoBay(pool, { ...parse(checkInBody, rest), bayId }, me.userId);
+    sendOk(res, result, 201);
   });
 
   router.post('/bay-suggestions/release', requireScreen('BAY_JOB_CONFIRM'), async (req, res) => {
