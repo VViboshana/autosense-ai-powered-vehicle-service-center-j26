@@ -136,11 +136,12 @@ export async function syncAnalysis(deps: VideoDeps, id: number) {
       const parsed = engineAlert.safeParse(JSON.parse(l));
       return parsed.success ? [parsed.data] : [];
     });
-    const folder = path.join('security', 'videos', String(id));
+    // Stored keys always use '/', so a file saved on Windows also opens on a Mac (and the reverse)
+    const folder = path.posix.join('security', 'videos', String(id));
     const snapshotKeys = new Map<string, string>();
     for (const al of alerts) {
       if (!al.snapshot) continue;
-      const key = path.join(folder, path.basename(al.snapshot));
+      const key = path.posix.join(folder, path.basename(al.snapshot));
       try {
         await download(serviceUrl, `/jobs/${a.service_job_id}/files/${al.snapshot}`, path.join(uploadDir, key));
         snapshotKeys.set(al.alert_id, key);
@@ -148,7 +149,7 @@ export async function syncAnalysis(deps: VideoDeps, id: number) {
         logger.warn('security snapshot not copied', { videoAnalysisId: id, error: String(err) });
       }
     }
-    let videoKey: string | null = path.join(folder, 'annotated.mp4');
+    let videoKey: string | null = path.posix.join(folder, 'annotated.mp4');
     try {
       await download(serviceUrl, `/jobs/${a.service_job_id}/browser-video`, path.join(uploadDir, videoKey));
     } catch (err) {
