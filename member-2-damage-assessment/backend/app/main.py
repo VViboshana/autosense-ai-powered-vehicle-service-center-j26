@@ -4,6 +4,7 @@ AutoSense damage assessment service (component 2). Called only by the AutoSense 
   GET  /health    200 when the models are loaded (the API's health check uses this)
   POST /predict   multipart photo -> quality check, vehicle, damage detections (findings + possible damage),
                   preliminary severity
+  POST /analyze-audio  multipart recording + situation -> quality check, most likely fault (sound inspection)
 
 Run (from member-2-damage-assessment/backend):  ..\\.venv\\Scripts\\python -m uvicorn app.main:app --port 8001
 """
@@ -15,7 +16,7 @@ import numpy as np
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from . import config
+from . import config, sound
 from .findings import split_findings
 from .predictor import SegModel, find_vehicle
 from .quality import check_quality
@@ -31,6 +32,8 @@ async def lifespan(_app: FastAPI):
     state['placeholder'] = not config.MODEL_PATH.exists()
     state['damage'] = state['coco'] if state['placeholder'] else SegModel(config.MODEL_PATH)
     state['version'] = 'coco-placeholder' if state['placeholder'] else config.MODEL_VERSION
+    # Sound inspection is optional: without acoustic/model/sound_classifier.joblib, /analyze-audio answers 503
+    state['sound'] = sound.SoundModel(config.SOUND_MODEL_PATH) if config.SOUND_MODEL_PATH.exists() else None
     yield
 
 
@@ -43,7 +46,8 @@ def model_info() -> dict:
 
 @app.get('/health')
 def health():
-    return {'status': 'up', 'model': {**model_info(), 'classes': state['damage'].classes}}
+    return {'status': 'up', 'model': {**model_info(), 'classes': state['damage'].classes},
+            'sound': {**state['sound'].info, 'situations': sound.classes.SITUATIONS} if state['sound'] else None}
 
 
 @app.post('/predict')
@@ -81,3 +85,21 @@ def predict(
         'severity': severity,
         'processingMs': round((time.perf_counter() - started) * 1000),
     }
+
+
+@app.post('/analyze-audio')
+def analyze_audio(
+    audio: UploadFile = File(..., description='Recording, 5-10 s (WAV, FLAC or OGG)'),
+    situation: str = Query(..., pattern='^(starting|idling|braking)$', description='What the vehicle was doing'),
+):
+    if state['sound'] is None:
+        raise HTTPException(503, 'Sound inspection is not installed (acoustic/model/sound_classifier.joblib is missing).')
+    started = time.perf_counter()
+    data = audio.file.read(config.MAX_AUDIO_MB * 1024 * 1024 + 1)
+    if len(data) > config.MAX_AUDIO_MB * 1024 * 1024:
+        raise HTTPException(413, f'The recording is larger than {config.MAX_AUDIO_MB} MB.')
+    try:
+        out = sound.analyze(state['sound'], data, situation)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {'model': state['sound'].info, **out, 'processingMs': round((time.perf_counter() - started) * 1000)}
