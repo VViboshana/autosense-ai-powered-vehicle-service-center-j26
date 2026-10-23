@@ -5,6 +5,7 @@ import { createApp } from '../../app.js';
 import { loadEnv } from '../../config/env.js';
 import { analysePhoto } from '../../integrations/ml/damageService.js';
 import { finalSeverity, formatInspectionNo, worstSeverity } from './inspections.rules.js';
+import { regionBody } from './inspections.routes.js';
 
 describe('inspection rules', () => {
   it('takes the worst graded severity', () => {
@@ -37,7 +38,7 @@ describe('damage service client', () => {
   const reply = (status: number, body: unknown) => vi.fn(async () => new Response(JSON.stringify(body), { status }));
 
   const result = {
-    model: { version: 'expA_yolo11n_640', placeholder: false },
+    model: { version: 'AutoSense Damage Detection V1', placeholder: false },
     image: { width: 640, height: 480 },
     quality: { passed: true, blurVar: 512.3, brightness: 121.4, warnings: [] },
     vehicle: null,
@@ -78,6 +79,20 @@ describe('damage service client', () => {
 
   it('reports a missing ML_DAMAGE_URL clearly', async () => {
     await expect(analysePhoto(undefined, photo)).rejects.toMatchObject({ code: 'DAMAGE_SERVICE_NOT_CONFIGURED' });
+  });
+});
+
+describe('damage a technician adds', () => {
+  it('accepts a box with a damage type and severity', () => {
+    expect(regionBody.parse({ label: 'dent', severity: 'moderate', bbox: [10, 20, 110, 90] })).toEqual({
+      label: 'dent', severity: 'moderate', bbox: [10, 20, 110, 90],
+    });
+  });
+
+  it('refuses a box that is too small (a stray click), negative, or an unknown type', () => {
+    expect(regionBody.safeParse({ label: 'dent', severity: 'minor', bbox: [10, 10, 14, 60] }).success).toBe(false);
+    expect(regionBody.safeParse({ label: 'dent', severity: 'minor', bbox: [-5, 10, 40, 60] }).success).toBe(false);
+    expect(regionBody.safeParse({ label: 'rust', severity: 'minor', bbox: [10, 10, 40, 60] }).success).toBe(false);
   });
 });
 

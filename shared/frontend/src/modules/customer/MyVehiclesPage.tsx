@@ -1,22 +1,30 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
-import { useSession } from '@/app/session';
+import { useEffect, useState, type CSSProperties } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Card } from '@/components/ui/Card';
-import { Alert, Field } from '@/components/ui/Form';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
-import { StatusPill } from '@/components/ui/StatusPill';
-import { ApiError, apiSend, fieldErrors } from '@/lib/api';
+import { apiSend, apiUpload } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import { useApi } from '@/lib/useApi';
-import { STAGES } from '@/modules/dashboard/stages';
+import { Toasts } from '@/modules/inspections/Toasts';
+import { useToasts } from '@/modules/inspections/useToasts';
+import { AddVehicleDialog } from './AddVehicleDialog';
+import { CarArt, PlateText } from './art';
 import type { MyVehicles } from './customer.types';
+import { shrinkPhoto } from './customer.ui';
+import { VehicleHero } from './VehicleHero';
+import './customer.css';
+import '@/modules/inspections/inspections.css';
 
-/** The customer's home: their vehicles (approved by staff), and a form to ask for another one. */
+/**
+ * The customer's home: their vehicles as photo cards with the visit on top (the one at the service centre first, large),
+ * a tile to add a vehicle, and requests waiting for the service centre.
+ */
 export function MyVehiclesPage() {
-  const { me } = useSession();
   const data = useApi<MyVehicles>('/my/vehicles', undefined, { refreshMs: 60_000 });
-  const [adding, setAdding] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  // ?add=1 (e.g. from the booking form) opens "Add a vehicle" straight away
+  const [params, setParams] = useSearchParams();
+  const [adding, setAdding] = useState(params.get('add') === '1');
+  const { toasts, show } = useToasts();
 
   useEffect(() => {
     document.title = 'My vehicles · AutoSense';
@@ -27,125 +35,103 @@ export function MyVehiclesPage() {
     data.reload();
   }
 
+  async function changePhoto(vehicleId: number, file: File) {
+    try {
+      const form = new FormData();
+      form.append('photo', await shrinkPhoto(file), 'vehicle.jpg');
+      await apiUpload(`/my/vehicles/${vehicleId}/photo`, form);
+      data.reload();
+      show('Photo updated');
+    } catch {
+      show("The photo couldn't be changed. Try a JPEG or PNG.", 'info');
+    }
+  }
+
+  const [first, ...others] = data.data?.vehicles ?? [];
+  const requests = data.data?.requests ?? [];
+
   return (
     <>
-      <div className="d-flex justify-content-between align-items-end flex-wrap gap-2 mb-3">
+      <div className="pt-head cp-rise">
         <div>
-          <h1 className="as-page-title">Hello, {me.displayName.split(' ')[0]}</h1>
-          <p className="text-body-secondary mb-0">Your vehicles at the service centre.</p>
+          <div className="cp-eyebrow">My vehicles</div>
+          <h1 className="cp-title">Your vehicles</h1>
+          <div className="text-body-secondary">Follow each visit and see what the inspection found.</div>
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
-          <i className="bi bi-plus-lg me-1" aria-hidden="true" />
-          Add a vehicle
-        </button>
+        {first && <Link to="/my/bookings/new" className="btn btn-primary"><i className="bi bi-calendar-plus me-2" aria-hidden="true" />Book a service</Link>}
       </div>
-      {message && <Alert tone="success">{message}</Alert>}
+
+      <div className="cp-home">
+        <div className="cp-home-main">
+          {data.error && !data.data ? (
+            <Card><ErrorState inline error={data.error} onRetry={data.reload} /></Card>
+          ) : !data.data ? (
+            <div className="cp-hero d-grid align-content-end p-4 gap-2"><Skeleton width="40%" /><Skeleton width="60%" /></div>
+          ) : !first ? (
+            <Card>
+              <EmptyState icon="bi-car-front" title="No vehicles yet" action={<button type="button" className="btn btn-primary btn-sm" onClick={() => setAdding(true)}>Add a vehicle</button>}>
+                Add your vehicle's number plate and a photo. The service centre confirms it's yours, then you can follow its service here.
+              </EmptyState>
+            </Card>
+          ) : (
+            <>
+              <div className="cp-rise" style={{ '--i': 1 } as CSSProperties}>
+                <VehicleHero v={first} big onChangePhoto={(f) => changePhoto(first.vehicleId, f)} />
+              </div>
+              {others.length > 0 && (
+                <div className="cp-others">
+                  {others.map((v, i) => (
+                    <div key={v.vehicleId} className="cp-rise" style={{ '--i': i + 2 } as CSSProperties}>
+                      <VehicleHero v={v} big={false} onChangePhoto={(f) => changePhoto(v.vehicleId, f)} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="cp-home-side">
+          <button type="button" className="cp-add cp-rise" style={{ '--i': 2 } as CSSProperties} onClick={() => setAdding(true)}>
+            <span className="plus" aria-hidden="true">+</span>
+            <b>Add a vehicle</b>
+            <span className="small">Its number plate and a photo. The service centre confirms it's yours.</span>
+          </button>
+          {requests.map((r) => (
+            <div key={r.claimId} className="cp-pend">
+              <div className="cp-pend-img">
+                {r.photoUrl ? <img src={r.photoUrl} alt="" /> : <CarArt />}
+                {r.status === 'pending' && <span className="cp-shimmer" aria-hidden="true" />}
+                <span className={`cp-pill cp-tone-${r.status === 'pending' ? 'warning' : 'muted'}`}>
+                  {r.status === 'pending' ? 'Waiting for the service centre' : 'Not approved'}
+                </span>
+              </div>
+              <div className="cp-pend-b">
+                <div className="cp-pend-row">
+                  <span className="cp-plate"><PlateText plate={r.registrationNo} /></span>
+                  {r.status === 'pending' && <button type="button" className="cp-link" onClick={() => void cancel(r.claimId)}>Cancel request</button>}
+                </div>
+                <span className="small text-body-secondary">
+                  {r.status === 'pending' ? `Asked on ${formatDate(r.requestedAt)}. It appears here once they confirm it, usually at your next visit.` : r.reviewNote ? `Reason: ${r.reviewNote}` : 'The service centre could not confirm this vehicle.'}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {adding && (
-        <AddVehicle
-          onCancel={() => setAdding(false)}
+        <AddVehicleDialog
+          onClose={() => { setAdding(false); setParams({}, { replace: true }); }}
           onAdded={(plate) => {
             setAdding(false);
-            setMessage(`We've asked the service centre to confirm ${plate}. It appears here once they do, usually when you next visit.`);
+            setParams({}, { replace: true });
+            show(`Sent. The service centre will confirm ${plate} is yours.`);
             data.reload();
           }}
         />
       )}
-
-      <Card title="My vehicles" icon="bi-car-front" className="mb-3">
-        {data.error && !data.data ? (
-          <ErrorState inline error={data.error} onRetry={data.reload} />
-        ) : data.loading || !data.data ? (
-          <div className="p-4 d-grid gap-3"><Skeleton width="50%" /><Skeleton width="35%" /></div>
-        ) : data.data.vehicles.length === 0 ? (
-          <EmptyState icon="bi-car-front" title="No vehicles yet" action={<button type="button" className="btn btn-primary btn-sm" onClick={() => setAdding(true)}>Add a vehicle</button>}>
-            Add your vehicle's number plate. The service centre confirms it's yours, then you can follow its service here.
-          </EmptyState>
-        ) : (
-          data.data.vehicles.map((v) => (
-            <Link key={v.vehicleId} to={`/my/vehicles/${v.vehicleId}`} className="as-vehicle-card">
-              <span className="as-vehicle-ic"><i className="bi bi-car-front" aria-hidden="true" /></span>
-              <span className="flex-grow-1" style={{ minWidth: 0 }}>
-                <b className="as-plate d-block">{v.registrationNo}</b>
-                <span className="small text-body-secondary">{v.description}</span>
-              </span>
-              {v.visit ? (
-                <StatusPill tone={STAGES[v.visit.stage].tone}>
-                  {STAGES[v.visit.stage].label}
-                  {v.visit.bay ? ` · ${v.visit.bay}` : ''}
-                </StatusPill>
-              ) : (
-                <span className="small text-body-secondary">Not at the centre</span>
-              )}
-              <i className="bi bi-chevron-right as-chev" aria-hidden="true" />
-            </Link>
-          ))
-        )}
-      </Card>
-
-      {data.data && data.data.requests.length > 0 && (
-        <Card title="Waiting for the service centre" icon="bi-hourglass">
-          <ul className="list-unstyled mb-0">
-            {data.data.requests.map((r) => (
-              <li key={r.claimId} className="as-vehicle-card">
-                <span className="flex-grow-1">
-                  <b className="as-plate d-block">{r.registrationNo}</b>
-                  <span className="small text-body-secondary">
-                    {r.status === 'pending' ? `Asked on ${formatDate(r.requestedAt)}` : `Not approved${r.reviewNote ? `: ${r.reviewNote}` : ''}`}
-                  </span>
-                </span>
-                {r.status === 'pending' ? (
-                  <>
-                    <StatusPill tone="warning">Waiting</StatusPill>
-                    <button type="button" className="btn btn-sm btn-light" onClick={() => void cancel(r.claimId)}>Cancel</button>
-                  </>
-                ) : (
-                  <StatusPill tone="muted">Not approved</StatusPill>
-                )}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+      <Toasts toasts={toasts} />
     </>
-  );
-}
-
-function AddVehicle({ onCancel, onAdded }: { onCancel: () => void; onAdded: (plate: string) => void }) {
-  const [plate, setPlate] = useState('');
-  const [note, setNote] = useState('');
-  const [error, setError] = useState<unknown>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      await apiSend('POST', '/my/vehicle-requests', { registrationNo: plate, note });
-      onAdded(plate.toUpperCase());
-    } catch (err) {
-      setError(err);
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Card title="Add a vehicle" icon="bi-plus-circle" className="mb-3">
-      <form className="px-4 pb-4" onSubmit={submit} noValidate>
-        {error instanceof ApiError && <Alert>{error.message}</Alert>}
-        <div className="row g-2">
-          <div className="col-sm-5">
-            <Field label="Number plate" value={plate} onChange={(e) => setPlate(e.target.value)} error={fieldErrors(error).registrationNo} placeholder="WP CAB-4521" autoFocus required />
-          </div>
-          <div className="col-sm-7">
-            <Field label="Anything we should know? (optional)" value={note} onChange={(e) => setNote(e.target.value)} error={fieldErrors(error).note} placeholder="e.g. Bought it last month" />
-          </div>
-        </div>
-        <div className="d-flex gap-2">
-          <button type="submit" className="btn btn-primary" disabled={busy || plate.trim().length < 4}>{busy ? 'Sending…' : 'Ask to add'}</button>
-          <button type="button" className="btn btn-light" onClick={onCancel}>Cancel</button>
-        </div>
-      </form>
-    </Card>
   );
 }

@@ -1,0 +1,9 @@
+# Component 4 runtime (all free / open source). Python 3.10-3.13.
+ultralytics==8.4.174
+lap>=0.5.12            # needed by the ByteTrack tracker
+opencv-python-headless>=4.9
+numpy
+pyyaml
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart       # video upload in POST /analyze

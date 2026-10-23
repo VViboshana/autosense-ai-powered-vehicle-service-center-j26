@@ -1,0 +1,13 @@
+# Zones for one camera. File name = <camera_id>.yaml (the API finds it by camera_id).
+# Points are fractions of the frame: (0,0) = top-left, (1,1) = bottom-right, so it works for any resolution.
+# Make your own:  python -m c4security.zone_helper --source <video or rtsp url>   (draws a 0.1 grid on a frame)
+camera_id: cam_01
+restricted:                 # visitors here without a worker nearby -> unauthorised access
+  - name: work_bay_1
+    points: [[0.55, 0.35], [1.00, 0.35], [1.00, 1.00], [0.55, 1.00]]
+public:                     # visitors are expected here (reception, waiting area, car park) -> no access alert
+  - name: waiting_area
+    points: [[0.00, 0.35], [0.30, 0.35], [0.30, 1.00], [0.00, 1.00]]
+# Default bay -> job link. In the integrated system Component 1 sends bay.state (POST /bay-state) instead.
+bays:
+  work_bay_1: {job_id: JOB-0001, plate: "CAB-1234"}

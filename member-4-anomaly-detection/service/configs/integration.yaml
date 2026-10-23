@@ -1,0 +1,47 @@
+# Component 4 integration settings (read by c4security/infer.py and c4security/alert_format.py).
+# The rule engine's own thresholds stay in threat_rules.yaml; this file only covers the model check and how an
+# engine alert is turned into the AutoSense `security.alert` format. Change values here; no code change needed.
+
+model:
+  weights: models/component4_best.pt   # relative to service/; the C4_MODEL environment variable overrides it
+  version: c4_v3_yolo11m               # from the zip README
+  # Training order of the classes (index = class id). Checked by infer.py and the tests.
+  classes: [person, vehicle, weapon, fire, smoke, tampering, loitering, face_covered, worker]
+  test_imgsz: 640                      # same as detection.imgsz in threat_rules.yaml
+
+alert:
+  # Engine threat name -> AutoSense threat name
+  threat_names:
+    fire: fire
+    smoke: smoke
+    weapon: weapon
+    tampering: vehicle_tampering
+    unauthorised_access: unauthorised_access
+    loitering: loitering
+
+  # Engine severity (Low..Critical) is written in lower case: low | medium | high | critical
+  severity_lower_case: true
+
+  # affected = vehicle | people | both | premises
+  #   vehicle : at least one vehicle affected, nobody nearby
+  #   people  : people affected, no vehicle
+  #   both    : vehicles and people
+  #   premises: one of these threats with no vehicle and no person nearby (approved rule)
+  premises_threats: [fire, smoke, weapon]
+  # TODO: an alert that is not a premises threat and has no vehicle or person (cannot happen with the current
+  #       engine, which always ties tampering / loitering / access to a person). Until decided, it is reported as
+  #       "people", because those threats are always about a person.
+  fallback_affected: people
+
+  # Engine notify_roles -> AutoSense notify groups (approved mapping). Emergency services are a separate list:
+  # staff call them only after confirming the threat.
+  notify_groups:
+    staff: [security_guard, bay_supervisor]
+    manager: [centre_manager]
+    customer: [vehicle_owner]
+    emergency: [fire_service, police, emergency_call_after_staff_confirm]
+  # log_only (Low severity) means nobody is notified.
+  ignore_roles: [log_only]
+
+  # The required fields of the AutoSense security.alert JSON, in order.
+  required_fields: [alert_id, threat, severity, affected, notify, reason, confidence, camera_id, snapshot, timestamp, status]

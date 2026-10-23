@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSession } from '@/app/session';
 import { Card } from '@/components/ui/Card';
+import { DrivingCar } from '@/components/ui/Art';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { formatDuration, formatMoney, formatTime } from '@/lib/format';
@@ -153,7 +154,7 @@ export function TodayVehicles() {
             </tbody>
           </table>
           {data && data.records.length === 0 && (
-            <EmptyState icon="bi-car-front" title={filtered ? 'No vehicles match these filters' : 'No vehicles checked in yet today'}>
+            <EmptyState icon="bi-car-front" art={filtered ? undefined : <DrivingCar />} title={filtered ? 'No vehicles match these filters' : 'No vehicles checked in yet today'}>
               {filtered ? 'Change the search or clear the filters.' : "Vehicles appear here as soon as they're checked in."}
             </EmptyState>
           )}

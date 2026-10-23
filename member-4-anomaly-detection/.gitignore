@@ -1,0 +1,17 @@
+# Component 4 (member 4): keep these out of git
+service/.venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# Run outputs: videos and snapshots show people (privacy)
+service/runs/
+runs/
+# Trained weights are not pushed (40.5 MB; under GitHub's 50 MB warning, so Git LFS is optional if you change your mind)
+*.pt
+# Temporary extraction folder of the zip
+_c4_extract_tmp/
+# Model packages and handover zips carry the weights: share them by Google Drive, never in git
+*.zip
+# Local Claude chat exports
+*command-message*.txt

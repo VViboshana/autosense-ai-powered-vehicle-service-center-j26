@@ -1,0 +1,545 @@
+/*
+ * Security & safety screens (component 4). Every class starts with .as-sec- so nothing here touches other screens.
+ * Colours only through the theme tokens in theme/autosense.css; state colours come from the .as-tone-* classes.
+ */
+
+/* ---------- Severity ---------- */
+/* Critical is the only filled pill: it must stand out from High at a glance */
+.as-pill.as-sec-critical {
+  color: var(--as-surface);
+  background: var(--as-danger);
+  font-weight: 700;
+}
+.as-sec-escalated {
+  color: var(--as-muted);
+  font-size: 0.72rem;
+  margin-left: 0.35rem;
+  white-space: nowrap;
+}
+
+/* ---------- Alert list ---------- */
+.as-sec-threat {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 11rem;
+}
+.as-sec-threat-ic {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  font-size: 0.95rem;
+}
+.as-sec-threat b {
+  display: block;
+  font-weight: 600;
+}
+.as-sec-threat small {
+  display: block;
+  color: var(--as-muted);
+  max-width: 22rem;
+  white-space: normal;
+}
+/* A stripe on the left of open critical and high rows */
+.as-table tr.as-sec-row-alert td:first-child {
+  box-shadow: inset 3px 0 0 var(--as-danger);
+}
+.as-sec-filters {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.as-sec-filters .form-select,
+.as-sec-filters .form-control {
+  width: auto;
+}
+
+/* Open alerts by severity (the KPI strip): a red value only when something is open */
+.as-kpi.as-sec-hot .as-kpi-value {
+  color: var(--as-danger);
+}
+
+/* ---------- Camera frame with the detection boxes ---------- */
+.as-sec-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--as-neutral-soft);
+  border: 1px solid var(--as-line);
+}
+.as-sec-frame-note {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--as-muted);
+}
+.as-sec-frame .as-sec-box {
+  position: absolute;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  background: none; /* the .as-tone-* class gives the colour; only its text colour is wanted here */
+}
+.as-sec-box.as-sec-box-context {
+  border-style: dashed;
+  border-width: 1.5px;
+  opacity: 0.75;
+}
+.as-sec-box > span {
+  position: absolute;
+  top: -1.35rem;
+  left: -2px;
+  padding: 0.05rem 0.4rem;
+  border-radius: 4px 4px 4px 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid currentColor;
+  background: var(--as-surface);
+}
+.as-sec-legend {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.6rem;
+  font-size: 0.75rem;
+  color: var(--as-muted);
+}
+.as-sec-legend span {
+  background: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.as-sec-legend i {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.6rem;
+  border: 2px solid currentColor;
+  border-radius: 2px;
+}
+.as-sec-legend i.dashed {
+  border-style: dashed;
+}
+
+/* ---------- Facts (label / value pairs) ---------- */
+.as-sec-facts {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, auto) 1fr;
+  gap: 0.45rem 1rem;
+  margin: 0;
+  font-size: 0.86rem;
+}
+.as-sec-facts dt {
+  color: var(--as-muted);
+  font-weight: 500;
+}
+.as-sec-facts dd {
+  margin: 0;
+}
+.as-sec-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.as-sec-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.12rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--as-line);
+  font-size: 0.75rem;
+  color: var(--as-ink-2);
+  background: var(--as-surface);
+}
+
+/* ---------- Timeline ---------- */
+.as-sec-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.as-sec-timeline li {
+  position: relative;
+  display: flex;
+  gap: 0.75rem;
+  padding-bottom: 1rem;
+}
+.as-sec-timeline li:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 0.95rem;
+  top: 2rem;
+  bottom: 0.2rem;
+  width: 1px;
+  background: var(--as-line);
+}
+.as-sec-timeline .as-sec-threat-ic {
+  width: 1.9rem;
+  height: 1.9rem;
+  font-size: 0.85rem;
+}
+.as-sec-timeline b {
+  font-weight: 600;
+  font-size: 0.86rem;
+}
+.as-sec-timeline small {
+  display: block;
+  color: var(--as-muted);
+}
+.as-sec-timeline p {
+  margin: 0.2rem 0 0;
+  font-size: 0.84rem;
+  color: var(--as-ink-2);
+}
+
+/* ---------- Cameras ---------- */
+.as-sec-cams {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 0.75rem;
+  padding: 0 1.25rem 1.25rem;
+}
+.as-sec-cam {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--as-line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--as-surface);
+}
+.as-sec-cam-view {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  background: var(--as-neutral-soft);
+  color: var(--as-muted);
+  font-size: 0.78rem;
+}
+.as-sec-cam-view > .bi {
+  font-size: 1.8rem;
+}
+.as-sec-cam-view .as-pill {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+}
+.as-sec-cam-view .as-sec-cam-code {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.7rem;
+  font-family: var(--as-mono);
+  font-size: 0.72rem;
+}
+.as-sec-cam.offline .as-sec-cam-view {
+  color: var(--as-danger);
+}
+.as-sec-cam-body {
+  padding: 0.75rem 0.9rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1;
+}
+.as-sec-cam-body b {
+  font-weight: 600;
+}
+.as-sec-cam-line {
+  font-size: 0.78rem;
+  color: var(--as-muted);
+}
+.as-sec-cam-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.9rem;
+  border-top: 1px solid var(--as-line-soft);
+  font-size: 0.78rem;
+}
+
+/* ---------- Alert rules ---------- */
+.as-sec-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+/* Padding inside a Card (cards leave their body unpadded; tables run edge to edge) */
+.as-sec-body {
+  padding: 0 1.25rem 1.25rem;
+}
+
+/* ---------- Recorded video analysis ---------- */
+.as-sec-player {
+  display: block;
+  width: 100%;
+  max-height: 70vh;
+  border-radius: 10px;
+  background: var(--as-ink);
+}
+/* Where in the clip each alert was raised, under the player; a mark jumps the video there */
+.as-sec-track {
+  position: relative;
+  height: 1.1rem;
+  margin-top: 0.6rem;
+  border-radius: 999px;
+  background: var(--as-neutral-soft);
+}
+.as-sec-mark {
+  position: absolute;
+  top: 0.15rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  margin-left: -0.4rem;
+  padding: 0;
+  border: 2px solid var(--as-surface);
+  border-radius: 50%;
+  background: currentColor;
+  cursor: pointer;
+}
+.as-sec-mark:focus-visible {
+  outline: 2px solid var(--as-focus);
+}
+.as-sec-vlist {
+  list-style: none;
+  margin: 0;
+  padding: 0 0.75rem 0.75rem;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.as-sec-vlist li {
+  border: 1px solid var(--as-line-soft);
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  margin-bottom: 0.5rem;
+}
+.as-sec-vlist li.on {
+  border-color: var(--as-primary);
+  background: var(--as-primary-soft);
+}
+.as-sec-vjump {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: inherit;
+}
+.as-sec-vtime {
+  flex: none;
+  min-width: 2.6rem;
+  padding-top: 0.4rem;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+.as-sec-vmeta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.45rem 0 0 3.2rem;
+}
+/* The stored evidence frame of an alert */
+.as-sec-snapshot {
+  display: block;
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--as-line);
+}
+
+/* ---------- Live wall (six camera screens) ---------- */
+.as-sec-wall {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+  padding: 0 1.25rem 1.25rem;
+}
+@media (max-width: 1199.98px) {
+  .as-sec-wall { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 767.98px) {
+  .as-sec-wall { grid-template-columns: minmax(0, 1fr); }
+}
+/* Full screen: the wall fills the monitor */
+.as-sec-wall:fullscreen {
+  padding: 0.6rem;
+  background: var(--as-sidebar);
+  align-content: center;
+}
+.as-sec-screen {
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--as-sidebar);
+  color: var(--as-sidebar-text);
+  box-shadow: 0 0 0 2px transparent;
+  transition: box-shadow 0.2s;
+}
+.as-sec-screen.alarm-danger {
+  box-shadow: 0 0 0 3px var(--as-danger);
+  animation: as-sec-pulse 1s ease-in-out infinite alternate;
+}
+.as-sec-screen.alarm-warning {
+  box-shadow: 0 0 0 3px var(--as-warning);
+}
+@keyframes as-sec-pulse {
+  to { box-shadow: 0 0 0 5px var(--as-danger); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .as-sec-screen.alarm-danger { animation: none; }
+}
+.as-sec-screen-head,
+.as-sec-screen-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.76rem;
+  min-width: 0;
+}
+.as-sec-screen-head b {
+  font-weight: 600;
+  color: var(--as-surface);
+  white-space: nowrap;
+}
+.as-sec-screen-head .as-mono,
+.as-sec-screen-zone {
+  color: var(--as-sidebar-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.as-sec-screen-foot {
+  color: var(--as-sidebar-muted);
+}
+.as-sec-screen-foot a {
+  color: var(--as-sidebar-text);
+}
+/* "Recording" dot */
+.as-sec-rec {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--as-danger);
+}
+.as-sec-screen-view {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--as-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.as-sec-screen-view video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.as-sec-screen-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--as-sidebar-muted);
+  font-size: 0.8rem;
+  text-align: center;
+  padding: 1rem;
+}
+.as-sec-screen-empty > .bi {
+  font-size: 1.6rem;
+}
+.as-sec-banners {
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.as-sec-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  background: var(--as-surface);
+  color: var(--as-ink);
+  box-shadow: var(--as-shadow-pop);
+  font-size: 0.78rem;
+}
+.as-sec-banner > .bi {
+  color: var(--as-danger);
+  font-size: 1rem;
+}
+.as-sec-banner-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  min-width: 0;
+  margin-right: auto;
+}
+.as-sec-banner-text small {
+  color: var(--as-muted);
+}
+.as-sec-banner-link {
+  font-family: var(--as-mono);
+  font-size: 0.7rem;
+}
+
+/* Tags in a screen's head, footer buttons and the model demo verdict */
+.as-sec-screen-off,
+.as-sec-screen-synthetic {
+  flex: none;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+.as-sec-screen-off {
+  color: var(--as-surface);
+  background: var(--as-danger);
+}
+.as-sec-screen-synthetic {
+  color: var(--as-sidebar);
+  background: var(--as-info-soft);
+}
+.as-sec-screen-foot .as-sec-screen-btn {
+  color: var(--as-sidebar-text);
+  font-size: 0.76rem;
+  text-decoration: underline;
+}
+.as-sec-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: 600;
+}
+.as-sec-verdict.ok { color: var(--as-success-soft); }
+.as-sec-verdict.miss { color: var(--as-warning-soft); }
+.as-sec-loc {
+  font-family: var(--as-font);
+  color: var(--as-muted);
+}

@@ -1,0 +1,319 @@
+/*
+ * Customer side (/my): the vehicle's photo on the home page, the visit's progress, and the inspection report told as a
+ * short animated story (summary, map, photos, list). Colours only through the theme tokens (--as-*). Every animation
+ * starts from the finished look and is switched off for people who ask for reduced motion.
+ */
+
+/* ---------- Tones: severity and state colours as two variables each ---------- */
+.cp-tone-danger { --t: var(--as-danger); --t-soft: var(--as-danger-soft); }
+.cp-tone-warning { --t: var(--as-warning); --t-soft: var(--as-warning-soft); }
+.cp-tone-info { --t: var(--as-info); --t-soft: var(--as-info-soft); }
+.cp-tone-success { --t: var(--as-success); --t-soft: var(--as-success-soft); }
+.cp-tone-muted { --t: var(--as-muted); --t-soft: var(--as-neutral-soft); }
+
+/* ---------- Motion ---------- */
+@keyframes cp-rise { from { opacity: 0; transform: translateY(10px); } }
+@keyframes cp-trace { from { stroke-dashoffset: var(--len); } }
+@keyframes cp-fill-in { from { fill-opacity: 0; } }
+@keyframes cp-drop { 0% { opacity: 0; transform: translateY(-14px) scale(0.6); } 70% { transform: translateY(2px) scale(1.06); } }
+@keyframes cp-grow { from { transform: scaleX(0); } }
+@keyframes cp-grow-y { from { transform: scaleY(0); } }
+@keyframes cp-halo { 0% { opacity: 0.45; transform: scale(1); } 100% { opacity: 0; transform: scale(2.3); } }
+@keyframes cp-ripple { 0% { opacity: 0.6; transform: scale(0.85); } 100% { opacity: 0; transform: scale(1.35); } }
+@keyframes cp-breathe { 50% { opacity: 0.45; } }
+@keyframes cp-kenburns { from { transform: scale(1.14); filter: saturate(0.6) brightness(0.8); } }
+@keyframes cp-live { 70% { box-shadow: 0 0 0 7px rgb(62 224 143 / 0%); } 100% { box-shadow: 0 0 0 0 rgb(62 224 143 / 0%); } }
+@keyframes cp-shimmer { from { background-position: 150% 0; } to { background-position: -100% 0; } }
+@keyframes cp-pop { from { opacity: 0; transform: translate(-2px, calc(-100% + 2px)) scale(0.95); } }
+.cp-rise { animation: cp-rise 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 70ms); }
+@media (prefers-reduced-motion: reduce) {
+  .as-cust *, .as-cust *::before, .as-cust *::after { animation: none !important; transition: none !important; }
+}
+
+/* ---------- Shared bits ---------- */
+.cp-eyebrow { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--as-muted); }
+.cp-title { font-size: clamp(1.45rem, 1.1rem + 1.4vw, 2rem); font-weight: 700; line-height: 1.15; letter-spacing: -0.01em; margin: 0.2rem 0 0.35rem; text-wrap: balance; }
+/* Sri Lankan number plate (the rear plate is yellow) */
+.cp-plate { display: inline-flex; align-items: center; gap: 0.35rem; background: #f6c623; color: #111418; border: 2px solid #111418; border-radius: 6px; padding: 0.1rem 0.55rem 0.1rem 0.35rem; font: 700 1.05rem/1.2 var(--as-mono); letter-spacing: 0.03em; white-space: nowrap; box-shadow: 0 1px 0 rgb(0 0 0 / 15%); }
+.cp-plate small { font-size: 0.62em; line-height: 1; }
+.cp-pill { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; background: var(--t-soft); color: var(--t); white-space: nowrap; }
+.cp-pill::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--t); }
+.cp-card { background: var(--as-surface); border: 1px solid var(--as-line); border-radius: 14px; box-shadow: var(--as-shadow); min-width: 0; }
+.cp-card-h { display: flex; align-items: center; gap: 0.5rem; padding: 0.9rem 1.1rem 0; font-weight: 600; font-size: 0.9rem; color: var(--as-ink-2); }
+.cp-card-h .bi { color: var(--as-muted); }
+.cp-card-b { padding: 0.9rem 1.1rem 1.1rem; }
+.cp-dmg-svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.cp-car-art .body { fill: var(--as-surface); stroke: var(--as-ink-2); stroke-width: 1.6; stroke-linejoin: round; }
+.cp-car-art .glass { fill: var(--as-info-soft); stroke: var(--as-ink-2); stroke-width: 1.2; }
+.cp-car-art .wheel { fill: var(--as-ink-2); }
+.cp-car-art .hub { fill: var(--as-surface-2); }
+.cp-car-art .lamp { fill: var(--as-brand); }
+
+/* ---------- Home: the vehicle's photo with its visit on top ---------- */
+.cp-home { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 1.1rem; align-items: start; }
+.cp-home-main, .cp-home-side { display: grid; gap: 1.1rem; min-width: 0; }
+@media (max-width: 860px) { .cp-home { grid-template-columns: 1fr; } }
+.cp-hero { position: relative; display: block; border-radius: 22px; overflow: hidden; min-height: 400px; background: var(--as-sidebar); box-shadow: var(--as-shadow-pop); isolation: isolate; color: #fff; text-decoration: none; }
+.cp-hero:hover { color: #fff; }
+.cp-hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scale(1.03); transition: transform 1.2s cubic-bezier(0.2, 0.7, 0.2, 1); animation: cp-kenburns 1.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.cp-hero:hover .cp-hero-img { transform: scale(1.07); }
+.cp-hero-art { position: absolute; inset: 0; display: grid; place-items: center; padding: 2rem 2rem 9rem; background: radial-gradient(ellipse at 50% 40%, var(--as-sidebar-2), var(--as-sidebar)); }
+.cp-hero-art .cp-car-art { width: min(420px, 90%); }
+.cp-hero-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgb(10 12 16 / 45%) 0%, rgb(10 12 16 / 0%) 26%, rgb(10 12 16 / 0%) 42%, rgb(10 12 16 / 88%) 100%); }
+.cp-hero-top { position: absolute; top: 1rem; left: 1rem; right: 1rem; display: flex; justify-content: space-between; align-items: flex-start; gap: 0.6rem; flex-wrap: wrap; }
+.cp-glass { background: rgb(255 255 255 / 16%); border: 1px solid rgb(255 255 255 / 28%); backdrop-filter: blur(12px) saturate(1.3); -webkit-backdrop-filter: blur(12px) saturate(1.3); color: #fff; }
+.cp-glass-pill { border-radius: 999px; padding: 0.3rem 0.75rem; font-size: 0.82rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.5rem; }
+.cp-live { width: 8px; height: 8px; border-radius: 50%; background: #3ee08f; animation: cp-live 1.8s ease-out infinite; }
+.cp-idle { width: 8px; height: 8px; border-radius: 50%; background: rgb(255 255 255 / 55%); }
+.cp-change { position: absolute; top: 3.6rem; right: 1rem; border-radius: 10px; padding: 0.35rem 0.65rem; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; opacity: 0; transform: translateY(-4px); transition: opacity 0.2s, transform 0.2s, background 0.2s; }
+.cp-hero:hover .cp-change, .cp-change:focus-visible { opacity: 1; transform: none; }
+.cp-change:hover { background: rgb(255 255 255 / 28%); }
+@media (hover: none) { .cp-change { opacity: 1; transform: none; } }
+.cp-hero-bot { position: absolute; left: 0; right: 0; bottom: 0; padding: 1.4rem; display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem; }
+.cp-hero-bot > * { animation: cp-rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) 0.45s both; }
+.cp-hero-text { min-width: 0; flex: 1 1 300px; }
+.cp-hero-car { font-size: 0.85rem; opacity: 0.85; }
+.cp-hero-stage { font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.2rem); font-weight: 700; line-height: 1.1; letter-spacing: -0.01em; margin: 0.15rem 0 0.75rem; text-wrap: balance; }
+.cp-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; max-width: 460px; }
+.cp-steps li { display: grid; gap: 6px; font-size: 0.72rem; color: rgb(255 255 255 / 70%); }
+.cp-steps li::before { content: ''; height: 5px; border-radius: 3px; background: rgb(255 255 255 / 25%); transform-origin: left; animation: cp-grow 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(0.7s + var(--i) * 0.1s); }
+.cp-steps li.done::before { background: #3ee08f; }
+.cp-steps li.now { color: #fff; font-weight: 650; }
+.cp-steps li.now::before { background: var(--as-brand); animation: cp-grow 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) calc(0.7s + var(--i) * 0.1s) both, cp-breathe 1.8s ease-in-out 1.4s infinite; }
+@media (max-width: 520px) { .cp-steps li:not(.now) span { visibility: hidden; } .cp-steps li.now span { white-space: nowrap; } }
+.cp-chips { display: grid; gap: 0.5rem; flex: 0 1 260px; }
+.cp-chip { border-radius: 14px; padding: 0.55rem 0.75rem; display: flex; align-items: center; gap: 0.6rem; text-align: left; font-size: 0.82rem; }
+.cp-chip b { display: block; font-size: 0.9rem; }
+.cp-chip small { opacity: 0.8; font-size: 0.75rem; }
+.cp-chip-ic { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: var(--t); color: #fff; flex: none; }
+/* The vehicle list when there are more vehicles: one smaller photo card each */
+.cp-others { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 1rem; }
+.cp-others .cp-hero { min-height: 220px; border-radius: 16px; }
+.cp-others .cp-hero-stage { font-size: 1.2rem; margin-bottom: 0; }
+.cp-others .cp-hero-bot { padding: 1rem; }
+
+.cp-add { border: 1.5px dashed var(--as-line); background: transparent; border-radius: 14px; display: grid; place-items: center; gap: 0.35rem; padding: 1.5rem; color: var(--as-muted); cursor: pointer; min-height: 170px; text-align: center; transition: border-color 0.2s, color 0.2s, background 0.2s; }
+.cp-add:hover { border-color: var(--as-primary); color: var(--as-primary); background: var(--as-primary-soft); }
+.cp-add .plus { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--as-line-soft); font-size: 1.3rem; transition: transform 0.3s ease, background 0.2s; }
+.cp-add:hover .plus { transform: rotate(90deg); background: var(--as-surface); }
+
+/* A request waiting for the service centre (or turned down) */
+.cp-pend { position: relative; border-radius: 16px; overflow: hidden; background: var(--as-surface); border: 1px solid var(--as-line); box-shadow: var(--as-shadow); animation: cp-rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.cp-pend-img { aspect-ratio: 16 / 9; background: var(--as-line-soft); position: relative; overflow: hidden; display: grid; place-items: center; }
+.cp-pend-img img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: grayscale(0.5); }
+.cp-pend-img .cp-car-art { width: 80%; }
+.cp-pend-img .cp-pill { position: absolute; left: 10px; bottom: 10px; background: var(--as-surface); }
+.cp-shimmer { position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 45%) 50%, transparent 70%); background-size: 250% 100%; animation: cp-shimmer 2.4s linear infinite; }
+.cp-pend-b { padding: 0.7rem 0.8rem; display: grid; gap: 0.3rem; }
+.cp-pend-row { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.cp-pend .cp-plate { font-size: 0.9rem; }
+.cp-link { border: 0; background: none; color: var(--as-muted); font-size: 0.8rem; cursor: pointer; padding: 0; }
+.cp-link:hover { color: var(--as-danger); }
+
+/* Add-a-vehicle photo drop area */
+.cp-drop { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 9; border: 1.5px dashed var(--as-line); border-radius: 14px; background: var(--as-surface-2); cursor: pointer; overflow: hidden; text-align: center; margin: 0; transition: border-color 0.2s, background 0.2s; }
+.cp-drop:hover, .cp-drop.over { border-color: var(--as-primary); background: var(--as-primary-soft); }
+.cp-drop.invalid { border-color: var(--as-danger); }
+.cp-drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.cp-drop:has(input:focus-visible) { box-shadow: var(--as-focus); border-color: var(--as-primary); }
+.cp-drop-empty { display: grid; justify-items: center; gap: 0.35rem; padding: 1rem; }
+.cp-drop-ic { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--as-primary-soft); color: var(--as-primary); font-size: 1.35rem; transition: transform 0.3s; }
+.cp-drop:hover .cp-drop-ic { transform: scale(1.08) rotate(-6deg); }
+.cp-drop img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cp-drop-change { position: absolute; right: 10px; bottom: 10px; background: rgb(14 17 22 / 65%); color: #fff; border-radius: 8px; padding: 0.2rem 0.6rem; font-size: 0.8rem; }
+.cp-plate-field input { font-family: var(--as-mono); text-transform: uppercase; letter-spacing: 0.03em; }
+
+/* ---------- Vehicle page ---------- */
+.cp-vhead { display: flex; flex-wrap: wrap; align-items: center; gap: 0.9rem 1.1rem; margin: 0.9rem 0 1.1rem; }
+.cp-vthumb { width: 84px; height: 56px; border-radius: 12px; object-fit: cover; box-shadow: var(--as-shadow-pop); background: var(--as-line-soft); display: grid; place-items: center; overflow: hidden; }
+.cp-vthumb .cp-car-art { width: 90%; }
+.cp-vhead .cp-plate { font-size: 1.3rem; }
+.cp-tabs-count { background: var(--as-primary-soft); color: var(--as-primary); border-radius: 999px; font-size: 0.72rem; padding: 0 0.45rem; font-weight: 700; margin-left: 0.3rem; }
+
+/* Visit progress */
+.cp-journey { list-style: none; margin: 0; padding: 0.4rem 0 0; display: grid; grid-template-columns: repeat(6, 1fr); position: relative; }
+.cp-journey::before, .cp-journey .cp-journey-fill { content: ''; position: absolute; top: 27px; left: 8.33%; height: 3px; border-radius: 2px; }
+.cp-journey::before { right: 8.33%; background: var(--as-line); }
+.cp-journey .cp-journey-fill { width: calc(83.33% * var(--p)); background: linear-gradient(90deg, var(--as-success), var(--as-brand)); transform-origin: left; animation: cp-grow 1.2s cubic-bezier(0.45, 0.05, 0.2, 1) 0.3s both; }
+.cp-journey li { display: grid; justify-items: center; gap: 0.5rem; text-align: center; position: relative; font-size: 0.82rem; color: var(--as-muted); padding: 0 0.25rem; }
+.cp-journey .node { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--as-surface); border: 2px solid var(--as-line); position: relative; z-index: 1; font-size: 1.1rem; animation: cp-drop 0.45s cubic-bezier(0.2, 0.8, 0.3, 1.2) both; animation-delay: calc(var(--i) * 160ms + 200ms); }
+.cp-journey li.done { color: var(--as-ink-2); }
+.cp-journey li.done .node { background: var(--as-success); border-color: var(--as-success); color: #fff; }
+.cp-journey li.now { color: var(--as-ink); font-weight: 600; }
+.cp-journey li.now .node { border-color: var(--as-brand); color: var(--as-brand); background: var(--as-primary-soft); }
+.cp-journey li.now .node::after { content: ''; position: absolute; inset: -7px; border-radius: 50%; border: 2px solid var(--as-brand); opacity: 0; animation: cp-ripple 2s ease-out infinite; }
+.cp-journey .when { display: block; font-weight: 400; font-size: 0.75rem; color: var(--as-muted); }
+@media (max-width: 620px) {
+  .cp-journey { grid-template-columns: 1fr; gap: 0.9rem; padding-left: 0.25rem; }
+  .cp-journey::before, .cp-journey .cp-journey-fill { top: 22px; bottom: 22px; left: 25px; right: auto; width: 3px; height: auto; }
+  .cp-journey .cp-journey-fill { height: calc((100% - 44px) * var(--p)); bottom: auto; transform-origin: top; animation-name: cp-grow-y; }
+  .cp-journey li { grid-template-columns: 44px 1fr; justify-items: start; text-align: left; align-items: center; column-gap: 0.75rem; }
+}
+.cp-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 0.75rem; }
+.cp-stat { background: var(--as-surface-2); border: 1px solid var(--as-line-soft); border-radius: 12px; padding: 0.75rem 0.9rem; }
+.cp-stat .k { font-size: 0.75rem; color: var(--as-muted); }
+.cp-stat .v { font-size: 1.2rem; font-weight: 650; margin-top: 0.1rem; }
+.cp-cta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.9rem; padding: 0.9rem 1rem; border-radius: 12px; background: var(--as-primary-soft); border: 1px solid rgba(var(--as-primary-rgb), 0.25); }
+.cp-cta .t { flex: 1; min-width: 200px; }
+
+/* ---------- Inspection report ---------- */
+.cp-report { display: grid; gap: 1.1rem; }
+.cp-rhead { display: grid; grid-template-columns: 1fr auto; gap: 1rem; align-items: end; padding: 1.25rem 1.4rem; position: relative; overflow: hidden; }
+.cp-rhead::after { content: ''; position: absolute; right: -60px; top: -60px; width: 220px; height: 220px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--t) 14%, transparent), transparent 70%); pointer-events: none; }
+.cp-metas { display: flex; flex-wrap: wrap; gap: 0.35rem 1rem; color: var(--as-muted); font-size: 0.85rem; }
+.cp-metas span { display: inline-flex; align-items: center; gap: 0.4rem; }
+.cp-verified { color: var(--as-success); font-weight: 600; }
+.cp-overall { display: grid; justify-items: end; gap: 0.25rem; position: relative; z-index: 1; }
+.cp-overall .cp-pill { font-size: 1rem; padding: 0.4rem 0.9rem; }
+@media (max-width: 640px) { .cp-rhead { grid-template-columns: 1fr; } .cp-overall { justify-items: start; } }
+.cp-how { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; font-size: 0.82rem; color: var(--as-ink-2); padding: 0 1.4rem 1.1rem; }
+.cp-how .cp-step { display: inline-flex; align-items: center; gap: 0.45rem; background: var(--as-surface-2); border: 1px solid var(--as-line-soft); border-radius: 999px; padding: 0.25rem 0.7rem 0.25rem 0.3rem; }
+.cp-how .cp-step i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--as-primary-soft); color: var(--as-primary); font-style: normal; font-size: 0.75rem; }
+.cp-how .cp-step.ok i { background: var(--as-success-soft); color: var(--as-success); }
+.cp-note { margin: 0 1.4rem 1.1rem; padding: 0.6rem 0.9rem; border-left: 3px solid var(--as-line); background: var(--as-surface-2); border-radius: 0 10px 10px 0; font-size: 0.9rem; color: var(--as-ink-2); }
+
+.cp-rgrid { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 1.1rem; align-items: start; }
+.cp-rside { display: grid; gap: 1.1rem; position: sticky; top: 0.9rem; }
+.cp-rmain { display: grid; gap: 1.1rem; min-width: 0; }
+@media (max-width: 900px) { .cp-rgrid { grid-template-columns: 1fr; } .cp-rside { position: static; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); } }
+
+/* Summary ring */
+.cp-ringwrap { display: flex; align-items: center; gap: 1.1rem; }
+.cp-ring { width: 128px; height: 128px; flex: none; }
+.cp-ring .track { fill: none; stroke: var(--as-line-soft); stroke-width: 12; }
+.cp-ring .seg { fill: none; stroke: var(--t); stroke-width: 12; }
+.cp-ring .mask { animation: cp-trace 1.2s cubic-bezier(0.45, 0.05, 0.2, 1) 0.2s both; }
+.cp-ring .c-num { font: 750 30px var(--as-font); fill: var(--as-ink); font-variant-numeric: tabular-nums; }
+.cp-ring .c-lbl { font: 600 10px var(--as-font); fill: var(--as-muted); letter-spacing: 0.08em; }
+.cp-legend { display: grid; gap: 0.45rem; flex: 1; min-width: 0; }
+.cp-legend div { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; }
+.cp-legend .sw { width: 10px; height: 10px; border-radius: 3px; background: var(--t); }
+.cp-legend b { margin-left: auto; font-variant-numeric: tabular-nums; }
+.cp-legend .none { opacity: 0.45; }
+.cp-sides { display: grid; gap: 0.45rem; margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--as-line-soft); }
+.cp-sides .row { display: grid; grid-template-columns: 74px 1fr 18px; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: var(--as-ink-2); }
+.cp-bar { display: flex; height: 8px; border-radius: 4px; background: var(--as-line-soft); overflow: hidden; gap: 2px; }
+.cp-bar i { background: var(--t); height: 100%; transform-origin: left; animation: cp-grow 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 90ms + 500ms); }
+.cp-sides .row b { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Damage map */
+.cp-map { margin: 0; }
+.cp-map svg { width: 100%; max-width: 250px; height: auto; display: block; margin: 0 auto; overflow: visible; }
+.cp-map .shell { fill: var(--as-surface); stroke: var(--as-ink-2); stroke-width: 2.2; stroke-linejoin: round; }
+.cp-map .part { fill: var(--as-info-soft); stroke: var(--as-ink-2); stroke-opacity: 0.55; stroke-width: 1.6; stroke-linejoin: round; }
+.cp-map .line { fill: none; stroke: var(--as-ink-2); stroke-opacity: 0.35; stroke-width: 1.4; }
+.cp-map .wheel { fill: var(--as-ink-2); }
+.cp-map .draw { stroke-dasharray: var(--len); animation: cp-trace 1.1s cubic-bezier(0.45, 0.05, 0.2, 1) both; animation-delay: var(--dl); }
+.cp-map .lbl { font: 650 8.5px var(--as-font); letter-spacing: 0.14em; fill: var(--as-muted); }
+.cp-pin { cursor: pointer; outline: none; }
+.cp-pin .halo { fill: var(--t); opacity: 0; }
+.cp-pin.sev .halo { animation: cp-halo 2.2s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+.cp-pin .core { animation: cp-drop 0.5s cubic-bezier(0.2, 0.8, 0.3, 1.2) both; animation-delay: calc(var(--i) * 90ms + 1000ms); transform-box: fill-box; transform-origin: center; }
+.cp-pin .dot { fill: var(--t); stroke: var(--as-surface); stroke-width: 2.5; transition: r 0.2s; }
+.cp-pin text { font: 750 10.5px var(--as-font); fill: #fff; pointer-events: none; }
+.cp-pin.on .dot, .cp-pin:focus-visible .dot { r: 13.5; stroke: var(--as-ink); }
+.cp-map figcaption { font-size: 0.75rem; color: var(--as-muted); margin-top: 0.6rem; text-align: center; }
+
+/* Photos */
+.cp-ptabs { display: flex; gap: 0.5rem; padding: 0.9rem 1.1rem 0; overflow-x: auto; }
+.cp-ptab { border: 1.5px solid var(--as-line); background: var(--as-surface); border-radius: 12px; padding: 0.3rem 0.75rem 0.3rem 0.3rem; display: flex; align-items: center; gap: 0.55rem; cursor: pointer; text-align: left; flex: none; transition: border-color 0.2s, box-shadow 0.2s; }
+.cp-ptab img { width: 64px; height: 36px; object-fit: cover; border-radius: 8px; display: block; background: var(--as-line-soft); }
+.cp-ptab b { display: block; font-size: 0.85rem; }
+.cp-ptab span { font-size: 0.75rem; color: var(--as-muted); }
+.cp-ptab[aria-pressed='true'] { border-color: var(--as-brand); box-shadow: 0 0 0 3px rgb(242 106 27 / 18%); }
+.cp-photo { position: relative; margin: 0.9rem 1.1rem 0; border-radius: 12px; overflow: hidden; background: var(--as-sidebar); max-width: 100%; }
+.cp-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cp-photo svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.cp-photo .missing { position: absolute; inset: 0; display: grid; place-items: center; color: var(--as-sidebar-text); }
+.cp-photo .ol { fill: var(--t); fill-opacity: 0.14; stroke: var(--t); stroke-linejoin: round; cursor: pointer; stroke-dasharray: var(--len); transition: fill-opacity 0.25s, stroke-width 0.25s; animation: cp-trace 1s cubic-bezier(0.45, 0.05, 0.2, 1) both, cp-fill-in 0.5s ease both; animation-delay: calc(var(--i) * 140ms + 150ms), calc(var(--i) * 140ms + 950ms); }
+.cp-photo .badge { cursor: pointer; animation: cp-drop 0.45s cubic-bezier(0.2, 0.8, 0.3, 1.2) both; animation-delay: calc(var(--i) * 140ms + 800ms); transform-box: fill-box; transform-origin: center; }
+.cp-photo .badge circle { fill: var(--t); stroke: #fff; }
+.cp-photo .badge text { font-weight: 800; fill: #fff; font-family: var(--as-font); }
+.cp-photo .grp { transition: opacity 0.25s; }
+.cp-photo.focus .grp { opacity: 0.28; }
+.cp-photo .grp.on { opacity: 1; }
+.cp-photo .grp.on .ol { fill-opacity: 0.34; }
+.cp-callout { position: absolute; transform: translate(-2px, calc(-100% - 6px)); background: var(--as-surface); color: var(--as-ink); border-radius: 9px; padding: 0.3rem 0.6rem; font-size: 0.8rem; font-weight: 600; box-shadow: var(--as-shadow-pop); white-space: nowrap; pointer-events: none; display: flex; align-items: center; gap: 0.45rem; animation: cp-pop 0.25s ease both; }
+.cp-callout::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--t); }
+.cp-pfoot { display: flex; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; padding: 0.6rem 1.1rem 1rem; font-size: 0.8rem; color: var(--as-muted); }
+
+/* What was found */
+.cp-flist { display: grid; gap: 1.1rem; }
+.cp-fside { display: grid; gap: 0.5rem; }
+.cp-fside-h { display: flex; align-items: center; gap: 0.6rem; font-weight: 650; font-size: 0.9rem; }
+.cp-fside-h .as-dmg-side { width: 44px; height: auto; margin: 0; color: var(--as-muted); fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.cp-fside-h .as-dmg-side-light { stroke: var(--as-brand); }
+.cp-fside-h .c { margin-left: auto; font-weight: 500; color: var(--as-muted); font-size: 0.82rem; }
+.cp-item { display: grid; grid-template-columns: auto 1fr auto; gap: 0.75rem; align-items: center; padding: 0.7rem 0.75rem; border: 1px solid var(--as-line); border-radius: 12px; background: var(--as-surface); cursor: pointer; text-align: left; width: 100%; color: inherit; transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s, background 0.2s; animation: cp-rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i) * 70ms + 600ms); }
+.cp-item:hover { border-color: color-mix(in srgb, var(--t) 45%, var(--as-line)); transform: translateX(2px); }
+.cp-item.on { border-color: var(--t); box-shadow: 0 0 0 3px color-mix(in srgb, var(--t) 18%, transparent); background: color-mix(in srgb, var(--t-soft) 45%, var(--as-surface)); }
+.cp-dmg-ic { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--t-soft); color: var(--t); position: relative; }
+.cp-dmg-ic .no { position: absolute; top: -6px; left: -6px; width: 20px; height: 20px; border-radius: 50%; background: var(--t); color: #fff; font-size: 0.7rem; font-weight: 800; display: grid; place-items: center; border: 2px solid var(--as-surface); }
+.cp-item .t { min-width: 0; }
+.cp-item .t b { display: block; font-size: 0.92rem; }
+.cp-item .t span { font-size: 0.82rem; color: var(--as-muted); }
+.cp-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.25rem; }
+.cp-tag { font-size: 0.72rem; border-radius: 6px; padding: 0.05rem 0.45rem; background: var(--as-line-soft); color: var(--as-ink-2); }
+.cp-sev { display: grid; justify-items: end; gap: 0.3rem; }
+.cp-meter { display: flex; gap: 3px; }
+.cp-meter i { width: 14px; height: 6px; border-radius: 3px; background: var(--as-line); }
+.cp-meter i.f { background: var(--t); }
+.cp-sev .lbl { font-size: 0.8rem; font-weight: 650; color: var(--t); }
+@media (max-width: 430px) { .cp-item { grid-template-columns: auto 1fr; } .cp-sev { grid-column: 2; justify-items: start; } }
+.cp-explain { border-top: 1px solid var(--as-line-soft); padding-top: 0.75rem; }
+.cp-explain summary { cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--as-ink-2); }
+.cp-sevgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 0.6rem; margin-top: 0.6rem; }
+.cp-sevgrid div { border-radius: 10px; padding: 0.6rem 0.75rem; background: var(--t-soft); font-size: 0.82rem; color: var(--as-ink-2); }
+.cp-sevgrid b { color: var(--t); display: block; }
+
+/* This vehicle's inspections */
+.cp-hist { display: flex; align-items: flex-start; overflow-x: auto; padding: 0.25rem 0.1rem 0.1rem; }
+.cp-hnode { display: grid; gap: 0.2rem; min-width: 190px; position: relative; padding-right: 1.2rem; border: 0; background: none; text-align: left; cursor: pointer; color: inherit; }
+.cp-hnode::before { content: ''; position: absolute; top: 8px; left: 20px; right: 0; height: 2px; background: var(--as-line); }
+.cp-hnode:last-child::before { background: repeating-linear-gradient(90deg, var(--as-line) 0 6px, transparent 6px 12px); }
+.cp-hnode .d { width: 18px; height: 18px; border-radius: 50%; background: var(--as-surface); border: 2px solid var(--as-ink-2); position: relative; z-index: 1; }
+.cp-hnode.on .d { background: var(--as-brand); border: 4px solid var(--as-primary-soft); box-shadow: 0 0 0 1px var(--as-brand); }
+.cp-hnode.ghost { cursor: default; }
+.cp-hnode.ghost .d { border: 2px dashed var(--as-line); }
+.cp-hnode b { font-size: 0.85rem; margin-top: 0.25rem; }
+.cp-hnode span { font-size: 0.78rem; color: var(--as-muted); }
+.cp-hnode:not(.ghost):hover b { color: var(--as-primary); }
+
+/* ---------- Printed report (Print / save as PDF) ---------- */
+.as-print-only { display: none; }
+@media print {
+  @page { margin: 14mm; }
+  /* Only the report being printed: everything else on the page is hidden */
+  body.as-printing * { visibility: hidden; }
+  body.as-printing .as-print-target, body.as-printing .as-print-target * { visibility: visible; }
+  body.as-printing .as-print-target { position: absolute; inset: 0 0 auto 0; }
+  .as-print-target .as-print-only { display: block; }
+  .as-print-target .btn, .as-print-target .as-no-print { display: none !important; }
+  .as-print-target, .as-print-target * { -webkit-print-color-adjust: exact; print-color-adjust: exact; animation: none !important; }
+  .as-print-target .cp-rgrid { grid-template-columns: 1fr; }
+  .as-print-target .cp-rside { position: static; }
+  .as-print-target .cp-card, .as-print-target .cp-item { break-inside: avoid; }
+}
+
+/* ---------- What needs doing (repair guide, in customer words) ---------- */
+.cp-todo { margin: 0 1.4rem 1.2rem; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--t) 30%, transparent); background: linear-gradient(135deg, var(--t-soft), var(--as-surface) 75%); padding: 0.9rem 1rem; display: grid; gap: 0.7rem; }
+.cp-todo-head { display: flex; gap: 0.8rem; align-items: center; }
+.cp-todo-head b { display: block; font-size: 1.1rem; color: var(--t); }
+.cp-todo-ic { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--t); color: #fff; font-size: 1.25rem; flex: none; position: relative; }
+.cp-tone-danger .cp-todo-ic::after { content: ''; position: absolute; inset: -4px; border-radius: 14px; border: 2px solid var(--t); opacity: 0; animation: cp-ripple 2.2s ease-out 1s infinite; }
+.cp-todo-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+.cp-todo-list li { display: grid; grid-template-columns: auto auto 1fr auto; gap: 0.6rem; align-items: center; font-size: 0.9rem; padding: 0.45rem 0.6rem; border-radius: 10px; background: var(--as-surface); border: 1px solid var(--as-line-soft); animation: cp-rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(500ms + var(--i) * 80ms); }
+.cp-todo-list li .text-body-secondary { font-size: 0.8rem; }
+.cp-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--t); }
+.cp-todo-time { font-size: 0.8rem; font-weight: 600; color: var(--as-ink-2); white-space: nowrap; }
+.cp-todo-note { margin: 0; font-size: 0.78rem; color: var(--as-muted); }
+@media (max-width: 480px) { .cp-todo-list li { grid-template-columns: auto 1fr auto; } .cp-todo-list li .text-body-secondary { display: none; } }
+.cp-tag-prio { background: var(--t-soft); color: var(--t); font-weight: 600; display: inline-flex; align-items: center; gap: 0.25rem; }
+
+/* What we heard: confirmed sound results */
+.cp-heard { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.45rem; }
+.cp-heard li { display: flex; gap: 0.65rem; align-items: flex-start; padding: 0.55rem 0.7rem; border-radius: 10px; background: var(--t-soft); border: 1px solid color-mix(in srgb, var(--t) 25%, transparent); }
+.cp-heard li > i { color: var(--t); font-size: 1.1rem; line-height: 1.3; }
+.cp-heard small { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--as-muted); }
+.cp-mech { margin-top: 0.8rem; padding-top: 0.7rem; border-top: 1px solid var(--as-line-soft); }
+.cp-mech ul { margin: 0.35rem 0 0; padding-left: 1.1rem; display: grid; gap: 0.3rem; font-size: 0.9rem; }

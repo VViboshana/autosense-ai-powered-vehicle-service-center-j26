@@ -1,0 +1,58 @@
+# Component 4 — rule engine settings (read by scripts/c4_analyze_video.py). See docs/threat_catalogue.md.
+# Change numbers here; no retraining needed. Times in seconds of VIDEO time.
+
+detection:
+  conf: 0.35              # minimum detection confidence (all classes)
+  class_conf:             # stricter per class (fewer false alarms on critical threats)
+    fire: 0.40
+    smoke: 0.40
+    weapon: 0.45
+  imgsz: 640
+  tracker: bytetrack.yaml # Ultralytics multi-object tracker (gives each person / vehicle an ID)
+  frame_step: 2           # analyse every 2nd frame (faster; 15 fps from a 30 fps video is enough)
+
+# Names used by the rules; a model with other names (e.g. pretrained COCO for testing) is mapped here.
+class_aliases: {car: vehicle, truck: vehicle, bus: vehicle, motorcycle: vehicle}
+
+role:
+  worker_iou: 0.3         # a person box overlapping a worker box this much = staff (worker)
+
+persistence_s: 2.0        # a threat must be seen this long before an alert (false-alarm guard)
+cooldown_s: 30            # the same threat for the same person / place is not repeated within this time
+near_vehicle_px_ratio: 0.15   # "near a vehicle" = gap between boxes < 15% of the frame width
+after_hours: {start: "19:00", end: "07:00"}   # used only if --start-time is given
+
+severity_levels: [Low, Medium, High, Critical]
+
+threats:
+  fire:
+    base: Critical
+    notify: [security_guard, centre_manager, fire_service, vehicle_owner]
+  smoke:
+    base: High
+    raise_if: {on_vehicle: true, lasts_s: 10}
+    notify: [security_guard, centre_manager, fire_service, vehicle_owner]
+  weapon:
+    base: Critical
+    notify: [security_guard, centre_manager, police]
+  tampering:              # model class `tampering`, or a visitor touching a vehicle for touch_s
+    base: High
+    touch_s: 10
+    raise_if: {face_covered: true, after_hours: true, group_size: 2}
+    notify: [security_guard, bay_supervisor, vehicle_owner]
+  unauthorised_access:    # visitor inside a restricted zone with no worker nearby
+    base: Medium
+    raise_if: {after_hours: true, face_covered: true, near_vehicle: true}
+    notify: [security_guard]
+  loitering:              # model class `loitering`, or a visitor near the same vehicle for dwell_s
+    base: Low
+    dwell_s: 120
+    raise_if: {face_covered: true, near_vehicle: true}
+    notify: [security_guard]
+
+# Severity -> extra people always told (on top of the threat's own list); Critical = human confirms before calling.
+notify_by_severity:
+  Low: [log_only]
+  Medium: [security_guard]
+  High: [security_guard, bay_supervisor, centre_manager]
+  Critical: [security_guard, bay_supervisor, centre_manager, emergency_call_after_staff_confirm]

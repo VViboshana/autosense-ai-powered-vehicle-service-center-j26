@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# Vite's dependency cache (created by npm run dev; different on every machine)
+.vite/
 *.tsbuildinfo
 coverage/
 

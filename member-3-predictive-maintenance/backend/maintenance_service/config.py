@@ -30,10 +30,25 @@ class Settings:
     enriched_encoder_filename: str = os.getenv(
         "AUTOSENSE_ENRICHED_ENCODER_FILENAME", "maintenance_category_enriched_encoder.pkl"
     )
+    enriched_json_model_filename: str = os.getenv(
+        "AUTOSENSE_ENRICHED_JSON_MODEL_FILENAME", "maintenance_category_enriched_xgboost.json"
+    )
+    enriched_preprocessor_filename: str = os.getenv(
+        "AUTOSENSE_ENRICHED_PREPROCESSOR_FILENAME", "maintenance_category_enriched_preprocessor.pkl"
+    )
 
     # Artifacts produced by the currently checked-in research notebook (03).
     legacy_model_filename: str = "maintenance_category_xgboost.pkl"
     legacy_encoder_filename: str = "maintenance_category_label_encoder.pkl"
+
+    duration_model_filename: str = os.getenv("AUTOSENSE_DURATION_MODEL_FILENAME", "service_duration_random_forest_final.pkl")
+    duration_fallback_model_filename: str = os.getenv("AUTOSENSE_DURATION_FALLBACK_MODEL_FILENAME", "service_duration_random_forest_task_only_fallback.pkl")
+    duration_metadata_filename: str = os.getenv("AUTOSENSE_DURATION_METADATA_FILENAME", "service_duration_model_metadata.json")
+    task_catalog_filename: str = os.getenv("AUTOSENSE_TASK_CATALOG_FILENAME", "maintenance_task_catalog_app.csv")
+    duration_model_path: Path | None = Path(os.getenv("AUTOSENSE_DURATION_MODEL_PATH")).expanduser() if os.getenv("AUTOSENSE_DURATION_MODEL_PATH") else None
+    duration_fallback_model_path: Path | None = Path(os.getenv("AUTOSENSE_DURATION_FALLBACK_MODEL_PATH")).expanduser() if os.getenv("AUTOSENSE_DURATION_FALLBACK_MODEL_PATH") else None
+    duration_metadata_path: Path | None = Path(os.getenv("AUTOSENSE_DURATION_METADATA_PATH")).expanduser() if os.getenv("AUTOSENSE_DURATION_METADATA_PATH") else None
+    task_catalog_path: Path | None = Path(os.getenv("AUTOSENSE_TASK_CATALOG_PATH")).expanduser() if os.getenv("AUTOSENSE_TASK_CATALOG_PATH") else None
 
 
 settings = Settings()

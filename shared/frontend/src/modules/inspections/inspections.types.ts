@@ -6,6 +6,20 @@ export type InspectionStatus = 'draft' | 'processing' | 'awaiting_review' | 'con
 export type ViewAngle = 'front' | 'rear' | 'left' | 'right' | 'other';
 export type ReviewStatus = 'pending' | 'confirmed' | 'corrected' | 'rejected';
 
+/** Repair guide (backend inspections.repair.ts, repair-v0): from the final damage type and severity. */
+export type Priority = 'before_driving' | 'soon' | 'planned' | 'cosmetic';
+export type Hours = [number, number];
+export type AreaRepair = { priority: Priority; why: string; service: string | null; effortHours: Hours | null };
+export type RepairPlan = {
+  method: string;
+  /** False until the service centre's technician has confirmed the rules and the hours */
+  validated: boolean;
+  priority: Priority | null;
+  services: { code: string; name: string; areas: number; priority: Priority; effortHours: Hours | null }[];
+  effortHours: Hours | null;
+  notEstimated: number;
+};
+
 export type InspectionListItem = {
   inspectionId: number;
   inspectionNo: string;
@@ -15,8 +29,10 @@ export type InspectionListItem = {
   vehicle: string;
   jobNo: string | null;
   imageCount: number;
+  thumbnailUrl: string | null;
   detectionCount: number;
   pendingCount: number;
+  possibleCount: number;
   createdBy: string | null;
   createdAt: string;
   reviewedAt: string | null;
@@ -34,11 +50,15 @@ export type Detection = {
   severity: SeverityValue;
   severityReason: string | null;
   source: 'model' | 'technician';
+  /** Possible damage: the model was less sure (confidence below the normal threshold). */
+  suggestion: boolean;
   reviewStatus: ReviewStatus;
   correctedLabel: DamageLabel | null;
   correctedSeverity: Severity | null;
   reviewedBy: string | null;
   reviewedAt: string | null;
+  /** Null for rejected regions and undecided possible damage */
+  repair: AreaRepair | null;
 };
 
 export type InspectionImage = {
@@ -69,6 +89,52 @@ export type InspectionDetail = {
   reviewedAt: string | null;
   reviewNotes: string | null;
   images: InspectionImage[];
+  /** For the whole inspection, from its damaged areas (overlapping regions of one damage count once) */
+  repair: RepairPlan;
+  /** Sound recordings made with the inspection, at most one per situation */
+  sounds: SoundCheck[];
+  /** Mechanical repair guide from the sound findings (sound-repair-v0), kept apart from the body-damage plan */
+  mechanical: MechanicalPlan;
+};
+
+export type MechanicalPlan = {
+  method: string;
+  validated: boolean;
+  priority: Priority | null;
+  items: { situation: SoundSituation; label: SoundLabel; name: string; priority: Priority; why: string; service: string; effortHours: Hours }[];
+  services: { code: string; name: string; faults: number; priority: Priority; effortHours: Hours | null }[];
+  effortHours: Hours | null;
+};
+
+/** Sound inspection (backend inspections.sound.ts): the technician picks what the vehicle was doing. */
+export type SoundSituation = 'starting' | 'idling' | 'braking';
+export type SoundLabel =
+  | 'normal_start' | 'bad_ignition' | 'dead_battery'
+  | 'normal_idle' | 'low_oil' | 'power_steering' | 'serpentine_belt' | 'misfire' | 'tappet'
+  | 'normal_brakes' | 'worn_brakes';
+
+export type SoundCheck = {
+  soundCheckId: number;
+  situation: SoundSituation;
+  url: string;
+  durationS: number | null;
+  quality: { passed?: boolean; warnings?: string[] };
+  /** The model's answer; finalLabel is after review (null when rejected) */
+  label: SoundLabel;
+  confidence: number;
+  /** Confidence at or above the service's "sure" level (0.7) */
+  sure: boolean;
+  /** False when it did not sound like the engine-bay recordings the model learned from (then never "sure") */
+  familiar: boolean | null;
+  probabilities: { label: SoundLabel; probability: number }[];
+  reviewStatus: ReviewStatus;
+  correctedLabel: SoundLabel | null;
+  finalLabel: SoundLabel | null;
+  name: string;
+  advice: string;
+  normal: boolean;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
 };
 
 export type VehicleOption = {
@@ -79,6 +145,8 @@ export type VehicleOption = {
   vehicle: string;
   customer: string | null;
   stage: string;
+  /** The bay the vehicle is in, while it is in one */
+  bay: string | null;
   checkedInAt: string;
   inspectionCount: number;
 };
