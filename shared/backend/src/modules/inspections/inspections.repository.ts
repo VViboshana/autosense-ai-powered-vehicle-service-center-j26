@@ -2,6 +2,7 @@ import type { Db } from '../../db/pool.js';
 import { offsetOf, toPage, type Page, type PageRequest } from '../../http/pagination.js';
 import { PLATE_KEY } from '../claims/claims.routes.js';
 import { groupRegions } from './inspections.areas.js';
+import { mechanicalPlan, type MechanicalPlan } from './inspections.mechanical.js';
 import { repairFor, repairPlan, type AreaRepair, type RepairPlan } from './inspections.repair.js';
 import type { DamageLabel, INSPECTION_STATUSES, OverallSeverity, REVIEW_DECISIONS, Severity, VIEW_ANGLES } from './inspections.rules.js';
 import { SOUND_FAULTS, type SoundLabel, type SoundSituation } from './inspections.sound.js';
@@ -75,7 +76,11 @@ export type InspectionDetail = Omit<InspectionListItem, 'imageCount' | 'thumbnai
   repair: RepairPlanView;
   /** Sound recordings made with the inspection (at most one per situation) and the fault the sound model named */
   sounds: SoundCheckView[];
+  /** Mechanical repair guide from the sound findings (not rejected; undecided ones count with the model's answer) */
+  mechanical: MechanicalPlanView;
 };
+
+export type MechanicalPlanView = Omit<MechanicalPlan, 'services'> & { services: (MechanicalPlan['services'][number] & { name: string })[] };
 
 export type SoundCheckView = {
   soundCheckId: number;
@@ -86,6 +91,8 @@ export type SoundCheckView = {
   label: SoundLabel;
   confidence: number;
   sure: boolean;
+  /** False when the recording did not sound like the training recordings (then never "sure"); null before the check */
+  familiar: boolean | null;
   probabilities: { label: SoundLabel; probability: number }[];
   reviewStatus: 'pending' | ReviewDecision;
   correctedLabel: SoundLabel | null;
@@ -100,8 +107,11 @@ export type SoundCheckView = {
 
 export type RepairPlanView = Omit<RepairPlan, 'services'> & { services: (RepairPlan['services'][number] & { name: string })[] };
 
-/** The plan with service names (workshop.service_types), for showing it. */
-export async function withServiceNames(db: Db, plan: RepairPlan): Promise<RepairPlanView> {
+/** A plan (damage or mechanical) with service names (workshop.service_types), for showing it. */
+export async function withServiceNames<P extends { services: { code: string }[] }>(
+  db: Db,
+  plan: P,
+): Promise<Omit<P, 'services'> & { services: (P['services'][number] & { name: string })[] }> {
   if (!plan.services.length) return { ...plan, services: [] };
   const { rows } = await db.query<{ code: string; name: string }>('SELECT code, name FROM workshop.service_types WHERE code = ANY($1)', [
     plan.services.map((s) => s.code),
@@ -228,7 +238,7 @@ export async function getInspection(db: Db, id: number): Promise<InspectionDetai
 
   return {
     repair: await withServiceNames(db, repairPlan(areas)),
-    sounds: await soundChecks(db, id),
+    ...(await soundsAndPlan(db, id)),
     inspectionId: h.inspection_id,
     inspectionNo: h.inspection_no,
     status: h.status,
@@ -565,6 +575,12 @@ export async function imageStorageKey(db: Db, inspectionId: number, imageId: num
   return rows[0]?.storage_key ?? null;
 }
 
+async function soundsAndPlan(db: Db, inspectionId: number) {
+  const sounds = await soundChecks(db, inspectionId);
+  const found = sounds.filter((s) => s.finalLabel !== null).map((s) => ({ situation: s.situation, label: s.finalLabel! }));
+  return { sounds, mechanical: await withServiceNames(db, mechanicalPlan(found)) };
+}
+
 /** The sound recordings of an inspection with their results, described for people. */
 export async function soundChecks(db: Db, inspectionId: number): Promise<SoundCheckView[]> {
   const { rows } = await db.query(
@@ -586,6 +602,7 @@ export async function soundChecks(db: Db, inspectionId: number): Promise<SoundCh
       label: s.label,
       confidence: Number(s.confidence),
       sure: s.sure,
+      familiar: s.familiar,
       probabilities: s.probabilities,
       reviewStatus: s.review_status,
       correctedLabel: s.corrected_label,
@@ -603,15 +620,15 @@ export async function insertSoundCheck(
   db: Db,
   s: { inspectionId: number; situation: SoundSituation; storageKey: string; durationS: number; quality: object; label: SoundLabel;
        confidence: number; sure: boolean; probabilities: { label: string; probability: number }[]; modelVersionId: number;
-       processingMs: number },
+       processingMs: number; familiarity: { familiar: boolean } | null },
 ) {
   await db.query(
     `INSERT INTO damage.sound_checks (inspection_id, situation, storage_key, duration_s, quality, label, confidence, sure,
-                                      probabilities, model_version_id, processing_ms)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                                      probabilities, model_version_id, processing_ms, familiar, familiarity)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
     [s.inspectionId, s.situation, s.storageKey, s.durationS, JSON.stringify(s.quality), s.label, s.confidence, s.sure,
      JSON.stringify(s.probabilities.map((p) => ({ label: p.label, probability: p.probability }))), s.modelVersionId,
-     Math.round(s.processingMs)],
+     Math.round(s.processingMs), s.familiarity?.familiar ?? null, s.familiarity ? JSON.stringify(s.familiarity) : null],
   );
 }
 

@@ -73,7 +73,8 @@ export type RepairPlan = {
 };
 
 const round = (h: number) => Math.round(h * 2) / 2; // to the half hour
-const sum = (ranges: (Hours | null)[]): Hours | null => {
+/** Adds hour ranges (work done one after another), to the half hour; null when none is known. */
+export const sumHours = (ranges: (Hours | null)[]): Hours | null => {
   const known = ranges.filter((r): r is Hours => r !== null);
   return known.length ? [round(known.reduce((s, r) => s + r[0], 0)), round(known.reduce((s, r) => s + r[1], 0))] : null;
 };
@@ -91,10 +92,10 @@ export function repairPlan(areas: { label: string; severity: string | null }[]):
       .map((code) => {
         const mine = each.filter((r) => r.service === code);
         const urgent = PRIORITIES.find((p) => mine.some((r) => r.priority === p))!;
-        return { code, areas: mine.length, priority: urgent, effortHours: sum(mine.map((r) => r.effortHours)) };
+        return { code, areas: mine.length, priority: urgent, effortHours: sumHours(mine.map((r) => r.effortHours)) };
       })
       .sort((a, b) => PRIORITIES.indexOf(a.priority) - PRIORITIES.indexOf(b.priority) || (b.effortHours?.[1] ?? 0) - (a.effortHours?.[1] ?? 0)),
-    effortHours: sum(each.map((r) => r.effortHours)),
+    effortHours: sumHours(each.map((r) => r.effortHours)),
     notEstimated: each.filter((r) => r.effortHours === null).length,
   };
 }

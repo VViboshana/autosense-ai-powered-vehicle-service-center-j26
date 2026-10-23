@@ -6,11 +6,12 @@ import { Alert } from '@/components/ui/Form';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { PageHeader } from '@/layout/PageHeader';
-import { ApiError, apiUpload, fieldErrors } from '@/lib/api';
+import { ApiError, apiGet, apiUpload, fieldErrors } from '@/lib/api';
 import { formatDate, formatTime } from '@/lib/format';
 import { useApi } from '@/lib/useApi';
 import { STAGES } from '@/modules/dashboard/stages';
 import type { JobStage } from '@/modules/dashboard/dashboard.types';
+import { AnalysingScreen, type LiveProgress } from './AnalysingScreen';
 import type { InspectionDetail, SoundSituation, VehicleOption, ViewAngle } from './inspections.types';
 import { VIEW_ANGLES } from './inspections.ui';
 import { checkPhoto, type PhotoCheck } from './photoCheck';
@@ -26,10 +27,10 @@ const DEFAULT_LIMITS: UploadLimits = { maxImageMb: 10, maxImagesPerInspection: 5
 const SLOTS: ViewAngle[] = ['front', 'left', 'rear', 'right', 'other'];
 
 /**
- * Inspections › New inspection (INSPECTION_CREATE). Choose the vehicle's open job, photograph the sides that show
- * damage (one slot per side, so the view angle is always right), optionally record the vehicle starting, idling or
- * braking, then analyse. Each photo gets a quick quality check in the browser first; the upload shows its real
- * progress, then the damage service analyses the photos and recordings.
+ * Inspections › New inspection (INSPECTION_CREATE), in three steps: 1 choose the vehicle's open job, 2 photograph the
+ * sides that show damage (one slot per side, so the view angle is always right), 3 optionally record the vehicle
+ * starting, idling or braking; then analyse. Each photo gets a quick quality check in the browser first. While the
+ * damage service works, the analysing screen follows its real progress (upload, each photo, each recording).
  */
 export function NewInspectionPage() {
   const { config } = useSession();
@@ -38,6 +39,7 @@ export function NewInspectionPage() {
   const fileInput = useRef<HTMLInputElement>(null);
   const target = useRef<ViewAngle>('front');
 
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [draft, setDraft] = useState('');
   const [search, setSearch] = useState('');
   const [job, setJob] = useState<VehicleOption | null>(null);
@@ -45,7 +47,11 @@ export function NewInspectionPage() {
   const [sounds, setSounds] = useState<Partial<Record<SoundSituation, Sound>>>({});
   const [problem, setProblem] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
-  const [upload, setUpload] = useState<{ sent: number; bytes: number } | null>(null);
+  // The analysis under way: what was sent, how much of it is uploaded, what the server reported, its answer
+  const [run, setRun] = useState<Run | null>(null);
+  const [sent, setSent] = useState(0);
+  const [live, setLive] = useState<LiveProgress | null>(null);
+  const [result, setResult] = useState<InspectionDetail | null>(null);
 
   // Search as the user types, but wait until they pause (one request instead of one per key)
   useEffect(() => {
@@ -54,15 +60,20 @@ export function NewInspectionPage() {
   }, [draft]);
   const options = useApi<VehicleOption[]>('/inspections/vehicle-options', { search });
 
-  // Opened from "Start inspection" (Bay monitor or job list): choose that job straight away
+  // Opened from "Start inspection" (Bay monitor or job list): choose that job straight away and go on to the photos
   const [params] = useSearchParams();
   const wanted = Number(params.get('job')) || null;
   const preselected = useRef(false);
   useEffect(() => {
     if (preselected.current || !wanted || !options.data) return;
     const match = options.data.find((o) => o.jobId === wanted);
-    if (match) setJob(match);
     preselected.current = true;
+    if (!match) return;
+    const raf = requestAnimationFrame(() => {
+      setJob(match);
+      setStep(2);
+    });
+    return () => cancelAnimationFrame(raf);
   }, [wanted, options.data]);
 
   // Previews are object URLs: free them when the page closes (replaced or removed ones are freed straight away)
@@ -77,9 +88,24 @@ export function NewInspectionPage() {
   }, [sounds]);
   useEffect(() => () => Object.values(soundsRef.current).forEach((s) => s && URL.revokeObjectURL(s.url)), []);
 
+  // Once uploaded, follow the analysis on the server until its answer arrives
+  const analysing = run !== null && sent >= 1 && result === null;
+  const progressId = run?.progressId;
+  useEffect(() => {
+    if (!analysing || !progressId) return;
+    const controller = new AbortController();
+    const t = window.setInterval(() => {
+      apiGet<LiveProgress>(`/inspections/progress/${progressId}`, undefined, controller.signal).then(setLive).catch(() => {});
+    }, 300);
+    return () => {
+      window.clearInterval(t);
+      controller.abort();
+    };
+  }, [analysing, progressId]);
+
   const taken = SLOTS.filter((a) => shots[a]);
   const full = taken.length >= limits.maxImagesPerInspection;
-  const busy = upload !== null;
+  const busy = run !== null;
 
   function pick(angle: ViewAngle) {
     target.current = angle;
@@ -117,35 +143,58 @@ export function NewInspectionPage() {
       .catch(() => setShots((all) => (all[angle]?.file === file ? { ...all, [angle]: { ...shot, check: 'failed' } } : all)));
   }
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
+  /** Uploads the photos (and, from step 3, the recordings), then shows the analysis as the server reports it. */
+  async function analyse(withSound: boolean) {
     if (!job || taken.length === 0) return;
     setError(null);
+    const situations = withSound ? recorded : [];
+    const id = newProgressId();
     const form = new FormData();
     form.append('jobId', String(job.jobId));
+    form.append('progressId', id);
     for (const angle of taken) {
       form.append('images', shots[angle]!.file);
       form.append('viewAngles', angle);
     }
-    for (const situation of recorded) {
+    for (const situation of situations) {
       form.append('sounds', sounds[situation]!.file);
       form.append('soundSituations', situation);
     }
-    const bytes = taken.reduce((s, a) => s + shots[a]!.file.size, 0) + recorded.reduce((s, k) => s + sounds[k]!.file.size, 0);
-    setUpload({ sent: 0, bytes });
+    setRun({
+      progressId: id,
+      bytes: taken.reduce((s, a) => s + shots[a]!.file.size, 0) + situations.reduce((s, k) => s + sounds[k]!.file.size, 0),
+      photos: taken.map((angle) => ({ angle, preview: shots[angle]!.preview })),
+      sounds: situations.map((situation) => ({ situation, file: sounds[situation]!.file })),
+    });
+    setSent(0);
+    setLive(null);
+    setResult(null);
     try {
-      const created = await apiUpload<InspectionDetail>('/inspections', form, (sent) => setUpload({ sent, bytes }));
-      const found = created.images.flatMap((im) => im.detections).length;
-      const heard = created.sounds.length;
-      navigate(`/inspections/${created.inspectionId}`, {
-        state: {
-          toast: `Inspection ${created.inspectionNo} created: ${found} ${found === 1 ? 'region' : 'regions'}${heard ? ` and ${heard} sound ${heard === 1 ? 'result' : 'results'}` : ''} to check`,
-        },
-      });
+      setResult(await apiUpload<InspectionDetail>('/inspections', form, setSent));
     } catch (err) {
       setError(err);
-      setUpload(null);
+      setRun(null);
+      // Back to the step the problem is in
+      const f = fieldErrors(err);
+      if (f.vehicleId || f.jobId) setStep(1);
+      else if (f.images || f.viewAngles) setStep(2);
+      else if (f.sounds) setStep(3);
     }
+  }
+
+  function openResult() {
+    if (!result) return;
+    const found = result.images.flatMap((im) => im.detections).length;
+    const heard = result.sounds.length;
+    navigate(`/inspections/${result.inspectionId}`, {
+      state: {
+        toast: `Inspection ${result.inspectionNo} created: ${found} ${found === 1 ? 'region' : 'regions'}${heard ? ` and ${heard} sound ${heard === 1 ? 'result' : 'results'}` : ''} to check`,
+      },
+    });
+  }
+
+  function submit(e: FormEvent) {
+    e.preventDefault(); // Enter in the search box must not analyse; only the Analyse button does
   }
 
   const fields = fieldErrors(error);
@@ -153,22 +202,60 @@ export function NewInspectionPage() {
     const c = shots[a]!.check;
     return typeof c === 'object' && c.warnings.length > 0;
   }).length;
+  const reachable = (s: 1 | 2 | 3) => s === 1 || (s === 2 && !!job) || (s === 3 && !!job && taken.length > 0);
+  const analyseLabel = (withSound: boolean) =>
+    `Analyse ${taken.length > 1 ? `${taken.length} photos` : 'photo'}${withSound && recorded.length > 0 ? ` + ${recorded.length} ${recorded.length === 1 ? 'recording' : 'recordings'}` : ''}`;
 
   return (
     <>
-      <PageHeader title="New inspection" subtitle="Photograph the damaged sides of the vehicle; the damage model marks the damage for a technician to check." />
+      <PageHeader title="New inspection" subtitle="Photograph the damaged sides and, if you can, record the engine; the AI marks the damage and names the sounds for a technician to check." />
       <div className="app-content">
         <div className="container-fluid">
-          <form onSubmit={submit} noValidate>
-            {error instanceof ApiError && <Alert>{error.message}</Alert>}
+          {error instanceof ApiError && <Alert>{error.message}</Alert>}
 
+          {run ? (
+            <AnalysingScreen
+              photos={run.photos}
+              sounds={run.sounds}
+              upload={{ sent, bytes: run.bytes }}
+              live={live}
+              result={result}
+              onFinished={openResult}
+            />
+          ) : (
+          <form onSubmit={submit} noValidate>
+            <ol className="as-wiz" aria-label="Steps">
+              {([
+                [1, 'Vehicle', job ? job.registrationNo : 'Choose the open job'],
+                [2, 'Photos', taken.length ? `${taken.length} of ${limits.maxImagesPerInspection} taken` : 'Each damaged side'],
+                [3, 'Sound', recorded.length ? `${recorded.length} ${recorded.length === 1 ? 'recording' : 'recordings'}` : 'Optional'],
+              ] as const).map(([n, title, note]) => {
+                const done = n < step || (n === 1 && !!job && step > 1);
+                return (
+                  <li key={n}>
+                    <button
+                      type="button"
+                      className={`${step === n ? 'on' : ''}${done ? ' done' : ''}`}
+                      aria-current={step === n ? 'step' : undefined}
+                      disabled={!reachable(n)}
+                      onClick={() => setStep(n)}
+                    >
+                      <span className="as-wiz-n">{done ? <i className="bi bi-check-lg" aria-hidden="true" /> : n}</span>
+                      <span className="as-wiz-text"><b>{title}</b><small>{note}</small></span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+
+            {step === 1 && (
             <Card className="mb-3" icon="bi-car-front" title="1. Vehicle" subtitle="Choose the vehicle's open job.">
               <div className="as-card-body">
               {job ? (
                 <div className="as-dmg-job" aria-pressed="true">
                   <i className="bi bi-check-circle-fill text-success" aria-hidden="true" />
                   <JobLine o={job} />
-                  <button type="button" className="btn btn-sm btn-light" disabled={busy} onClick={() => setJob(null)}>Change</button>
+                  <button type="button" className="btn btn-sm btn-light" onClick={() => setJob(null)}>Change</button>
                 </div>
               ) : (
                 <>
@@ -192,7 +279,16 @@ export function NewInspectionPage() {
                   ) : (
                     <div className="as-dmg-jobs">
                       {options.data.map((o) => (
-                        <button key={o.jobId} type="button" className="as-dmg-job" aria-pressed="false" onClick={() => setJob(o)}>
+                        <button
+                          key={o.jobId}
+                          type="button"
+                          className="as-dmg-job"
+                          aria-pressed="false"
+                          onClick={() => {
+                            setJob(o);
+                            setStep(2);
+                          }}
+                        >
                           <JobLine o={o} />
                           <i className="bi bi-chevron-right text-body-secondary" aria-hidden="true" />
                         </button>
@@ -204,7 +300,9 @@ export function NewInspectionPage() {
               {fields.vehicleId && <div className="text-danger small mt-2">{fields.vehicleId}</div>}
               </div>
             </Card>
+            )}
 
+            {step === 2 && (
             <Card
               className="mb-3"
               icon="bi-camera"
@@ -261,29 +359,69 @@ export function NewInspectionPage() {
               </p>
               </div>
             </Card>
-
-            <SoundCapture sounds={sounds} onChange={setSound} disabled={busy} />
-            {fields.sounds && <Alert>{fields.sounds}</Alert>}
-
-            {upload ? (
-              <UploadProgress sent={upload.sent} bytes={upload.bytes} photos={taken.length} sounds={recorded.length} />
-            ) : (
-              <div className="d-flex align-items-center gap-3 mb-4">
-                <button type="submit" className="btn btn-primary" disabled={!job || taken.length === 0}>
-                  <i className="bi bi-magic me-1" aria-hidden="true" />
-                  Analyse {taken.length > 1 ? `${taken.length} photos` : 'photo'}
-                  {recorded.length > 0 && ` + ${recorded.length} ${recorded.length === 1 ? 'recording' : 'recordings'}`}
-                </button>
-                <span className="small text-body-secondary">
-                  {!job ? 'Choose the vehicle first.' : taken.length === 0 ? 'Add at least one photo.' : 'The result opens for review.'}
-                </span>
-              </div>
             )}
+
+            {step === 3 && (
+              <>
+                <SoundCapture sounds={sounds} onChange={setSound} disabled={busy} />
+                {fields.sounds && <Alert>{fields.sounds}</Alert>}
+              </>
+            )}
+
+            <div className="as-wiz-foot">
+              {step > 1 && (
+                <button type="button" className="btn btn-light" onClick={() => setStep((step - 1) as 1 | 2)}>
+                  <i className="bi bi-arrow-left me-1" aria-hidden="true" />Back
+                </button>
+              )}
+              <span className="small text-body-secondary me-auto">
+                {step === 1
+                  ? job ? 'Vehicle chosen.' : 'Choose the vehicle first.'
+                  : step === 2
+                    ? taken.length === 0 ? 'Add at least one photo.' : 'Next: record the engine, or analyse the photos only.'
+                    : recorded.length === 0 ? 'No recordings: only the photos will be analysed.' : 'The results open for review.'}
+              </span>
+              {step === 1 && (
+                <button type="button" className="btn btn-primary" disabled={!job} onClick={() => setStep(2)}>
+                  Next: photos<i className="bi bi-arrow-right ms-1" aria-hidden="true" />
+                </button>
+              )}
+              {step === 2 && (
+                <>
+                  <button type="button" className="btn btn-light" disabled={taken.length === 0} onClick={() => void analyse(false)}>
+                    <i className="bi bi-magic me-1" aria-hidden="true" />{analyseLabel(false)} only
+                  </button>
+                  <button type="button" className="btn btn-primary" disabled={taken.length === 0} onClick={() => setStep(3)}>
+                    Next: sound<i className="bi bi-arrow-right ms-1" aria-hidden="true" />
+                  </button>
+                </>
+              )}
+              {step === 3 && (
+                <button type="button" className="btn btn-primary as-wiz-go" disabled={!job || taken.length === 0} onClick={() => void analyse(true)}>
+                  <i className="bi bi-magic me-1" aria-hidden="true" />{analyseLabel(true)}
+                </button>
+              )}
+            </div>
           </form>
+          )}
         </div>
       </div>
     </>
   );
+}
+
+type Run = {
+  progressId: string;
+  bytes: number;
+  photos: { angle: ViewAngle; preview: string }[];
+  sounds: { situation: SoundSituation; file: File }[];
+};
+
+/** An id for following this analysis (letters, digits and dashes, as the server expects). */
+function newProgressId() {
+  return typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function FilledSlot({ angle, shot, disabled, onReplace, onRemove }: {
@@ -328,31 +466,6 @@ function FilledSlot({ angle, shot, disabled, onReplace, onRemove }: {
         </div>
       </div>
     </div>
-  );
-}
-
-/** Real upload progress (bytes sent), then an honest "analysing" state while the server runs the model. */
-function UploadProgress({ sent, bytes, photos, sounds }: { sent: number; bytes: number; photos: number; sounds: number }) {
-  const uploading = sent < 1;
-  const mb = (n: number) => (n / 1024 / 1024).toFixed(1);
-  return (
-    <section className="as-card as-dmg-progress mb-4" aria-live="polite">
-      <div className="d-flex justify-content-between align-items-baseline flex-wrap gap-2">
-        <b>
-          {uploading ? (
-            `Uploading ${photos === 1 ? 'the photo' : `${photos} photos`}${sounds ? ` and ${sounds === 1 ? 'the recording' : `${sounds} recordings`}` : ''}`
-          ) : (
-            <><span className="spinner-border spinner-border-sm me-2" aria-hidden="true" />Analysing on the server</>
-          )}
-        </b>
-        <span className="small text-body-secondary as-num">
-          {uploading ? `${mb(sent * bytes)} of ${mb(bytes)} MB · ${Math.round(sent * 100)}%` : `Finding the vehicle and the damage; about a second per photo${sounds ? ' and per recording' : ''}`}
-        </span>
-      </div>
-      <div className={`as-dmg-bar${uploading ? '' : ' working'}`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(sent * 100)}>
-        <i style={{ width: `${Math.round(sent * 100)}%` }} />
-      </div>
-    </section>
   );
 }
 

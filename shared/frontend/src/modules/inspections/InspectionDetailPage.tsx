@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useSession } from '@/app/session';
 import { Card } from '@/components/ui/Card';
 import { Alert, SelectField } from '@/components/ui/Form';
@@ -13,7 +13,7 @@ import { useApi } from '@/lib/useApi';
 import { Celebration } from './Celebration';
 import { DamagePhoto } from './DamagePhoto';
 import { PhotoViewer } from './PhotoViewer';
-import { SoundResults } from './SoundResults';
+import { MechanicalGuide, SoundResults } from './SoundResults';
 import { Toasts } from './Toasts';
 import { useToasts } from './useToasts';
 import type { DamageLabel, Detection, InspectionDetail, RepairPlan, Severity } from './inspections.types';
@@ -24,8 +24,8 @@ import './inspections.css';
 const AI_STEPS = ['Detect', 'Outline', 'Grade', 'Plan'];
 
 /**
- * One inspection: each photo with the damage outlines, and beside it the regions the model found; then the sound
- * results, if the vehicle was recorded. A technician confirms, corrects or rejects each region and sound result
+ * One inspection, in two tabs: Visual (each photo with the damage outlines and the regions the model found, then the
+ * repair guide) and, if the vehicle was recorded, Sound (each recording's result, then the mechanical guide). A technician confirms, corrects or rejects each region and sound result
  * (INSPECTION_REVIEW); once none is left to review, someone with INSPECTION_CONFIRM confirms the inspection, which
  * makes it final and visible to the customer.
  */
@@ -48,6 +48,7 @@ export function InspectionDetailPage() {
   const { toasts, show } = useToasts();
   const location = useLocation();
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
 
   // A message handed over by the previous page (e.g. "Inspection created"), shown once
   useEffect(() => {
@@ -100,6 +101,13 @@ export function InspectionDetailPage() {
   const pending = findings.filter((d) => d.reviewStatus === 'pending').length + soundsPending;
   const possible = all.filter(isOpenSuggestion).length;
   const order = [...numbers.keys()]; // regions in the order they are numbered: findings, then possible damage
+  const visualPending = pending - soundsPending;
+  const hasSound = data.sounds.length > 0;
+  const view: 'visual' | 'sound' = hasSound && params.get('view') === 'sound' ? 'sound' : 'visual';
+  const openView = (v: 'visual' | 'sound') => {
+    setSelected(null);
+    setParams(v === 'sound' ? { view: 'sound' } : {}, { replace: true });
+  };
   const modalOpen = !!(correcting || confirming || adding || drawingImage) || viewerIndex !== null;
 
   /** Shows the decision at once, then the server's version; puts the page back if saving fails. */
@@ -223,8 +231,6 @@ export function InspectionDetailPage() {
             </div>
           </section>
 
-          <RepairGuide plan={data.repair} reviewing={data.status === 'awaiting_review'} />
-
           {editable && (
             <ReviewProgress
               reviewed={findings.length + data.sounds.length - pending}
@@ -235,7 +241,7 @@ export function InspectionDetailPage() {
           )}
           {editable && (
             <ReviewKeys
-              disabled={modalOpen}
+              disabled={modalOpen || view === 'sound'}
               order={order}
               selected={selected}
               onMove={setSelected}
@@ -252,17 +258,31 @@ export function InspectionDetailPage() {
             />
           )}
 
-          <Alert tone="info">
-            Damage is found by an AI model and the severity is a preliminary estimate ({data.severityMethod ?? 'rule-v0'}),
-            {data.severityValidated ? ' validated against technician labels.' : ' not yet validated.'} Confidence is the model's
-            confidence, not a probability of being right. Check every region before confirming.
-          </Alert>
           {data.status === 'confirmed' && (
             <Alert tone="success">
               Confirmed{data.reviewedBy && ` by ${data.reviewedBy}`}{data.reviewedAt && ` on ${formatDate(data.reviewedAt)} at ${formatTime(data.reviewedAt)}`}.
               {data.reviewNotes && <div className="mt-1">Note: {data.reviewNotes}</div>}
             </Alert>
           )}
+
+          {hasSound && (
+            <InspectionSwitch
+              view={view}
+              onView={openView}
+              photos={data.images.length}
+              regions={findings.filter((d) => d.reviewStatus !== 'rejected').length}
+              sounds={data.sounds.length}
+              visualPending={editable ? visualPending + possible : 0}
+              soundPending={editable ? soundsPending : 0}
+            />
+          )}
+
+          {view === 'visual' && <div className="as-insp-panel" role={hasSound ? 'tabpanel' : undefined} id="insp-visual">
+          <Alert tone="info">
+            Damage is found by an AI model and the severity is a preliminary estimate ({data.severityMethod ?? 'rule-v0'}),
+            {data.severityValidated ? ' validated against technician labels.' : ' not yet validated.'} Confidence is the model's
+            confidence, not a probability of being right. Check every region before confirming.
+          </Alert>
 
           {data.images.map((image) => (
             <Card
@@ -364,7 +384,23 @@ export function InspectionDetailPage() {
             </Card>
           ))}
 
-          {data.sounds.length > 0 && (
+          <RepairGuide plan={data.repair} reviewing={data.status === 'awaiting_review'} />
+
+          {editable && visualPending === 0 && soundsPending > 0 && (
+            <div className="as-insp-nudge">
+              <i className="bi bi-soundwave" aria-hidden="true" />
+              <span>
+                <b>Photos done.</b> {soundsPending} sound {soundsPending === 1 ? 'result is' : 'results are'} still to review
+                before the inspection can be confirmed.
+              </span>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => openView('sound')}>
+                Open sound inspection<i className="bi bi-arrow-right ms-1" aria-hidden="true" />
+              </button>
+            </div>
+          )}
+          </div>}
+
+          {view === 'sound' && <div className="as-insp-panel" role="tabpanel" id="insp-sound">
             <SoundResults
               inspectionId={data.inspectionId}
               sounds={data.sounds}
@@ -375,7 +411,8 @@ export function InspectionDetailPage() {
               }}
               onError={setActionError}
             />
-          )}
+            <MechanicalGuide plan={data.mechanical} reviewing={data.status === 'awaiting_review'} />
+          </div>}
         </div>
       </div>
 
@@ -440,6 +477,41 @@ export function InspectionDetailPage() {
       )}
       <Toasts toasts={toasts} />
     </>
+  );
+}
+
+/** Visual | Sound: the two halves of an inspection, each with what is still to review. */
+function InspectionSwitch({ view, onView, photos, regions, sounds, visualPending, soundPending }: {
+  view: 'visual' | 'sound';
+  onView: (v: 'visual' | 'sound') => void;
+  photos: number;
+  regions: number;
+  sounds: number;
+  visualPending: number;
+  soundPending: number;
+}) {
+  const tab = (key: 'visual' | 'sound', icon: string, title: string, facts: string, open: number) => (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={view === key}
+      aria-controls={`insp-${key}`}
+      className={view === key ? 'on' : ''}
+      onClick={() => onView(key)}
+    >
+      <span className="as-insp-icon"><i className={`bi ${icon}`} aria-hidden="true" /></span>
+      <span className="as-insp-text">
+        <b>{title}</b>
+        <small>{facts}</small>
+      </span>
+      {open > 0 ? <span className="as-insp-badge">{open} to review</span> : <i className="bi bi-check2-circle as-insp-done" aria-label="Nothing to review" />}
+    </button>
+  );
+  return (
+    <nav className="as-insp-switch" role="tablist" aria-label="Inspection parts">
+      {tab('visual', 'bi-camera', 'Visual inspection', `${photos} ${photos === 1 ? 'photo' : 'photos'} · ${regions} ${regions === 1 ? 'region' : 'regions'}`, visualPending)}
+      {tab('sound', 'bi-soundwave', 'Sound inspection', `${sounds} ${sounds === 1 ? 'recording' : 'recordings'}`, soundPending)}
+    </nav>
   );
 }
 

@@ -148,7 +148,7 @@ export function InspectionReportView({ vehicle, report, history, onPick }: {
               </div>
             </div>
 
-            {report.sounds.length > 0 && <WhatWeHeard sounds={report.sounds} />}
+            {report.sounds.length > 0 && <WhatWeHeard sounds={report.sounds} mechanical={report.mechanical} />}
 
             <div className="cp-card cp-rise as-no-print" style={{ '--i': 7 } as CSSProperties}>
               <div className="cp-card-h"><i className="bi bi-clock-history" aria-hidden="true" />This vehicle's inspections</div>
@@ -217,7 +217,7 @@ function WhatNeedsDoing({ plan }: { plan: InspectionReport['repair'] }) {
 const SITUATION_NAMES = { starting: 'Starting', idling: 'Idling', braking: 'Braking' } as const;
 
 /** Sound results a technician confirmed: what the vehicle sounded like starting, idling or braking. */
-function WhatWeHeard({ sounds }: { sounds: InspectionReport['sounds'] }) {
+function WhatWeHeard({ sounds, mechanical }: { sounds: InspectionReport['sounds']; mechanical: InspectionReport['mechanical'] }) {
   return (
     <div className="cp-card cp-rise" style={{ '--i': 6 } as CSSProperties}>
       <div className="cp-card-h"><i className="bi bi-soundwave" aria-hidden="true" />What we heard</div>
@@ -234,6 +234,20 @@ function WhatWeHeard({ sounds }: { sounds: InspectionReport['sounds'] }) {
             </li>
           ))}
         </ul>
+        {mechanical.items.length > 0 && (
+          <div className="cp-mech">
+            <div className="cp-eyebrow">Mechanical work suggested</div>
+            <ul>
+              {mechanical.items.map((i) => (
+                <li key={i.label}>
+                  <b>{mechanical.services.find((s) => s.code === i.service)?.name ?? i.service}</b>
+                  <span className="text-body-secondary"> · {i.why}</span>
+                  {i.priority === 'before_driving' && <span className="cp-pill cp-tone-danger ms-1">Before driving</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <p className="small text-body-secondary mt-2 mb-0">
           From short recordings of your vehicle, checked by a technician. A sound check points to what to look at; it is not a diagnosis.
         </p>

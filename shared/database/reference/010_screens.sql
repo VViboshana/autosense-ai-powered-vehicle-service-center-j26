@@ -50,7 +50,7 @@ INSERT INTO app.screens (screen_code, name, url, parent_code, icon, display_orde
     ('SETUP',                 'Feature setup',             NULL,                       'MANAGE',         'bi-tools',              92,  true,  false, 'shared',      'manage', 'staff'),
     ('BAYS_CAMERAS',          'Bays & cameras',            '/setup/bays',              'SETUP',          'bi-bounding-box',       93,  true,  false, 'occupancy',   'manage', 'staff'),
     ('OCCUPANCY_SETTINGS',    'Occupancy settings',        '/setup/occupancy',         'SETUP',          'bi-p-square',           94,  true,  false, 'occupancy',   'manage', 'staff'),
-    ('DAMAGE_SETTINGS',       'Damage settings',           '/setup/damage',            'SETUP',          'bi-clipboard-check',    95,  true,  false, 'damage',      'manage', 'staff'),
+    ('DAMAGE_SETTINGS',       'AI performance',            '/setup/ai',                'SETUP',          'bi-cpu',                95,  true,  false, 'damage',      'manage', 'staff'),
     ('MAINTENANCE_SETTINGS',  'Maintenance settings',      '/setup/maintenance',       'SETUP',          'bi-wrench-adjustable',  96,  true,  false, 'maintenance', 'manage', 'staff'),
     ('ALERT_RULES',           'Alert rules',               '/setup/alert-rules',       'SETUP',          'bi-shield-check',       97,  true,  false, 'security',    'manage', 'staff'),
     ('ADMINISTRATION',        'Administration',            NULL,                       'MANAGE',         'bi-gear',               100, true,  false, 'shared',      'admin',  'staff'),

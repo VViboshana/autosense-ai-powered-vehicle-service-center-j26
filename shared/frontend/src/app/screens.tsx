@@ -7,7 +7,7 @@ import { DashboardPage } from '@/modules/dashboard/DashboardPage';
 import { BookingsPage } from '@/modules/floor/BookingsPage';
 import { JobsPage } from '@/modules/floor/JobsPage';
 import { VehicleRequestsPage } from '@/modules/floor/VehicleRequestsPage';
-import { DamagePerformancePage } from '@/modules/inspections/DamagePerformancePage';
+import { AiHubPage } from '@/modules/ai/AiHubPage';
 import { InspectionDetailPage } from '@/modules/inspections/InspectionDetailPage';
 import { InspectionListPage } from '@/modules/inspections/InspectionListPage';
 import { NewInspectionPage } from '@/modules/inspections/NewInspectionPage';
@@ -68,5 +68,5 @@ export const SCREENS: ScreenRoute[] = [
   { code: 'CAMERAS', path: '/safety/cameras', element: <CamerasPage /> },
   { code: 'CAMERAS', also: ['SAFETY_ALERTS'], path: '/safety/videos/:id', element: <VideoAnalysisPage /> },
   { code: 'ALERT_RULES', path: '/setup/alert-rules', element: <AlertRulesPage /> },
-  { code: 'DAMAGE_SETTINGS', path: '/setup/damage', element: <DamagePerformancePage /> },
+  { code: 'DAMAGE_SETTINGS', path: '/setup/ai', element: <AiHubPage /> },
 ];

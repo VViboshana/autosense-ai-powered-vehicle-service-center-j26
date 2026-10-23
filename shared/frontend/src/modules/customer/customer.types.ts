@@ -59,6 +59,13 @@ export type InspectionReport = {
   repair: RepairPlan;
   /** What the technician confirmed from the sound recordings (none when the vehicle was not recorded) */
   sounds: { situation: 'starting' | 'idling' | 'braking'; label: string; name: string; advice: string; normal: boolean }[];
+  /** Mechanical work from the confirmed sounds (sound-repair-v0) */
+  mechanical: {
+    priority: Priority | null;
+    items: { label: string; name: string; priority: Priority; why: string; service: string; effortHours: [number, number] }[];
+    services: { code: string; name: string }[];
+    effortHours: [number, number] | null;
+  };
 };
 
 type Section<T> = { available: false } | { available: true; connected?: boolean; data: T };

@@ -16,13 +16,15 @@ import { moveStage } from '../jobs/jobs.repository.js';
 import * as repo from './inspections.repository.js';
 import type { ReviewDecision, ViewAngle } from './inspections.repository.js';
 import { extensionFor, finalSeverity, formatInspectionNo, isDamageLabel, worstSeverity, type DamageLabel, type Severity } from './inspections.rules.js';
+import { mechanicalPlan } from './inspections.mechanical.js';
+import { silentReporter, type Reporter } from './inspections.progress.js';
 import { audioExtensionFor, belongsTo, SOUND_FAULTS, type SoundLabel, type SoundSituation } from './inspections.sound.js';
 
 export type InspectionDeps = { pool: pg.Pool; damageServiceUrl?: string; uploadDir: string };
 export type SoundRecording = SoundUpload & { situation: SoundSituation };
 
 /** Registered in app.model_versions next to the damage model (same component, its own name). */
-const SOUND_MODEL_NAME = 'panns-mfcc-sound-classifier';
+export const SOUND_MODEL_NAME = 'panns-mfcc-sound-classifier';
 
 /**
  * New inspection: every photo, and every sound recording (optional, one per situation), goes to the damage service
@@ -35,6 +37,22 @@ const SOUND_MODEL_NAME = 'panns-mfcc-sound-classifier';
 export async function createInspection(
   deps: InspectionDeps,
   input: { jobId?: number; vehicleId?: number; viewAngles: ViewAngle[]; photos: PhotoUpload[]; sounds?: SoundRecording[]; userId: number },
+  report: Reporter = silentReporter,
+) {
+  try {
+    const id = await analyseAndSave(deps, input, report);
+    report.done(id);
+    return id;
+  } catch (err) {
+    report.failed();
+    throw err;
+  }
+}
+
+async function analyseAndSave(
+  deps: InspectionDeps,
+  input: { jobId?: number; vehicleId?: number; viewAngles: ViewAngle[]; photos: PhotoUpload[]; sounds?: SoundRecording[]; userId: number },
+  report: Reporter,
 ) {
   const target = await repo.findJobOrVehicle(deps.pool, input);
   if (!target) throw new NotFoundError(input.jobId ? 'That job does not exist.' : 'That vehicle does not exist.');
@@ -44,8 +62,14 @@ export async function createInspection(
   if (target.jobStage === 'cancelled') throw new BusinessRuleError('JOB_CANCELLED', 'This job was cancelled.');
 
   // One photo at a time: the service runs one prediction at a time anyway.
+  const sounds = input.sounds ?? [];
+  report.start(input.photos.length, sounds.length);
   const results: DamagePrediction[] = [];
-  for (const photo of input.photos) results.push(await analysePhoto(deps.damageServiceUrl, photo));
+  for (const [n, photo] of input.photos.entries()) {
+    const result = await analysePhoto(deps.damageServiceUrl, photo);
+    results.push(result);
+    report.photo(input.viewAngles[n] ?? 'other', result);
+  }
 
   if (results.some((r) => r.model.placeholder)) {
     throw new ServiceUnavailableError(
@@ -57,10 +81,10 @@ export async function createInspection(
   if (versions.size > 1) throw new ServiceUnavailableError('DAMAGE_MODEL_CHANGED', 'The damage model changed while the photos were assessed. Try again.');
   const first = results[0]!;
 
-  const sounds = input.sounds ?? [];
   const heard: SoundAnalysis[] = [];
   for (const sound of sounds) {
     const analysis = await analyseSound(deps.damageServiceUrl, sound, sound.situation);
+    report.sound(sound.situation, analysis);
     if (!analysis.result) {
       const why = analysis.quality.warnings[0] ?? 'The recording could not be used.';
       throw new ValidationError(`${capitalise(sound.situation)} recording: ${why}`, [{ field: 'sounds', message: why }]);
@@ -71,6 +95,7 @@ export async function createInspection(
     heard.push(analysis);
   }
 
+  report.saving();
   const id = await repo.nextInspectionId(deps.pool);
   const inspectionNo = formatInspectionNo(id);
   const folder = path.join('inspections', inspectionNo);
@@ -142,6 +167,7 @@ export async function createInspection(
           probabilities: analysis.probabilities,
           modelVersionId: await repo.modelVersionId(client, analysis.model.version, SOUND_MODEL_NAME),
           processingMs: analysis.processingMs,
+          familiarity: analysis.familiarity,
         });
       }
       await audit(client, {
@@ -300,7 +326,9 @@ export async function confirmInspection(pool: pg.Pool, c: { inspectionId: number
     );
     await repo.markConfirmed(client, { inspectionId: c.inspectionId, overallSeverity, notes: c.notes, userId: c.userId });
     // Sound findings do not change the damage severity; they travel in the report event for the maintenance forecast
-    const sounds = (await repo.keptSoundFindings(client, c.inspectionId)).map((s) => ({ ...s, normal: SOUND_FAULTS[s.label].normal }));
+    const heard = await repo.keptSoundFindings(client, c.inspectionId);
+    const sounds = heard.map((s) => ({ ...s, normal: SOUND_FAULTS[s.label].normal }));
+    const mechanical = mechanicalPlan(heard);
     // Service flow: the job's damage inspection is done (the vehicle stays in its bay until it is ready)
     if (inspection.job_id) {
       await moveStage(client, {
@@ -318,6 +346,8 @@ export async function confirmInspection(pool: pg.Pool, c: { inspectionId: number
         overallSeverity,
         damage: kept.map((d) => ({ label: d.corrected_label ?? d.label, severity: d.corrected_severity ?? d.severity })),
         sounds,
+        // Mechanical work from the sounds (sound-repair-v0): priority, services and proposed hours for the forecast
+        mechanical: { method: mechanical.method, priority: mechanical.priority, services: mechanical.services, effortHours: mechanical.effortHours },
       })],
     );
     await audit(client, {

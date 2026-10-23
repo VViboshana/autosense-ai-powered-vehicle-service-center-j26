@@ -93,6 +93,17 @@ export type InspectionDetail = {
   repair: RepairPlan;
   /** Sound recordings made with the inspection, at most one per situation */
   sounds: SoundCheck[];
+  /** Mechanical repair guide from the sound findings (sound-repair-v0), kept apart from the body-damage plan */
+  mechanical: MechanicalPlan;
+};
+
+export type MechanicalPlan = {
+  method: string;
+  validated: boolean;
+  priority: Priority | null;
+  items: { situation: SoundSituation; label: SoundLabel; name: string; priority: Priority; why: string; service: string; effortHours: Hours }[];
+  services: { code: string; name: string; faults: number; priority: Priority; effortHours: Hours | null }[];
+  effortHours: Hours | null;
 };
 
 /** Sound inspection (backend inspections.sound.ts): the technician picks what the vehicle was doing. */
@@ -113,6 +124,8 @@ export type SoundCheck = {
   confidence: number;
   /** Confidence at or above the service's "sure" level (0.7) */
   sure: boolean;
+  /** False when it did not sound like the engine-bay recordings the model learned from (then never "sure") */
+  familiar: boolean | null;
   probabilities: { label: SoundLabel; probability: number }[];
   reviewStatus: ReviewStatus;
   correctedLabel: SoundLabel | null;

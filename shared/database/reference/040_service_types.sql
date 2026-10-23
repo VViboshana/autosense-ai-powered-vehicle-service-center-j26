@@ -14,5 +14,9 @@ INSERT INTO workshop.service_types (code, name, default_minutes) VALUES
     -- What the damage inspection can suggest besides body repair (member 2's repair guide, repair-v0)
     ('GLASS_REPLACEMENT', 'Glass replacement',  120),
     ('LIGHTING_REPAIR',   'Lighting repair',     60),
-    ('TYRE_SERVICE',      'Tyre service',        30)
+    ('TYRE_SERVICE',      'Tyre service',        30),
+    -- What the sound inspection can suggest (member 2's mechanical guide, sound-repair-v0)
+    ('BATTERY_SERVICE',   'Battery service',     45),
+    ('STEERING_SERVICE',  'Steering service',    90),
+    ('BELT_REPLACEMENT',  'Belt replacement',    60)
 ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name;
