@@ -309,3 +309,9 @@
 .cp-todo-note { margin: 0; font-size: 0.78rem; color: var(--as-muted); }
 @media (max-width: 480px) { .cp-todo-list li { grid-template-columns: auto 1fr auto; } .cp-todo-list li .text-body-secondary { display: none; } }
 .cp-tag-prio { background: var(--t-soft); color: var(--t); font-weight: 600; display: inline-flex; align-items: center; gap: 0.25rem; }
+
+/* What we heard: confirmed sound results */
+.cp-heard { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.45rem; }
+.cp-heard li { display: flex; gap: 0.65rem; align-items: flex-start; padding: 0.55rem 0.7rem; border-radius: 10px; background: var(--t-soft); border: 1px solid color-mix(in srgb, var(--t) 25%, transparent); }
+.cp-heard li > i { color: var(--t); font-size: 1.1rem; line-height: 1.3; }
+.cp-heard small { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--as-muted); }

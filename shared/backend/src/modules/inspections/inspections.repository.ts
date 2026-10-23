@@ -4,6 +4,7 @@ import { PLATE_KEY } from '../claims/claims.routes.js';
 import { groupRegions } from './inspections.areas.js';
 import { repairFor, repairPlan, type AreaRepair, type RepairPlan } from './inspections.repair.js';
 import type { DamageLabel, INSPECTION_STATUSES, OverallSeverity, REVIEW_DECISIONS, Severity, VIEW_ANGLES } from './inspections.rules.js';
+import { SOUND_FAULTS, type SoundLabel, type SoundSituation } from './inspections.sound.js';
 
 export type InspectionStatus = (typeof INSPECTION_STATUSES)[number];
 export type ViewAngle = (typeof VIEW_ANGLES)[number];
@@ -72,6 +73,29 @@ export type InspectionDetail = Omit<InspectionListItem, 'imageCount' | 'thumbnai
   }[];
   /** Repair guide for the whole inspection, from its damaged areas (overlapping regions of one damage count once) */
   repair: RepairPlanView;
+  /** Sound recordings made with the inspection (at most one per situation) and the fault the sound model named */
+  sounds: SoundCheckView[];
+};
+
+export type SoundCheckView = {
+  soundCheckId: number;
+  situation: SoundSituation;
+  url: string;
+  durationS: number | null;
+  quality: { passed?: boolean; warnings?: string[] };
+  label: SoundLabel;
+  confidence: number;
+  sure: boolean;
+  probabilities: { label: SoundLabel; probability: number }[];
+  reviewStatus: 'pending' | ReviewDecision;
+  correctedLabel: SoundLabel | null;
+  /** After review: the technician's correction, else the model's label; null when rejected */
+  finalLabel: SoundLabel | null;
+  name: string;
+  advice: string;
+  normal: boolean;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
 };
 
 export type RepairPlanView = Omit<RepairPlan, 'services'> & { services: (RepairPlan['services'][number] & { name: string })[] };
@@ -123,7 +147,9 @@ export async function listInspections(db: Db, f: InspectionFilter): Promise<Page
             (SELECT count(*) FROM damage.detections d JOIN damage.inspection_images im USING (image_id)
               WHERE im.inspection_id = i.inspection_id AND ${COUNTS_AS_FINDING}) AS detection_count,
             (SELECT count(*) FROM damage.detections d JOIN damage.inspection_images im USING (image_id)
-              WHERE im.inspection_id = i.inspection_id AND d.review_status = 'pending' AND NOT d.is_suggestion) AS pending_count,
+              WHERE im.inspection_id = i.inspection_id AND d.review_status = 'pending' AND NOT d.is_suggestion)
+              + (SELECT count(*) FROM damage.sound_checks s WHERE s.inspection_id = i.inspection_id AND s.review_status = 'pending')
+              AS pending_count,
             (SELECT count(*) FROM damage.detections d JOIN damage.inspection_images im USING (image_id)
               WHERE im.inspection_id = i.inspection_id AND d.review_status = 'pending' AND d.is_suggestion) AS possible_count
      ${from}
@@ -202,6 +228,7 @@ export async function getInspection(db: Db, id: number): Promise<InspectionDetai
 
   return {
     repair: await withServiceNames(db, repairPlan(areas)),
+    sounds: await soundChecks(db, id),
     inspectionId: h.inspection_id,
     inspectionNo: h.inspection_no,
     status: h.status,
@@ -386,13 +413,13 @@ export async function findJobOrVehicle(db: Db, input: { jobId?: number; vehicleI
 }
 
 /** The model version that produced a result, registered the first time it is seen (app.model_versions). */
-export async function modelVersionId(db: Db, version: string): Promise<number> {
+export async function modelVersionId(db: Db, version: string, name = 'yolo11-seg-cardd'): Promise<number> {
   const { rows } = await db.query<{ model_version_id: number }>(
     `INSERT INTO app.model_versions (component, name, version, notes)
-     VALUES ('damage', 'yolo11-seg-cardd', $1, 'Registered by the first inspection that used it')
+     VALUES ('damage', $2, $1, 'Registered by the first inspection that used it')
      ON CONFLICT (component, name, version) DO UPDATE SET version = EXCLUDED.version
      RETURNING model_version_id`,
-    [version],
+    [version, name],
   );
   return rows[0]!.model_version_id;
 }
@@ -534,6 +561,100 @@ export async function imageStorageKey(db: Db, inspectionId: number, imageId: num
   const { rows } = await db.query<{ storage_key: string }>(
     'SELECT storage_key FROM damage.inspection_images WHERE inspection_id = $1 AND image_id = $2',
     [inspectionId, imageId],
+  );
+  return rows[0]?.storage_key ?? null;
+}
+
+/** The sound recordings of an inspection with their results, described for people. */
+export async function soundChecks(db: Db, inspectionId: number): Promise<SoundCheckView[]> {
+  const { rows } = await db.query(
+    `SELECT s.*, ${USER_NAME('ru')} AS reviewed_by_name
+     FROM damage.sound_checks s LEFT JOIN app.users ru ON ru.user_id = s.reviewed_by
+     WHERE s.inspection_id = $1
+     ORDER BY CASE s.situation WHEN 'starting' THEN 0 WHEN 'idling' THEN 1 ELSE 2 END`,
+    [inspectionId],
+  );
+  return rows.map((s) => {
+    const finalLabel: SoundLabel | null = s.review_status === 'rejected' ? null : (s.corrected_label ?? s.label);
+    const fault = SOUND_FAULTS[(finalLabel ?? s.label) as SoundLabel];
+    return {
+      soundCheckId: s.sound_check_id,
+      situation: s.situation,
+      url: `/api/inspections/${inspectionId}/sounds/${s.sound_check_id}/audio`,
+      durationS: s.duration_s === null ? null : Number(s.duration_s),
+      quality: s.quality,
+      label: s.label,
+      confidence: Number(s.confidence),
+      sure: s.sure,
+      probabilities: s.probabilities,
+      reviewStatus: s.review_status,
+      correctedLabel: s.corrected_label,
+      finalLabel,
+      name: fault.name,
+      advice: fault.advice,
+      normal: fault.normal,
+      reviewedBy: s.reviewed_by_name,
+      reviewedAt: s.reviewed_at,
+    };
+  });
+}
+
+export async function insertSoundCheck(
+  db: Db,
+  s: { inspectionId: number; situation: SoundSituation; storageKey: string; durationS: number; quality: object; label: SoundLabel;
+       confidence: number; sure: boolean; probabilities: { label: string; probability: number }[]; modelVersionId: number;
+       processingMs: number },
+) {
+  await db.query(
+    `INSERT INTO damage.sound_checks (inspection_id, situation, storage_key, duration_s, quality, label, confidence, sure,
+                                      probabilities, model_version_id, processing_ms)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+    [s.inspectionId, s.situation, s.storageKey, s.durationS, JSON.stringify(s.quality), s.label, s.confidence, s.sure,
+     JSON.stringify(s.probabilities.map((p) => ({ label: p.label, probability: p.probability }))), s.modelVersionId,
+     Math.round(s.processingMs)],
+  );
+}
+
+/** One sound result of the inspection, for a review decision. */
+export async function soundCheckForReview(db: Db, inspectionId: number, soundCheckId: number) {
+  const { rows } = await db.query<{ sound_check_id: number; situation: SoundSituation; label: SoundLabel; review_status: string }>(
+    'SELECT sound_check_id, situation, label, review_status FROM damage.sound_checks WHERE inspection_id = $1 AND sound_check_id = $2',
+    [inspectionId, soundCheckId],
+  );
+  return rows[0] ?? null;
+}
+
+export async function setSoundReview(db: Db, r: { soundCheckId: number; decision: ReviewDecision; label: SoundLabel | null; userId: number }) {
+  await db.query(
+    `UPDATE damage.sound_checks SET review_status = $2, corrected_label = $3, reviewed_by = $4, reviewed_at = now()
+     WHERE sound_check_id = $1`,
+    [r.soundCheckId, r.decision, r.label, r.userId],
+  );
+}
+
+/** Sound results of the inspection that a technician still has to decide (they block confirming). */
+export async function pendingSoundChecks(db: Db, inspectionId: number): Promise<number> {
+  const { rows } = await db.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM damage.sound_checks WHERE inspection_id = $1 AND review_status = 'pending'`,
+    [inspectionId],
+  );
+  return rows[0]!.n;
+}
+
+/** Final sound findings (not rejected), for the inspection.report event: the situation and the fault after review. */
+export async function keptSoundFindings(db: Db, inspectionId: number) {
+  const { rows } = await db.query<{ situation: SoundSituation; label: SoundLabel }>(
+    `SELECT situation, COALESCE(corrected_label, label) AS label FROM damage.sound_checks
+     WHERE inspection_id = $1 AND review_status <> 'rejected' ORDER BY sound_check_id`,
+    [inspectionId],
+  );
+  return rows;
+}
+
+export async function soundStorageKey(db: Db, inspectionId: number, soundCheckId: number): Promise<string | null> {
+  const { rows } = await db.query<{ storage_key: string }>(
+    'SELECT storage_key FROM damage.sound_checks WHERE inspection_id = $1 AND sound_check_id = $2',
+    [inspectionId, soundCheckId],
   );
   return rows[0]?.storage_key ?? null;
 }

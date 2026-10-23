@@ -1019,3 +1019,125 @@
     animation: none;
   }
 }
+
+/* ---------- Sound: recording on New inspection, results on the inspection ---------- */
+.as-snd-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.75rem;
+}
+.as-snd-slot {
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+  padding: 0.8rem 0.9rem;
+  border: 2px dashed var(--as-line);
+  border-radius: 12px;
+  background: var(--as-surface-2);
+}
+.as-snd-slot.filled {
+  border-style: solid;
+  background: var(--as-surface);
+}
+.as-snd-slot.live {
+  border-color: var(--as-danger);
+  border-style: solid;
+}
+.as-snd-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.as-snd-head b {
+  margin-right: auto;
+}
+.as-snd-how {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--as-muted);
+}
+.as-snd-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.as-snd-audio {
+  width: 100%;
+  height: 2.25rem;
+  margin-top: 0.35rem;
+}
+.as-snd-live {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+}
+.as-snd-dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: var(--as-danger);
+  animation: as-snd-blink 1s ease-in-out infinite;
+}
+@keyframes as-snd-blink {
+  50% { opacity: 0.25; }
+}
+.as-snd-level {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--as-line-soft);
+  overflow: hidden;
+}
+.as-snd-level b {
+  display: block;
+  height: 100%;
+  background: var(--as-success);
+  transition: width 0.1s linear;
+}
+.as-snd-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+  gap: 0.75rem;
+}
+.as-snd-result {
+  border: 1px solid var(--as-line);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  background: var(--as-surface);
+}
+.as-snd-result.st-rejected {
+  opacity: 0.7;
+}
+.as-snd-probs {
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+}
+.as-snd-probs summary {
+  color: var(--as-muted);
+  cursor: pointer;
+}
+.as-snd-probs ul {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+.as-snd-probs li {
+  display: grid;
+  grid-template-columns: 1fr auto 2.5rem;
+  gap: 0.5rem;
+  align-items: center;
+}
+.as-snd-probs li .as-num {
+  text-align: right;
+}
+@media (prefers-reduced-motion: reduce) {
+  .as-snd-dot {
+    animation: none;
+  }
+}
