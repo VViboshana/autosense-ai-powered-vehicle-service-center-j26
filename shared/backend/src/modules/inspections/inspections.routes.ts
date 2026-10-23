@@ -9,6 +9,7 @@ import { parse } from '../../http/validate.js';
 import { getSetting } from '../../lib/settings.js';
 import { requireScreen, signedInUser } from '../../middleware/requireScreen.js';
 import { fieldPerformance } from './inspections.performance.js';
+import { PROGRESS_ID, progressReporter, readProgress } from './inspections.progress.js';
 import {
   getInspection,
   imageStorageKey,
@@ -51,9 +52,12 @@ const createBody = z
     viewAngles: z.preprocess((v) => (v == null ? [] : Array.isArray(v) ? v : [v]), z.array(z.enum(VIEW_ANGLES))),
     // One per recording, in the same order (soundSituations=idling&soundSituations=braking)
     soundSituations: z.preprocess((v) => (v == null ? [] : Array.isArray(v) ? v : [v]), z.array(z.enum(SOUND_SITUATIONS))),
+    // Chosen by the browser, to follow the analysis live (GET /progress/:progressId)
+    progressId: z.string().regex(PROGRESS_ID).optional(),
   })
   .refine((b) => b.jobId || b.vehicleId, { message: 'Choose the job or the vehicle.', path: ['vehicleId'] });
 const idParam = z.object({ id: z.coerce.number().int().positive() });
+const progressParam = z.object({ progressId: z.string().regex(PROGRESS_ID) });
 const imageParams = idParam.extend({ imageId: z.coerce.number().int().positive() });
 const detectionParams = idParam.extend({ detectionId: z.coerce.number().int().positive() });
 const reviewBody = z
@@ -131,7 +135,9 @@ async function receiveUpload(req: Request, res: Response, limits: typeof DEFAULT
  * result; confirming makes it final and visible to the customer.
  *
  *   POST  /api/inspections                                   new inspection (multipart: images, viewAngles, jobId | vehicleId;
- *                                                            optional sounds + soundSituations, one recording per situation)
+ *                                                            optional sounds + soundSituations, one recording per situation;
+ *                                                            optional progressId to follow the analysis)
+ *   GET   /api/inspections/progress/:progressId              live analysis progress of a new inspection
  *   GET   /api/inspections?status=&search=&page=&pageSize=    list (review queue: status=awaiting_review)
  *   GET   /api/inspections/vehicle-options?search=            open jobs to start an inspection for
  *   GET   /api/inspections/performance                        field figures: model per damage type + severity rule check
@@ -161,8 +167,13 @@ export function inspectionsRoutes(deps: InspectionDeps) {
       throw new ValidationError(message, [{ field: 'sounds', message }]);
     }
     const recordings: SoundRecording[] = sounds.map((s, n) => ({ ...s, situation: body.soundSituations[n]! }));
-    const id = await createInspection(deps, { ...body, photos, sounds: recordings, userId: me.userId });
+    const id = await createInspection(deps, { ...body, photos, sounds: recordings, userId: me.userId }, progressReporter(me.userId, body.progressId));
     sendOk(res, await getInspection(pool, id), 201);
+  });
+
+  router.get('/progress/:progressId', requireScreen('INSPECTION_CREATE'), (req, res) => {
+    const { progressId } = parse(progressParam, req.params);
+    sendOk(res, readProgress(signedInUser(req).userId, progressId));
   });
 
   router.get('/', requireScreen('INSPECTION_HISTORY', 'INSPECTION_REVIEW'), async (req, res) => {

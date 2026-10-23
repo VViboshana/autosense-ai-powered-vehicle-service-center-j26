@@ -1,0 +1,895 @@
+/* ---------- AI performance hub ---------- */
+.ai-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.ai-orb {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 1rem;
+  background: radial-gradient(circle at 30% 30%, color-mix(in srgb, var(--as-primary) 60%, #fff), var(--as-primary));
+  box-shadow: 0 0 0 0 rgba(var(--as-primary-rgb), 0.45);
+  animation: ai-pulse 2.6s ease-out infinite;
+}
+@keyframes ai-pulse {
+  70% { box-shadow: 0 0 0 10px rgba(var(--as-primary-rgb), 0); }
+  100% { box-shadow: 0 0 0 0 rgba(var(--as-primary-rgb), 0); }
+}
+
+.ai-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  padding: 0.3rem;
+  border: 1px solid var(--as-line);
+  border-radius: 12px;
+  background: var(--as-surface);
+  overflow-x: auto;
+}
+.ai-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 0;
+  border-radius: 9px;
+  padding: 0.5rem 0.9rem;
+  background: none;
+  color: var(--as-ink-2);
+  font-weight: 600;
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+.ai-tabs button:hover {
+  background: var(--as-hover);
+}
+.ai-tabs button.on {
+  background: var(--as-primary);
+  color: #fff;
+}
+.ai-panel {
+  animation: ai-rise 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes ai-rise {
+  from { opacity: 0; transform: translateY(6px); }
+}
+.ai-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+/* Grid items may shrink below their content; wide tables scroll inside their card instead of spilling out */
+.ai-grid-2 > *,
+.ai-panel .as-card-body {
+  min-width: 0;
+}
+.ai-cm-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem 2.5rem;
+  align-items: start;
+}
+.ai-h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+.ai-h3 small {
+  margin-left: auto;
+  font-weight: 400;
+  color: var(--as-muted);
+  font-size: 0.78rem;
+}
+.ai-eyebrow {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--as-primary);
+  margin-bottom: 0.3rem;
+}
+
+/* Overview: loop + tiles */
+.ai-top {
+  display: grid;
+  grid-template-columns: minmax(20rem, 1.1fr) minmax(16rem, 1fr);
+  gap: 1rem;
+}
+@media (max-width: 991.98px) {
+  .ai-top { grid-template-columns: 1fr; }
+}
+.ai-loop {
+  position: relative;
+  width: min(100%, 26rem);
+  aspect-ratio: 1;
+  margin: 0.5rem auto 1.25rem;
+}
+.ai-loop svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.ai-loop-ring {
+  fill: none;
+  stroke: var(--as-line);
+  stroke-width: 2;
+}
+.ai-loop-flow {
+  fill: none;
+  stroke: var(--as-primary);
+  stroke-width: 2;
+  stroke-dasharray: 4 14;
+  opacity: 0.55;
+  animation: ai-flow 3s linear infinite;
+}
+@keyframes ai-flow {
+  to { stroke-dashoffset: -36; }
+}
+.ai-loop-dot {
+  fill: var(--as-primary);
+}
+.ai-loop-core {
+  font: 700 15px var(--bs-body-font-family);
+  fill: var(--as-ink);
+}
+.ai-loop-sub {
+  font-size: 11px;
+  fill: var(--as-muted);
+}
+.ai-loop-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 7.4rem;
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 0.1rem;
+  padding: 0.45rem 0.4rem;
+  border-radius: 12px;
+  background: var(--as-surface);
+  border: 1px solid var(--as-line);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.07);
+  animation: ai-rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: var(--d);
+}
+.ai-loop-node i {
+  color: var(--as-primary);
+  font-size: 1.05rem;
+}
+.ai-loop-node b {
+  font-size: 0.78rem;
+}
+.ai-loop-node small {
+  font-size: 0.66rem;
+  color: var(--as-muted);
+  line-height: 1.25;
+}
+.ai-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  align-content: start;
+}
+.ai-tile {
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+  padding: 1rem;
+  border: 1px solid var(--as-line);
+  border-radius: 14px;
+  background: var(--as-surface);
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+.ai-tile:hover {
+  border-color: var(--as-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+.ai-tile-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--as-muted);
+}
+.ai-tile-label i {
+  color: var(--as-primary);
+  margin-right: 0.35rem;
+}
+.ai-tile-value {
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: var(--as-ink);
+  line-height: 1.15;
+}
+.ai-tile-note {
+  font-size: 0.75rem;
+  color: var(--as-ink-2);
+}
+
+/* Live feed */
+.ai-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--as-danger);
+}
+.ai-live i {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--as-danger);
+  animation: ai-blink 1.2s ease-in-out infinite;
+}
+@keyframes ai-blink {
+  50% { opacity: 0.2; }
+}
+.ai-feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+  max-height: 26rem;
+  overflow-y: auto;
+}
+.ai-feed-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.45rem 0.6rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  border: 1px solid var(--as-line-soft);
+}
+.ai-feed-item.fresh {
+  animation: ai-slide 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both, ai-glow 2.2s ease-out both;
+}
+@keyframes ai-slide {
+  from { opacity: 0; transform: translateX(-12px); }
+}
+@keyframes ai-glow {
+  from { background: var(--as-primary-soft); }
+}
+.ai-feed-ic {
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  background: var(--as-primary-soft);
+  color: var(--as-primary);
+}
+.tone-good .ai-feed-ic {
+  background: var(--as-success-soft);
+  color: var(--as-success);
+}
+.tone-teach .ai-feed-ic {
+  background: var(--as-warning-soft);
+  color: var(--as-warning);
+}
+.ai-feed-time {
+  font-size: 0.72rem;
+  color: var(--as-muted);
+  white-space: nowrap;
+}
+
+/* Charts: confusion matrix (fixed-size cells, so it always fits or scrolls inside its card) */
+.ai-cm-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.ai-cm {
+  display: grid;
+  gap: 3px;
+  width: max-content;
+  font-size: 0.75rem;
+}
+.ai-cm-row {
+  display: contents;
+}
+.ai-cm-corner {
+  font-size: 0.66rem;
+  color: var(--as-muted);
+  align-self: end;
+  padding-bottom: 0.25rem;
+  line-height: 1.2;
+}
+.ai-cm-col {
+  align-self: end;
+  text-align: center;
+  font-weight: 600;
+  color: var(--as-ink-2);
+  font-size: 0.66rem;
+  line-height: 1.15;
+  padding-bottom: 0.25rem;
+  overflow-wrap: anywhere;
+}
+.ai-cm-rowh {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  color: var(--as-ink-2);
+  padding-right: 0.5rem;
+  line-height: 1.15;
+}
+.ai-cm-cell {
+  display: grid;
+  place-items: center;
+  height: 2.3rem;
+  border-radius: 6px;
+  background: var(--as-surface-2);
+  color: var(--as-muted);
+  font: 600 0.85rem var(--as-mono);
+  animation: ai-pop 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: var(--d);
+}
+.ai-cm-cell.filled {
+  color: var(--as-ink);
+}
+@keyframes ai-pop {
+  from { opacity: 0; transform: scale(0.85); }
+}
+.ai-cm-cell.dark {
+  color: #fff;
+}
+.ai-cm-cell.agree {
+  box-shadow: inset 0 0 0 2px var(--as-ink-2);
+}
+
+/* Charts: reliability diagram */
+.ai-rel {
+  margin: 0;
+  max-width: 34rem;
+}
+.ai-rel svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+.ai-grid {
+  stroke: var(--as-line-soft);
+  stroke-width: 1;
+}
+.ai-axis {
+  stroke: var(--as-line);
+  stroke-width: 1;
+}
+.ai-diag {
+  stroke: var(--as-ink-2);
+  stroke-width: 2;
+  fill: none;
+}
+.ai-tick {
+  font-size: 11px;
+  fill: var(--as-muted);
+}
+.ai-axis-title {
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--as-ink-2);
+}
+.ai-hit {
+  fill: transparent;
+  cursor: default;
+}
+.ai-bar {
+  fill: color-mix(in srgb, var(--as-primary) 70%, var(--as-surface));
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: ai-grow 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: var(--d);
+}
+.ai-bar.on {
+  fill: var(--as-primary);
+}
+.ai-count {
+  fill: var(--as-line);
+}
+@keyframes ai-grow {
+  from { transform: scaleY(0); }
+}
+.ai-rel-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+  font-size: 0.75rem;
+  color: var(--as-ink-2);
+  margin-top: 0.4rem;
+}
+.ai-rel-legend i {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 0.35rem;
+}
+.ai-rel-legend i.bar {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--as-primary) 70%, var(--as-surface));
+}
+.ai-rel-legend i.line {
+  width: 1.1rem;
+  height: 2px;
+  background: var(--as-ink-2);
+}
+.ai-rel-legend i.count {
+  width: 0.8rem;
+  height: 0.5rem;
+  border-radius: 2px;
+  background: var(--as-line);
+}
+.ai-rel-cap {
+  font-size: 0.8rem;
+  color: var(--as-ink-2);
+  margin-top: 0.5rem;
+  min-height: 2.6em;
+}
+.ai-rel-verdict {
+  display: inline-block;
+  font-weight: 600;
+  margin-right: 0.35rem;
+}
+
+/* Charts: before / after */
+.ai-legend {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.78rem;
+  color: var(--as-ink-2);
+  margin-bottom: 0.5rem;
+}
+.ai-legend i {
+  display: inline-block;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 3px;
+  margin-right: 0.35rem;
+  vertical-align: -1px;
+}
+.ai-legend i.before,
+.ai-ba-track i.before {
+  background: var(--as-line);
+}
+.ai-legend i.after,
+.ai-ba-track i.after {
+  background: var(--as-primary);
+}
+.ai-ba {
+  display: grid;
+  gap: 0.6rem;
+}
+.ai-ba-row {
+  display: grid;
+  grid-template-columns: 9rem 1fr 4.5rem;
+  gap: 0.75rem;
+  align-items: center;
+}
+.ai-ba-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.ai-ba-label small {
+  display: block;
+  font-weight: 400;
+  font-size: 0.7rem;
+  color: var(--as-muted);
+}
+.ai-ba-bars {
+  display: grid;
+  gap: 2px;
+}
+.ai-ba-track {
+  height: 0.7rem;
+  border-radius: 999px;
+  background: var(--as-surface-2);
+  overflow: hidden;
+}
+.ai-ba-track i {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  transform-origin: left;
+  animation: ai-grow-x 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: var(--d);
+}
+@keyframes ai-grow-x {
+  from { transform: scaleX(0); }
+}
+.ai-ba-val {
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-align: right;
+}
+.ai-ba-val small,
+.ai-v-score small.up,
+.ai-v-score small.down {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.up {
+  color: var(--as-success);
+}
+.down {
+  color: var(--as-danger);
+}
+
+/* Tables and meters */
+.ai-table th {
+  font-size: 0.75rem;
+  color: var(--as-muted);
+  font-weight: 600;
+}
+.ai-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 10rem;
+}
+.ai-meter-track {
+  flex: 1;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--as-line-soft);
+  overflow: hidden;
+}
+.ai-meter-track i {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: var(--as-primary);
+}
+.ai-meter b {
+  font-size: 0.78rem;
+  width: 2.5rem;
+  text-align: right;
+}
+.ai-odd {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+}
+
+/* Damage tab: lessons + training pack */
+.ai-lessons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.ai-lesson {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
+  background: var(--as-surface-2);
+}
+.ai-lesson i {
+  color: var(--as-primary);
+  font-size: 1.2rem;
+}
+.ai-lesson b {
+  font-size: 1.5rem;
+}
+.ai-lesson span {
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.ai-lesson small {
+  display: block;
+  font-weight: 400;
+  color: var(--as-muted);
+  font-size: 0.7rem;
+}
+.ai-pack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  border: 1px dashed color-mix(in srgb, var(--as-primary) 45%, transparent);
+  background: var(--as-primary-soft);
+}
+.ai-pack > div:first-child {
+  flex: 1 1 22rem;
+}
+
+/* Learning tab */
+.ai-teach {
+  display: grid;
+  grid-template-columns: minmax(18rem, 1fr) minmax(18rem, 1fr);
+  gap: 1.5rem;
+  padding: 1.4rem;
+  background:
+    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--as-primary) 10%, transparent), transparent 55%),
+    var(--as-surface);
+}
+@media (max-width: 991.98px) {
+  .ai-teach { grid-template-columns: 1fr; }
+}
+.ai-teach h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+.ai-teach h2 b {
+  color: var(--as-primary);
+}
+.ai-teach p {
+  color: var(--as-ink-2);
+  font-size: 0.9rem;
+}
+.ai-pipe {
+  display: grid;
+  gap: 0.6rem;
+  align-content: center;
+}
+.ai-pipe-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.6rem 0.75rem;
+  border-radius: 12px;
+  border: 1px solid var(--as-line);
+  background: var(--as-surface);
+  opacity: 0.6;
+  transition: opacity 0.3s ease, border-color 0.3s ease;
+}
+.ai-pipe-step b {
+  display: block;
+  font-size: 0.88rem;
+}
+.ai-pipe-step small {
+  font-size: 0.75rem;
+  color: var(--as-muted);
+}
+.ai-pipe-ic {
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  background: var(--as-surface-2);
+  color: var(--as-muted);
+}
+.ai-pipe-step.now {
+  opacity: 1;
+  border-color: var(--as-primary);
+  box-shadow: 0 0 0 3px rgba(var(--as-primary-rgb), 0.12);
+}
+.ai-pipe-step.now .ai-pipe-ic {
+  background: var(--as-primary);
+  color: #fff;
+  animation: ai-pulse 1.6s ease-out infinite;
+}
+.ai-pipe-step.done {
+  opacity: 1;
+}
+.ai-pipe-step.done .ai-pipe-ic {
+  background: var(--as-success-soft);
+  color: var(--as-success);
+}
+.ai-pipe-step.failed .ai-pipe-ic {
+  background: var(--as-danger-soft);
+  color: var(--as-danger);
+}
+.ai-pipe-bar {
+  grid-column: 1 / -1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--as-line-soft);
+  overflow: hidden;
+}
+.ai-pipe-bar b {
+  display: block;
+  height: 100%;
+  background: var(--as-primary);
+  transition: width 0.6s ease;
+}
+.ai-result {
+  border-color: color-mix(in srgb, var(--as-primary) 40%, var(--as-line));
+  animation: ai-rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.ai-verdict {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 0.95rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+}
+.ai-verdict.good {
+  background: var(--as-success-soft);
+}
+.ai-verdict.good i {
+  color: var(--as-success);
+}
+.ai-verdict.bad {
+  background: var(--as-warning-soft);
+}
+.ai-verdict.bad i {
+  color: var(--as-warning);
+}
+.ai-versions {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 1rem;
+  border-left: 2px solid var(--as-line);
+  display: grid;
+  gap: 0.6rem;
+}
+.ai-versions li {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--as-line-soft);
+  border-radius: 12px;
+  animation: ai-rise 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: var(--d);
+}
+.ai-versions li::before {
+  content: '';
+  position: absolute;
+  left: calc(-1rem - 7px);
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--as-surface);
+  border: 2px solid var(--as-line);
+  transform: translateY(-50%);
+}
+.ai-versions li.on {
+  border-color: var(--as-success);
+}
+.ai-versions li.on::before {
+  background: var(--as-success);
+  border-color: var(--as-success);
+}
+.ai-v-badge {
+  display: grid;
+  place-items: center;
+  min-width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 10px;
+  background: var(--as-primary-soft);
+  color: var(--as-primary);
+  font-weight: 800;
+}
+.ai-v-body small {
+  display: block;
+  color: var(--as-muted);
+  font-size: 0.75rem;
+}
+.ai-v-score {
+  text-align: right;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.ai-v-score > small:last-child {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: var(--as-muted);
+}
+
+/* Test lab */
+.ai-lab-hero {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.4rem;
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--as-primary) 10%, transparent), transparent 55%),
+    var(--as-surface);
+}
+.ai-lab-hero > div {
+  flex: 1 1 24rem;
+}
+.ai-lab-hero h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+.ai-lab-hero p {
+  color: var(--as-ink-2);
+  margin: 0;
+  font-size: 0.9rem;
+}
+.ai-labs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.ai-labs button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.1rem 1rem;
+  text-align: left;
+  border: 1px solid var(--as-line);
+  border-radius: 12px;
+  padding: 0.6rem 0.85rem;
+  background: var(--as-surface);
+}
+.ai-labs button:hover,
+.ai-labs button.on {
+  border-color: var(--as-primary);
+}
+.ai-labs small {
+  grid-column: 1;
+  color: var(--as-muted);
+  font-size: 0.75rem;
+}
+.ai-labs-score {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  text-align: right;
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+.ai-labs-score small {
+  display: block;
+  font-weight: 400;
+}
+.ai-kpis-flat {
+  border: 0;
+  padding: 0;
+}
+.ai-mini-audio {
+  height: 2rem;
+  width: 11rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-orb,
+  .ai-loop-flow,
+  .ai-live i,
+  .ai-pipe-step.now .ai-pipe-ic {
+    animation: none;
+  }
+  .ai-panel,
+  .ai-loop-node,
+  .ai-feed-item.fresh,
+  .ai-cm-cell,
+  .ai-bar,
+  .ai-ba-track i,
+  .ai-result,
+  .ai-versions li {
+    animation: none;
+  }
+  .ai-loop-dot {
+    display: none;
+  }
+}

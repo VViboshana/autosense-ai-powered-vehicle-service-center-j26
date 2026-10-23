@@ -13,6 +13,7 @@ import { bookingsRoutes } from './modules/bookings/bookings.routes.js';
 import { myBookingsRoutes } from './modules/bookings/myBookings.routes.js';
 import { claimsRoutes } from './modules/claims/claims.routes.js';
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes.js';
+import { aiRoutes } from './modules/ai/ai.routes.js';
 import { inspectionsRoutes } from './modules/inspections/inspections.routes.js';
 import { jobsRoutes } from './modules/jobs/jobs.routes.js';
 import { myServiceCentreRoutes } from './modules/occupancy/occupancy.my.routes.js';
@@ -48,6 +49,7 @@ export function createApp(pool: pg.Pool, env: Env) {
   app.use('/api/vehicle-requests', claimsRoutes(pool, env.UPLOAD_DIR));
   app.use('/api/bookings', bookingsRoutes(pool));
   app.use('/api/inspections', inspectionsRoutes({ pool, damageServiceUrl: env.ML_DAMAGE_URL, uploadDir: env.UPLOAD_DIR }));
+  app.use('/api/ai', aiRoutes({ pool, damageServiceUrl: env.ML_DAMAGE_URL, uploadDir: env.UPLOAD_DIR }));
   app.use('/api/maintenance', maintenanceRoutes(pool, env));
   app.use('/api/security', securityRoutes({ pool, uploadDir: env.UPLOAD_DIR, serviceUrl: env.ML_SECURITY_URL }));
   app.use('/api/occupancy', occupancyRoutes({ pool, serviceUrl: env.ML_OCCUPANCY_URL }));

@@ -1,0 +1,53 @@
+{
+  "versionNo": 2,
+  "version": "AutoSense Sound Inspection V2",
+  "recipe": "F: MFCC + PANNs, logistic regression, noise training",
+  "trained": "2026-10-23 22:17",
+  "trainedOn": {
+    "app": 7,
+    "car_diagnostics": 949,
+    "sri_lanka": 312
+  },
+  "appRecordings": 7,
+  "comparison": {
+    "current": {
+      "all": {
+        "clips": 1268,
+        "accuracy": 0.8707,
+        "macroF1": 0.8644
+      },
+      "noisy": {
+        "clips": 1268,
+        "accuracy": 0.8715,
+        "macroF1": 0.8661
+      },
+      "appRecordings": {
+        "clips": 7,
+        "accuracy": 0.4286,
+        "macroF1": 0.2
+      }
+    },
+    "new": {
+      "all": {
+        "clips": 1268,
+        "accuracy": 0.8715,
+        "macroF1": 0.8651
+      },
+      "noisy": {
+        "clips": 1268,
+        "accuracy": 0.8715,
+        "macroF1": 0.8657
+      },
+      "appRecordings": {
+        "clips": 7,
+        "accuracy": 0.8571,
+        "macroF1": 0.4615
+      }
+    }
+  },
+  "familiarity": {
+    "marginThreshold": 0.11,
+    "distanceThreshold": 12.01
+  },
+  "runId": "20261023-164435-283341"
+}

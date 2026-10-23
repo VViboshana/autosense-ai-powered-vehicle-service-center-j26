@@ -315,3 +315,5 @@
 .cp-heard li { display: flex; gap: 0.65rem; align-items: flex-start; padding: 0.55rem 0.7rem; border-radius: 10px; background: var(--t-soft); border: 1px solid color-mix(in srgb, var(--t) 25%, transparent); }
 .cp-heard li > i { color: var(--t); font-size: 1.1rem; line-height: 1.3; }
 .cp-heard small { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--as-muted); }
+.cp-mech { margin-top: 0.8rem; padding-top: 0.7rem; border-top: 1px solid var(--as-line-soft); }
+.cp-mech ul { margin: 0.35rem 0 0; padding-left: 1.1rem; display: grid; gap: 0.3rem; font-size: 0.9rem; }

@@ -11,7 +11,8 @@ import { PLATE_KEY } from '../claims/claims.routes.js';
 import { groupRegions, type Region, type ViewAngle } from '../inspections/inspections.areas.js';
 import { repairFor, repairPlan } from '../inspections/inspections.repair.js';
 import { withServiceNames } from '../inspections/inspections.repository.js';
-import { SOUND_FAULTS, type SoundLabel } from '../inspections/inspections.sound.js';
+import { mechanicalPlan } from '../inspections/inspections.mechanical.js';
+import { SOUND_FAULTS, type SoundLabel, type SoundSituation } from '../inspections/inspections.sound.js';
 
 const claimBody = z.object({
   registrationNo: z
@@ -88,7 +89,7 @@ export function myRoutes(pool: pg.Pool, uploadDir: string) {
       [ids],
     );
     // Only what a technician confirmed or corrected; the customer never sees a rejected or unchecked result
-    const sounds = await pool.query<{ inspection_id: number; situation: string; label: SoundLabel }>(
+    const sounds = await pool.query<{ inspection_id: number; situation: SoundSituation; label: SoundLabel }>(
       `SELECT inspection_id, situation, COALESCE(corrected_label, label) AS label FROM damage.sound_checks
        WHERE inspection_id = ANY($1) AND review_status IN ('confirmed', 'corrected')
        ORDER BY CASE situation WHEN 'starting' THEN 0 WHEN 'idling' THEN 1 ELSE 2 END`,
@@ -123,6 +124,7 @@ export function myRoutes(pool: pg.Pool, uploadDir: string) {
         sounds: sounds.rows
           .filter((s) => s.inspection_id === h.inspection_id)
           .map((s) => ({ label: s.label, ...SOUND_FAULTS[s.label] })), // situation, name, advice, normal
+        mechanical: await withServiceNames(pool, mechanicalPlan(sounds.rows.filter((s) => s.inspection_id === h.inspection_id))),
       };
     }));
   }

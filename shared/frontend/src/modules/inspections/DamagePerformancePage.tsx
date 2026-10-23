@@ -1,7 +1,6 @@
 import { Card } from '@/components/ui/Card';
 import { Alert } from '@/components/ui/Form';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States';
-import { PageHeader } from '@/layout/PageHeader';
 import { formatDate } from '@/lib/format';
 import { useApi } from '@/lib/useApi';
 import type { DamageLabel, Severity } from './inspections.types';
@@ -44,42 +43,24 @@ type Performance = {
 const ENOUGH = 50; // reviewed regions before the figures mean much
 
 /**
- * Feature setup › Damage settings (DAMAGE_SETTINGS): how the damage model and the severity rules do in real use,
+ * AI performance › Damage model (DAMAGE_SETTINGS): how the damage model and the severity rules do in real use,
  * from technicians' decisions on confirmed inspections. Complements the test-set evaluation: the test set says how
  * the model does on CarDD, this says how it does on this service centre's photos.
  */
-export function DamagePerformancePage() {
+export function DamagePerformance() {
   const { data, error, loading, reload } = useApi<Performance>('/inspections/performance');
-
-  return (
-    <>
-      <PageHeader
-        title="Damage model performance"
-        subtitle="Measured from technicians' decisions on confirmed inspections."
-        actions={
-          <button type="button" className="btn btn-light" onClick={reload}>
-            <i className="bi bi-arrow-clockwise me-1" aria-hidden="true" />Refresh
-          </button>
-        }
-      />
-      <div className="app-content">
-        <div className="container-fluid">
-          {error && !data ? (
-            <ErrorState error={error} onRetry={reload} title="Figures couldn't be loaded" />
-          ) : loading || !data ? (
-            <Card><div className="as-card-body pt-3"><Skeleton width="40%" /><div className="mt-3"><Skeleton width="100%" /></div></div></Card>
-          ) : data.regionsReviewed === 0 && !data.testSet ? (
-            <Card>
-              <EmptyState icon="bi-graph-up" title="Nothing measured yet">
-                Figures appear once inspections are reviewed and confirmed.
-              </EmptyState>
-            </Card>
-          ) : (
-            <Figures data={data} />
-          )}
-        </div>
-      </div>
-    </>
+  return error && !data ? (
+    <ErrorState error={error} onRetry={reload} title="Figures couldn't be loaded" />
+  ) : loading || !data ? (
+    <Card><div className="as-card-body pt-3"><Skeleton width="40%" /><div className="mt-3"><Skeleton width="100%" /></div></div></Card>
+  ) : data.regionsReviewed === 0 && !data.testSet ? (
+    <Card>
+      <EmptyState icon="bi-graph-up" title="Nothing measured yet">
+        Figures appear once inspections are reviewed and confirmed.
+      </EmptyState>
+    </Card>
+  ) : (
+    <Figures data={data} />
   );
 }
 

@@ -23,7 +23,8 @@ MAX_UPLOAD_MB = int(os.getenv('DAMAGE_MAX_UPLOAD_MB', '15'))
 # Sound inspection (see sound.py). The audio code is shared with training (acoustic/audio.py) so both prepare
 # recordings identically.
 ACOUSTIC_DIR = COMPONENT_DIR / 'acoustic'
-SOUND_MODEL_PATH = Path(os.getenv('SOUND_MODEL_PATH', ACOUSTIC_DIR / 'model' / 'sound_classifier.joblib'))
+# Unset: the active version (acoustic/model/active.json, see acoustic/learning.py). Set: always this file.
+SOUND_MODEL_PATH = Path(os.environ['SOUND_MODEL_PATH']) if os.getenv('SOUND_MODEL_PATH') else None
 # Below this the answer is "not sure, record again": at 0.7 the model answered 93% of test clips, 90.7% of them right
 SOUND_SURE_CONFIDENCE = float(os.getenv('SOUND_SURE_CONFIDENCE', '0.7'))
 SOUND_MIN_SECONDS = 1.0          # shorter: no prediction at all

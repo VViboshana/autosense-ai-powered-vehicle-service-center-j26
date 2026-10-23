@@ -5,6 +5,7 @@ Two kinds of features, one per model we compare:
           over the window -> 80 numbers. The classic hand-made features (baseline).
   - panns: the 2048-number "sound fingerprint" from PANNs CNN14, a network pre-trained on AudioSet (about 2 million
            YouTube clips, 527 everyday sound types). It already knows what engines, squeals and clicks sound like.
+  - vehicle / other: per window, how strongly PANNs hears vehicle sound and speech/music/tones (familiarity.py).
 
 With --noisy-copies K it instead writes cache/features_noisy.npz: K copies of every clip with workshop-like noise
 added (random 5-20 dB signal-to-noise), used to train on noise and to test how well each model copes with it.
@@ -21,6 +22,7 @@ import librosa
 import numpy as np
 
 import audio
+import familiarity
 
 HERE = Path(__file__).resolve().parent
 BATCH = 32
@@ -38,8 +40,23 @@ def panns_model():
 
 
 def panns_features(model, wins: np.ndarray) -> np.ndarray:
-    out = [model.inference(wins[i:i + BATCH])[1] for i in range(0, len(wins), BATCH)]
-    return np.concatenate(out).astype(np.float32)
+    return panns_outputs(model, wins)[0]
+
+
+def panns_outputs(model, wins: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """(fingerprints [n, 2048], vehicle [n], other [n]): PANNs' embedding, and how strongly it hears vehicle sound and
+    "something else" (speech, music, a tone; see familiarity.py)."""
+    from panns_inference.config import labels
+    veh_i = familiarity.label_indices(labels, familiarity.VEHICLE_LABELS)
+    oth_i = familiarity.label_indices(labels, familiarity.OTHER_LABELS)
+    emb, vehicle, other = [], [], []
+    for i in range(0, len(wins), BATCH):
+        tags, e = model.inference(wins[i:i + BATCH])
+        emb.append(e)
+        vehicle.append(familiarity.strongest(tags, veh_i))
+        other.append(familiarity.strongest(tags, oth_i))
+    cat = lambda xs: np.concatenate(xs).astype(np.float32)
+    return cat(emb), cat(vehicle), cat(other)
 
 
 def main():
@@ -68,12 +85,12 @@ def main():
     print(f'{len(rows)} clips -> {len(wins)} windows')
 
     mfcc = np.stack([mfcc_features(w) for w in wins]).astype(np.float32)
-    panns = panns_features(panns_model(), wins)
+    panns, vehicle, other = panns_outputs(panns_model(), wins)
 
     out = HERE / 'cache' / ('features_noisy.npz' if args.noisy_copies else 'features.npz')
     out.parent.mkdir(exist_ok=True)
     np.savez_compressed(out, paths=np.array([r['path'] for r in rows]), clip_of=np.array(clip_of),
-                        snr_db=np.array(snr, dtype=np.float32), mfcc=mfcc, panns=panns)
+                        snr_db=np.array(snr, dtype=np.float32), mfcc=mfcc, panns=panns, vehicle=vehicle, other=other)
     print(f'Wrote {out}: mfcc {mfcc.shape}, panns {panns.shape}')
 
 

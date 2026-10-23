@@ -4,8 +4,8 @@ import { Alert, SelectField } from '@/components/ui/Form';
 import { Modal } from '@/components/ui/Modal';
 import { StatusPill } from '@/components/ui/StatusPill';
 import { ApiError, apiSend } from '@/lib/api';
-import type { InspectionDetail, SoundCheck, SoundLabel } from './inspections.types';
-import { REVIEW, SOUND_FAULTS, SOUND_SITUATIONS, percent } from './inspections.ui';
+import type { InspectionDetail, MechanicalPlan, SoundCheck, SoundLabel } from './inspections.types';
+import { PRIORITY, REVIEW, SOUND_FAULTS, SOUND_SITUATIONS, hours, percent } from './inspections.ui';
 
 /**
  * The sound results of an inspection: each recording, the fault the sound model names for that situation, and how
@@ -45,7 +45,8 @@ export function SoundResults({ inspectionId, sounds, editable, onSaved, onError 
       <div className="as-card-body">
         <Alert tone="info">
           The sound model chooses only between the faults of the situation that was recorded. "Not sure" means its
-          confidence is under 70%: check by ear, or record again in a new inspection.
+          confidence is under 70%; "Odd sound" means the recording did not sound like an engine-bay recording (speech,
+          music, a tone, or very unusual). Either way: check by ear, or record again in a new inspection.
         </Alert>
         <ol className="as-snd-results">
           {sounds.map((s) => (
@@ -98,7 +99,8 @@ function SoundItem({ s, editable, busy, onConfirm, onReject, onCorrect }: {
           {SOUND_FAULTS[s.finalLabel ?? s.label].name}
         </b>
         <StatusPill tone={tone}>{s.normal ? 'Normal' : 'Fault'}</StatusPill>
-        {!s.sure && s.reviewStatus === 'pending' && <StatusPill tone="muted">Not sure</StatusPill>}
+        {s.familiar === false ? <StatusPill tone="warning"><i className="bi bi-shield-exclamation me-1" aria-hidden="true" />Odd sound</StatusPill>
+          : !s.sure && s.reviewStatus === 'pending' && <StatusPill tone="muted">Not sure</StatusPill>}
         <StatusPill tone={REVIEW[s.reviewStatus].tone}>{REVIEW[s.reviewStatus].label}</StatusPill>
       </div>
       <audio controls preload="none" src={s.url} className="as-snd-audio" aria-label={`${situation.label} recording`} />
@@ -191,5 +193,50 @@ function CorrectSoundDialog({ inspectionId, s, onClose, onDone }: {
         </SelectField>
       </form>
     </Modal>
+  );
+}
+
+/**
+ * Mechanical repair guide (sound-repair-v0) from the sound findings: kept apart from the body-damage repair guide.
+ * While reviewing, undecided results count with the model's answer; rejected ones drop out.
+ */
+export function MechanicalGuide({ plan, reviewing }: { plan: MechanicalPlan; reviewing: boolean }) {
+  const top = plan.priority ? PRIORITY[plan.priority] : null;
+  return (
+    <Card
+      className="mb-3"
+      icon="bi-gear-wide-connected"
+      title="Mechanical"
+      subtitle={`From what the sound model heard${reviewing ? ' (updates as you review)' : ''} · ${plan.method}, proposed hours`}
+      actions={top && <StatusPill tone={top.tone}><i className={`bi ${top.icon} me-1`} aria-hidden="true" />{top.label}</StatusPill>}
+    >
+      <div className="as-card-body">
+        {plan.items.length === 0 ? (
+          <p className="small text-body-secondary mb-0"><i className="bi bi-check-circle text-success me-1" aria-hidden="true" />No mechanical work suggested: the recordings sounded normal.</p>
+        ) : (
+          <>
+            <ul className="as-mech-list">
+              {plan.items.map((i) => (
+                <li key={i.label}>
+                  <StatusPill tone={PRIORITY[i.priority].tone}>{PRIORITY[i.priority].label}</StatusPill>
+                  <span>
+                    <b>{i.name}</b> <span className="small text-body-secondary">· {SOUND_SITUATIONS[i.situation].label.toLowerCase()}</span>
+                    <span className="d-block small text-body-secondary">{i.why}</span>
+                  </span>
+                  <span className="small text-end">
+                    {plan.services.find((s) => s.code === i.service)?.name ?? i.service}
+                    <span className="d-block as-num text-body-secondary">{hours(i.effortHours)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="small text-body-secondary mt-2 mb-0">
+              Total about <b className="as-num">{hours(plan.effortHours)}</b> of workshop time. Hours are a proposal until the
+              service centre's technician confirms them{plan.validated ? '' : ' (not validated yet)'}; never a quote.
+            </p>
+          </>
+        )}
+      </div>
+    </Card>
   );
 }
