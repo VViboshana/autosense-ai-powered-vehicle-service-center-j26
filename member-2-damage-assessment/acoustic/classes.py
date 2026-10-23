@@ -10,6 +10,21 @@ CLASSES = [c for classes in SITUATIONS.values() for c in classes]
 SITUATION_OF = {c: s for s, classes in SITUATIONS.items() for c in classes}
 NORMAL = {'normal_start', 'normal_idle', 'normal_brakes'}
 
+# What staff and customers read: (name, what to check). Proposed wording, to confirm with the technician.
+DESCRIPTIONS = {
+    'normal_start': ('Normal start', 'No starting problem heard.'),
+    'bad_ignition': ('Ignition problem', 'Check spark plugs, ignition coils and the starter motor.'),
+    'dead_battery': ('Weak or flat battery', 'Test the battery voltage and charging system.'),
+    'normal_idle': ('Normal idle', 'No engine problem heard at idle.'),
+    'low_oil': ('Low engine oil', 'Check the oil level and look for leaks.'),
+    'power_steering': ('Power steering noise', 'Check the power steering fluid and pump.'),
+    'serpentine_belt': ('Drive belt noise', 'Check the serpentine (drive) belt for wear and tension.'),
+    'misfire': ('Engine misfire', 'Check spark plugs, ignition coils and injectors.'),
+    'tappet': ('Tappet (valve) noise', 'Check valve clearance and oil condition.'),
+    'normal_brakes': ('Normal brakes', 'No brake noise heard.'),
+    'worn_brakes': ('Worn brakes', 'Inspect brake pads and discs.'),
+}
+
 # Source label -> our class. Labels not listed are not used (e.g. "air leak", which no other dataset has).
 CAR_DIAGNOSTICS = {  # Kaggle malakragaie/car-diagnostics-dataset: the folder name is the label
     'normal_engine_startup': 'normal_start',

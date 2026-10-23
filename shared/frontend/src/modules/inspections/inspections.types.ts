@@ -91,6 +91,37 @@ export type InspectionDetail = {
   images: InspectionImage[];
   /** For the whole inspection, from its damaged areas (overlapping regions of one damage count once) */
   repair: RepairPlan;
+  /** Sound recordings made with the inspection, at most one per situation */
+  sounds: SoundCheck[];
+};
+
+/** Sound inspection (backend inspections.sound.ts): the technician picks what the vehicle was doing. */
+export type SoundSituation = 'starting' | 'idling' | 'braking';
+export type SoundLabel =
+  | 'normal_start' | 'bad_ignition' | 'dead_battery'
+  | 'normal_idle' | 'low_oil' | 'power_steering' | 'serpentine_belt' | 'misfire' | 'tappet'
+  | 'normal_brakes' | 'worn_brakes';
+
+export type SoundCheck = {
+  soundCheckId: number;
+  situation: SoundSituation;
+  url: string;
+  durationS: number | null;
+  quality: { passed?: boolean; warnings?: string[] };
+  /** The model's answer; finalLabel is after review (null when rejected) */
+  label: SoundLabel;
+  confidence: number;
+  /** Confidence at or above the service's "sure" level (0.7) */
+  sure: boolean;
+  probabilities: { label: SoundLabel; probability: number }[];
+  reviewStatus: ReviewStatus;
+  correctedLabel: SoundLabel | null;
+  finalLabel: SoundLabel | null;
+  name: string;
+  advice: string;
+  normal: boolean;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
 };
 
 export type VehicleOption = {

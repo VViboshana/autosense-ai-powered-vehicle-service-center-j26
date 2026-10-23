@@ -2,3 +2,4 @@ ultralytics==8.4.178
 fastapi>=0.115
 uvicorn[standard]>=0.32
 python-multipart>=0.0.20
+-r acoustic/requirements.txt  # sound inspection (POST /analyze-audio)

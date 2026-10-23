@@ -11,9 +11,10 @@ import { formatDate, formatTime } from '@/lib/format';
 import { useApi } from '@/lib/useApi';
 import { STAGES } from '@/modules/dashboard/stages';
 import type { JobStage } from '@/modules/dashboard/dashboard.types';
-import type { InspectionDetail, VehicleOption, ViewAngle } from './inspections.types';
+import type { InspectionDetail, SoundSituation, VehicleOption, ViewAngle } from './inspections.types';
 import { VIEW_ANGLES } from './inspections.ui';
 import { checkPhoto, type PhotoCheck } from './photoCheck';
+import { SoundCapture, type Sound } from './SoundCapture';
 import { VehicleSide } from './VehicleSide';
 import './inspections.css';
 
@@ -26,8 +27,9 @@ const SLOTS: ViewAngle[] = ['front', 'left', 'rear', 'right', 'other'];
 
 /**
  * Inspections › New inspection (INSPECTION_CREATE). Choose the vehicle's open job, photograph the sides that show
- * damage (one slot per side, so the view angle is always right), then analyse. Each photo gets a quick quality check
- * in the browser first; the upload shows its real progress, then the damage service analyses the photos.
+ * damage (one slot per side, so the view angle is always right), optionally record the vehicle starting, idling or
+ * braking, then analyse. Each photo gets a quick quality check in the browser first; the upload shows its real
+ * progress, then the damage service analyses the photos and recordings.
  */
 export function NewInspectionPage() {
   const { config } = useSession();
@@ -40,6 +42,7 @@ export function NewInspectionPage() {
   const [search, setSearch] = useState('');
   const [job, setJob] = useState<VehicleOption | null>(null);
   const [shots, setShots] = useState<Partial<Record<ViewAngle, Shot>>>({});
+  const [sounds, setSounds] = useState<Partial<Record<SoundSituation, Sound>>>({});
   const [problem, setProblem] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [upload, setUpload] = useState<{ sent: number; bytes: number } | null>(null);
@@ -68,6 +71,11 @@ export function NewInspectionPage() {
     shotsRef.current = shots;
   }, [shots]);
   useEffect(() => () => Object.values(shotsRef.current).forEach((s) => s && URL.revokeObjectURL(s.preview)), []);
+  const soundsRef = useRef(sounds);
+  useEffect(() => {
+    soundsRef.current = sounds;
+  }, [sounds]);
+  useEffect(() => () => Object.values(soundsRef.current).forEach((s) => s && URL.revokeObjectURL(s.url)), []);
 
   const taken = SLOTS.filter((a) => shots[a]);
   const full = taken.length >= limits.maxImagesPerInspection;
@@ -85,6 +93,15 @@ export function NewInspectionPage() {
       return { ...all, [angle]: shot };
     });
   }
+
+  function setSound(situation: SoundSituation, sound: Sound | undefined) {
+    setSounds((all) => {
+      const old = all[situation];
+      if (old && old.url !== sound?.url) URL.revokeObjectURL(old.url);
+      return { ...all, [situation]: sound };
+    });
+  }
+  const recorded = (Object.keys(sounds) as SoundSituation[]).filter((s) => sounds[s]);
 
   function onFile(file: File | undefined) {
     if (fileInput.current) fileInput.current.value = ''; // so the same file can be chosen again
@@ -110,13 +127,20 @@ export function NewInspectionPage() {
       form.append('images', shots[angle]!.file);
       form.append('viewAngles', angle);
     }
-    const bytes = taken.reduce((s, a) => s + shots[a]!.file.size, 0);
+    for (const situation of recorded) {
+      form.append('sounds', sounds[situation]!.file);
+      form.append('soundSituations', situation);
+    }
+    const bytes = taken.reduce((s, a) => s + shots[a]!.file.size, 0) + recorded.reduce((s, k) => s + sounds[k]!.file.size, 0);
     setUpload({ sent: 0, bytes });
     try {
       const created = await apiUpload<InspectionDetail>('/inspections', form, (sent) => setUpload({ sent, bytes }));
       const found = created.images.flatMap((im) => im.detections).length;
+      const heard = created.sounds.length;
       navigate(`/inspections/${created.inspectionId}`, {
-        state: { toast: `Inspection ${created.inspectionNo} created: ${found} ${found === 1 ? 'region' : 'regions'} to check` },
+        state: {
+          toast: `Inspection ${created.inspectionNo} created: ${found} ${found === 1 ? 'region' : 'regions'}${heard ? ` and ${heard} sound ${heard === 1 ? 'result' : 'results'}` : ''} to check`,
+        },
       });
     } catch (err) {
       setError(err);
@@ -238,13 +262,17 @@ export function NewInspectionPage() {
               </div>
             </Card>
 
+            <SoundCapture sounds={sounds} onChange={setSound} disabled={busy} />
+            {fields.sounds && <Alert>{fields.sounds}</Alert>}
+
             {upload ? (
-              <UploadProgress sent={upload.sent} bytes={upload.bytes} photos={taken.length} />
+              <UploadProgress sent={upload.sent} bytes={upload.bytes} photos={taken.length} sounds={recorded.length} />
             ) : (
               <div className="d-flex align-items-center gap-3 mb-4">
                 <button type="submit" className="btn btn-primary" disabled={!job || taken.length === 0}>
                   <i className="bi bi-magic me-1" aria-hidden="true" />
                   Analyse {taken.length > 1 ? `${taken.length} photos` : 'photo'}
+                  {recorded.length > 0 && ` + ${recorded.length} ${recorded.length === 1 ? 'recording' : 'recordings'}`}
                 </button>
                 <span className="small text-body-secondary">
                   {!job ? 'Choose the vehicle first.' : taken.length === 0 ? 'Add at least one photo.' : 'The result opens for review.'}
@@ -304,7 +332,7 @@ function FilledSlot({ angle, shot, disabled, onReplace, onRemove }: {
 }
 
 /** Real upload progress (bytes sent), then an honest "analysing" state while the server runs the model. */
-function UploadProgress({ sent, bytes, photos }: { sent: number; bytes: number; photos: number }) {
+function UploadProgress({ sent, bytes, photos, sounds }: { sent: number; bytes: number; photos: number; sounds: number }) {
   const uploading = sent < 1;
   const mb = (n: number) => (n / 1024 / 1024).toFixed(1);
   return (
@@ -312,13 +340,13 @@ function UploadProgress({ sent, bytes, photos }: { sent: number; bytes: number; 
       <div className="d-flex justify-content-between align-items-baseline flex-wrap gap-2">
         <b>
           {uploading ? (
-            `Uploading ${photos === 1 ? 'the photo' : `${photos} photos`}`
+            `Uploading ${photos === 1 ? 'the photo' : `${photos} photos`}${sounds ? ` and ${sounds === 1 ? 'the recording' : `${sounds} recordings`}` : ''}`
           ) : (
             <><span className="spinner-border spinner-border-sm me-2" aria-hidden="true" />Analysing on the server</>
           )}
         </b>
         <span className="small text-body-secondary as-num">
-          {uploading ? `${mb(sent * bytes)} of ${mb(bytes)} MB · ${Math.round(sent * 100)}%` : 'Finding the vehicle and the damage; about a second per photo'}
+          {uploading ? `${mb(sent * bytes)} of ${mb(bytes)} MB · ${Math.round(sent * 100)}%` : `Finding the vehicle and the damage; about a second per photo${sounds ? ' and per recording' : ''}`}
         </span>
       </div>
       <div className={`as-dmg-bar${uploading ? '' : ' working'}`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(sent * 100)}>

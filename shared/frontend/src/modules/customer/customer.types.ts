@@ -57,6 +57,8 @@ export type InspectionReport = {
   areas: (ReportArea & { viewAngle: ViewAngle; imageId: number })[];
   /** What needs doing: most urgent priority, the services with their areas, the total estimated effort */
   repair: RepairPlan;
+  /** What the technician confirmed from the sound recordings (none when the vehicle was not recorded) */
+  sounds: { situation: 'starting' | 'idling' | 'braking'; label: string; name: string; advice: string; normal: boolean }[];
 };
 
 type Section<T> = { available: false } | { available: true; connected?: boolean; data: T };

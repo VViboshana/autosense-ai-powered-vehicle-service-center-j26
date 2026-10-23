@@ -1,5 +1,27 @@
 import type { Tone } from '@/components/ui/StatusPill';
-import type { DamageLabel, Detection, Hours, InspectionStatus, Priority, SeverityValue, ViewAngle } from './inspections.types';
+import type { DamageLabel, Detection, Hours, InspectionStatus, Priority, SeverityValue, SoundLabel, SoundSituation, ViewAngle } from './inspections.types';
+
+/** What the technician records in each situation, and how (the sound model learned engine-bay recordings). */
+export const SOUND_SITUATIONS: Record<SoundSituation, { label: string; icon: string; how: string }> = {
+  starting: { label: 'Starting', icon: 'bi-key', how: 'Bonnet open, phone about 30 cm from the engine. Start recording, then start the engine.' },
+  idling: { label: 'Idling', icon: 'bi-speedometer2', how: 'Engine warm and idling, bonnet open, phone about 30 cm from the engine.' },
+  braking: { label: 'Braking', icon: 'bi-sign-stop', how: 'Phone near a front wheel while the vehicle brakes gently at low speed.' },
+};
+
+/** Fault names by situation, for the correction list (the same wording as the backend's SOUND_FAULTS). */
+export const SOUND_FAULTS: Record<SoundLabel, { situation: SoundSituation; name: string; normal: boolean }> = {
+  normal_start: { situation: 'starting', name: 'Normal start', normal: true },
+  bad_ignition: { situation: 'starting', name: 'Ignition problem', normal: false },
+  dead_battery: { situation: 'starting', name: 'Weak or flat battery', normal: false },
+  normal_idle: { situation: 'idling', name: 'Normal idle', normal: true },
+  low_oil: { situation: 'idling', name: 'Low engine oil', normal: false },
+  power_steering: { situation: 'idling', name: 'Power steering noise', normal: false },
+  serpentine_belt: { situation: 'idling', name: 'Drive belt noise', normal: false },
+  misfire: { situation: 'idling', name: 'Engine misfire', normal: false },
+  tappet: { situation: 'idling', name: 'Tappet (valve) noise', normal: false },
+  normal_brakes: { situation: 'braking', name: 'Normal brakes', normal: true },
+  worn_brakes: { situation: 'braking', name: 'Worn brakes', normal: false },
+};
 
 export const DAMAGE_LABELS: Record<DamageLabel, string> = {
   dent: 'Dent',

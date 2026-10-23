@@ -11,6 +11,7 @@ import { PLATE_KEY } from '../claims/claims.routes.js';
 import { groupRegions, type Region, type ViewAngle } from '../inspections/inspections.areas.js';
 import { repairFor, repairPlan } from '../inspections/inspections.repair.js';
 import { withServiceNames } from '../inspections/inspections.repository.js';
+import { SOUND_FAULTS, type SoundLabel } from '../inspections/inspections.sound.js';
 
 const claimBody = z.object({
   registrationNo: z
@@ -86,6 +87,13 @@ export function myRoutes(pool: pg.Pool, uploadDir: string) {
        ORDER BY d.detection_id`,
       [ids],
     );
+    // Only what a technician confirmed or corrected; the customer never sees a rejected or unchecked result
+    const sounds = await pool.query<{ inspection_id: number; situation: string; label: SoundLabel }>(
+      `SELECT inspection_id, situation, COALESCE(corrected_label, label) AS label FROM damage.sound_checks
+       WHERE inspection_id = ANY($1) AND review_status IN ('confirmed', 'corrected')
+       ORDER BY CASE situation WHEN 'starting' THEN 0 WHEN 'idling' THEN 1 ELSE 2 END`,
+      [ids],
+    );
     return Promise.all(heads.rows.map(async (h) => {
       let no = 0; // numbered across the report's photos: the same number on the photo, the map and the list
       const photos = images.rows
@@ -112,6 +120,9 @@ export function myRoutes(pool: pg.Pool, uploadDir: string) {
         photos,
         areas: photos.flatMap((p) => p.areas.map((a) => ({ ...a, viewAngle: p.viewAngle, imageId: p.imageId }))),
         repair: await withServiceNames(pool, repairPlan(photos.flatMap((p) => p.areas))),
+        sounds: sounds.rows
+          .filter((s) => s.inspection_id === h.inspection_id)
+          .map((s) => ({ label: s.label, ...SOUND_FAULTS[s.label] })), // situation, name, advice, normal
       };
     }));
   }

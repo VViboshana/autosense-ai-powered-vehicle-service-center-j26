@@ -13,6 +13,7 @@ import { useApi } from '@/lib/useApi';
 import { Celebration } from './Celebration';
 import { DamagePhoto } from './DamagePhoto';
 import { PhotoViewer } from './PhotoViewer';
+import { SoundResults } from './SoundResults';
 import { Toasts } from './Toasts';
 import { useToasts } from './useToasts';
 import type { DamageLabel, Detection, InspectionDetail, RepairPlan, Severity } from './inspections.types';
@@ -23,9 +24,10 @@ import './inspections.css';
 const AI_STEPS = ['Detect', 'Outline', 'Grade', 'Plan'];
 
 /**
- * One inspection: each photo with the damage outlines, and beside it the regions the model found. A technician
- * confirms, corrects or rejects each region (INSPECTION_REVIEW); once none is left to review, someone with
- * INSPECTION_CONFIRM confirms the inspection, which makes it final and visible to the customer.
+ * One inspection: each photo with the damage outlines, and beside it the regions the model found; then the sound
+ * results, if the vehicle was recorded. A technician confirms, corrects or rejects each region and sound result
+ * (INSPECTION_REVIEW); once none is left to review, someone with INSPECTION_CONFIRM confirms the inspection, which
+ * makes it final and visible to the customer.
  */
 export function InspectionDetailPage() {
   const { id } = useParams();
@@ -93,7 +95,9 @@ export function InspectionDetailPage() {
   const editable = data.status === 'awaiting_review' && can('INSPECTION_REVIEW');
   const all = data.images.flatMap((im) => im.detections);
   const findings = all.filter(isFinding);
-  const pending = findings.filter((d) => d.reviewStatus === 'pending').length;
+  const soundsPending = data.sounds.filter((s) => s.reviewStatus === 'pending').length;
+  // Regions and sound results still to decide: both block confirming
+  const pending = findings.filter((d) => d.reviewStatus === 'pending').length + soundsPending;
   const possible = all.filter(isOpenSuggestion).length;
   const order = [...numbers.keys()]; // regions in the order they are numbered: findings, then possible damage
   const modalOpen = !!(correcting || confirming || adding || drawingImage) || viewerIndex !== null;
@@ -175,7 +179,7 @@ export function InspectionDetailPage() {
                 type="button"
                 className={`btn btn-primary${pending === 0 ? ' as-ready' : ''}`}
                 disabled={pending > 0}
-                title={pending > 0 ? `Review every region first (${pending} left)` : undefined}
+                title={pending > 0 ? `Review every region and sound result first (${pending} left)` : undefined}
                 onClick={() => setConfirming(true)}
               >
                 <i className="bi bi-check2-all me-1" aria-hidden="true" />
@@ -223,8 +227,8 @@ export function InspectionDetailPage() {
 
           {editable && (
             <ReviewProgress
-              reviewed={findings.length - pending}
-              total={findings.length}
+              reviewed={findings.length + data.sounds.length - pending}
+              total={findings.length + data.sounds.length}
               possible={possible}
               canConfirm={can('INSPECTION_CONFIRM')}
             />
@@ -359,6 +363,19 @@ export function InspectionDetailPage() {
               </div>
             </Card>
           ))}
+
+          {data.sounds.length > 0 && (
+            <SoundResults
+              inspectionId={data.inspectionId}
+              sounds={data.sounds}
+              editable={editable}
+              onSaved={(fresh, message) => {
+                setLatest({ base: loaded!, value: fresh });
+                show(message);
+              }}
+              onError={setActionError}
+            />
+          )}
         </div>
       </div>
 
@@ -508,9 +525,9 @@ function ReviewProgress({ reviewed, total, possible, canConfirm }: { reviewed: n
   return (
     <section className={`as-card as-dmg-progress${done ? ' done' : ''}`} aria-label="Review progress">
       <div className="d-flex justify-content-between align-items-baseline flex-wrap gap-2">
-        <b>{done ? (canConfirm ? 'Every region reviewed: ready to confirm' : 'Every region reviewed') : 'Review progress'}</b>
+        <b>{done ? (canConfirm ? 'Everything reviewed: ready to confirm' : 'Everything reviewed') : 'Review progress'}</b>
         <span className="small text-body-secondary as-num">
-          {reviewed} of {total} {total === 1 ? 'region' : 'regions'} reviewed
+          {reviewed} of {total} reviewed
           {possible > 0 && ` · ${possible} possible damage to accept or dismiss`}
         </span>
       </div>
@@ -781,6 +798,7 @@ function ConfirmDialog({ inspection, onClose, onDone }: { inspection: Inspection
   const all = inspection.images.flatMap((im) => im.detections);
   const kept = all.filter((d) => isFinding(d) && d.reviewStatus !== 'rejected');
   const undecided = all.filter(isOpenSuggestion).length;
+  const heard = inspection.sounds.filter((s) => s.finalLabel !== null).length;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -813,6 +831,7 @@ function ConfirmDialog({ inspection, onClose, onDone }: { inspection: Inspection
             ? 'No damage will be recorded on this vehicle.'
             : `${kept.length} damage ${kept.length === 1 ? 'region' : 'regions'} will be recorded.`}{' '}
           {undecided > 0 && `${undecided} possible ${undecided === 1 ? 'region you did not accept is' : 'regions you did not accept are'} dismissed. `}
+          {heard > 0 && `${heard} sound ${heard === 1 ? 'result is' : 'results are'} added to the report. `}
           The report becomes final and the customer can see it in their account.
         </p>
         <div className="mb-3">

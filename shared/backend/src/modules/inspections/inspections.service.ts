@@ -3,24 +3,38 @@ import path from 'node:path';
 import type pg from 'pg';
 import { withTransaction } from '../../db/pool.js';
 import { BusinessRuleError, NotFoundError, ServiceUnavailableError, ValidationError } from '../../http/errors.js';
-import { analysePhoto, type DamagePrediction, type PhotoUpload } from '../../integrations/ml/damageService.js';
+import {
+  analysePhoto,
+  analyseSound,
+  type DamagePrediction,
+  type PhotoUpload,
+  type SoundAnalysis,
+  type SoundUpload,
+} from '../../integrations/ml/damageService.js';
 import { audit } from '../../lib/audit.js';
 import { moveStage } from '../jobs/jobs.repository.js';
 import * as repo from './inspections.repository.js';
 import type { ReviewDecision, ViewAngle } from './inspections.repository.js';
 import { extensionFor, finalSeverity, formatInspectionNo, isDamageLabel, worstSeverity, type DamageLabel, type Severity } from './inspections.rules.js';
+import { audioExtensionFor, belongsTo, SOUND_FAULTS, type SoundLabel, type SoundSituation } from './inspections.sound.js';
 
 export type InspectionDeps = { pool: pg.Pool; damageServiceUrl?: string; uploadDir: string };
+export type SoundRecording = SoundUpload & { situation: SoundSituation };
+
+/** Registered in app.model_versions next to the damage model (same component, its own name). */
+const SOUND_MODEL_NAME = 'panns-mfcc-sound-classifier';
 
 /**
- * New inspection: every photo goes to the damage service first. Only when all of them have a result are the
- * inspection, photos and detections saved, in one transaction, as 'awaiting_review'. If the service fails, nothing
- * is saved and staff try again (503). Damage the service found outside the inspected vehicle (onVehicle: false) is
- * not stored: it belongs to another car in the photo. Possible damage (weaker regions) is stored as suggestions.
+ * New inspection: every photo, and every sound recording (optional, one per situation), goes to the damage service
+ * first. Only when all of them have a result are the inspection, photos, detections and sound results saved, in one
+ * transaction, as 'awaiting_review'. If the service fails, nothing is saved and staff try again (503). A recording the
+ * service cannot use (silent, too short) is refused with its reason, so staff record it again. Damage the service
+ * found outside the inspected vehicle (onVehicle: false) is not stored: it belongs to another car in the photo.
+ * Possible damage (weaker regions) is stored as suggestions.
  */
 export async function createInspection(
   deps: InspectionDeps,
-  input: { jobId?: number; vehicleId?: number; viewAngles: ViewAngle[]; photos: PhotoUpload[]; userId: number },
+  input: { jobId?: number; vehicleId?: number; viewAngles: ViewAngle[]; photos: PhotoUpload[]; sounds?: SoundRecording[]; userId: number },
 ) {
   const target = await repo.findJobOrVehicle(deps.pool, input);
   if (!target) throw new NotFoundError(input.jobId ? 'That job does not exist.' : 'That vehicle does not exist.');
@@ -42,6 +56,20 @@ export async function createInspection(
   const versions = new Set(results.map((r) => `${r.model.version}|${r.severity.method}`));
   if (versions.size > 1) throw new ServiceUnavailableError('DAMAGE_MODEL_CHANGED', 'The damage model changed while the photos were assessed. Try again.');
   const first = results[0]!;
+
+  const sounds = input.sounds ?? [];
+  const heard: SoundAnalysis[] = [];
+  for (const sound of sounds) {
+    const analysis = await analyseSound(deps.damageServiceUrl, sound, sound.situation);
+    if (!analysis.result) {
+      const why = analysis.quality.warnings[0] ?? 'The recording could not be used.';
+      throw new ValidationError(`${capitalise(sound.situation)} recording: ${why}`, [{ field: 'sounds', message: why }]);
+    }
+    if (!belongsTo(analysis.result.label, sound.situation)) {
+      throw new ServiceUnavailableError('DAMAGE_SERVICE_BAD_RESPONSE', `The damage service returned an unknown sound fault "${analysis.result.label}".`);
+    }
+    heard.push(analysis);
+  }
 
   const id = await repo.nextInspectionId(deps.pool);
   const inspectionNo = formatInspectionNo(id);
@@ -98,12 +126,33 @@ export async function createInspection(
           });
         }
       }
+      for (const [n, analysis] of heard.entries()) {
+        const sound = sounds[n]!;
+        const storageKey = path.posix.join('inspections', inspectionNo, `sound-${sound.situation}.${audioExtensionFor(sound.mimeType)}`);
+        await writeFile(path.resolve(deps.uploadDir, storageKey), sound.buffer);
+        await repo.insertSoundCheck(client, {
+          inspectionId: id,
+          situation: sound.situation,
+          storageKey,
+          durationS: analysis.quality.durationS,
+          quality: analysis.quality,
+          label: analysis.result!.label as SoundLabel,
+          confidence: analysis.result!.confidence,
+          sure: analysis.result!.sure,
+          probabilities: analysis.probabilities,
+          modelVersionId: await repo.modelVersionId(client, analysis.model.version, SOUND_MODEL_NAME),
+          processingMs: analysis.processingMs,
+        });
+      }
       await audit(client, {
         table: 'damage.inspections',
         recordId: id,
         action: 'created',
         userId: input.userId,
-        snapshot: { inspectionNo, vehicleId: target.vehicleId, jobId: target.jobId, photos: results.length, modelVersion: first.model.version },
+        snapshot: {
+          inspectionNo, vehicleId: target.vehicleId, jobId: target.jobId, photos: results.length, modelVersion: first.model.version,
+          sounds: heard.map((h, n) => ({ situation: sounds[n]!.situation, label: h.result!.label, modelVersion: h.model.version })),
+        },
       });
     });
   } catch (err) {
@@ -139,6 +188,37 @@ export async function reviewDetection(
     });
   });
 }
+
+/**
+ * A technician's decision on one sound result: confirm the fault, correct it to another fault of the same situation
+ * (the recording was of that situation), or reject it. Each decision is a measured check of the sound model.
+ */
+export async function reviewSound(
+  pool: pg.Pool,
+  r: { inspectionId: number; soundCheckId: number; decision: ReviewDecision; label?: SoundLabel; userId: number },
+) {
+  await withTransaction(pool, async (client) => {
+    await lockForReview(client, r.inspectionId);
+    const sound = await repo.soundCheckForReview(client, r.inspectionId, r.soundCheckId);
+    if (!sound) throw new NotFoundError('This sound result is not part of the inspection.');
+    if (r.decision === 'corrected' && (!r.label || !belongsTo(r.label, sound.situation))) {
+      throw new ValidationError(`Choose a ${sound.situation} fault.`, [{ field: 'label', message: `The recording is of the vehicle ${sound.situation}.` }]);
+    }
+    const label = r.decision === 'corrected' && r.label !== sound.label ? r.label! : null;
+    // Correcting to the model's own answer is a confirmation
+    const decision = r.decision === 'corrected' && !label ? 'confirmed' : r.decision;
+    await repo.setSoundReview(client, { soundCheckId: r.soundCheckId, decision, label, userId: r.userId });
+    await audit(client, {
+      table: 'damage.sound_checks',
+      recordId: r.soundCheckId,
+      action: decision,
+      userId: r.userId,
+      snapshot: { inspectionId: r.inspectionId, situation: sound.situation, from: sound.label, to: label },
+    });
+  });
+}
+
+const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** The inspection, locked, and still open for review; otherwise the right error. */
 async function lockForReview(client: pg.PoolClient, inspectionId: number) {
@@ -206,6 +286,10 @@ export async function confirmInspection(pool: pg.Pool, c: { inspectionId: number
     if (pending) {
       throw new BusinessRuleError('DETECTIONS_PENDING', `Review every damage region first (${pending} still to review).`);
     }
+    const soundsPending = await repo.pendingSoundChecks(client, c.inspectionId);
+    if (soundsPending) {
+      throw new BusinessRuleError('SOUNDS_PENDING', `Review every sound result first (${soundsPending} still to review).`);
+    }
     // Possible damage nobody accepted is recorded as dismissed by the person confirming (kept for measuring suggestions)
     const dismissed = await repo.dismissOpenSuggestions(client, c.inspectionId, c.userId);
     if (dismissed) detections = await repo.detectionsForReview(client, c.inspectionId);
@@ -215,6 +299,8 @@ export async function confirmInspection(pool: pg.Pool, c: { inspectionId: number
       kept.map((d) => finalSeverity({ reviewStatus: d.review_status, severity: d.severity, correctedSeverity: d.corrected_severity })),
     );
     await repo.markConfirmed(client, { inspectionId: c.inspectionId, overallSeverity, notes: c.notes, userId: c.userId });
+    // Sound findings do not change the damage severity; they travel in the report event for the maintenance forecast
+    const sounds = (await repo.keptSoundFindings(client, c.inspectionId)).map((s) => ({ ...s, normal: SOUND_FAULTS[s.label].normal }));
     // Service flow: the job's damage inspection is done (the vehicle stays in its bay until it is ready)
     if (inspection.job_id) {
       await moveStage(client, {
@@ -231,6 +317,7 @@ export async function confirmInspection(pool: pg.Pool, c: { inspectionId: number
         jobId: inspection.job_id,
         overallSeverity,
         damage: kept.map((d) => ({ label: d.corrected_label ?? d.label, severity: d.corrected_severity ?? d.severity })),
+        sounds,
       })],
     );
     await audit(client, {
@@ -238,7 +325,7 @@ export async function confirmInspection(pool: pg.Pool, c: { inspectionId: number
       recordId: c.inspectionId,
       action: 'confirmed',
       userId: c.userId,
-      snapshot: { overallSeverity, kept: kept.length, rejected: detections.length - kept.length, suggestionsDismissed: dismissed },
+      snapshot: { overallSeverity, kept: kept.length, rejected: detections.length - kept.length, suggestionsDismissed: dismissed, sounds: sounds.length },
     });
   });
 }
