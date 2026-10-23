@@ -1,0 +1,3 @@
+# Features are rebuilt by features.py; the trained classifier is shared like best.pt (not through git)
+cache/
+model/
