@@ -1918,3 +1918,8 @@
     display: none;
   }
 }
+
+/* possible damage held back by the stricter bar for glass */
+.as-dmg-strict {
+  color: var(--as-warning);
+}

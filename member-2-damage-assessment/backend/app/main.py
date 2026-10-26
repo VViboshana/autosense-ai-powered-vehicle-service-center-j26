@@ -52,7 +52,9 @@ def model_info() -> dict:
 
 @app.get('/health')
 def health():
-    return {'status': 'up', 'model': {**model_info(), 'classes': state['damage'].classes},
+    return {'status': 'up', 'model': {**model_info(), 'classes': state['damage'].classes,
+                                      'thresholds': {'finding': config.CONFIDENCE, 'possible': config.POSSIBLE_CONFIDENCE,
+                                                     'strict': config.STRICT_CONFIDENCE}},
             'sound': {**state['sound'].info, 'situations': sound.classes.SITUATIONS} if state['sound'] else None}
 
 
@@ -74,9 +76,9 @@ def predict(
 
     quality = check_quality(bgr)
     vehicle = find_vehicle(state['coco'], bgr)
-    # One model run at the lower threshold; then findings (>= confidence) and possible damage (below it)
+    # One model run at the lower threshold; then findings (>= confidence, glass >= its stricter bar) and possible damage
     regions = state['damage'].predict(bgr, min(config.POSSIBLE_CONFIDENCE, confidence))
-    detections = split_findings(regions, confidence, config.MAX_POSSIBLE_PER_PHOTO)
+    detections = split_findings(regions, confidence, config.MAX_POSSIBLE_PER_PHOTO, config.STRICT_CONFIDENCE)
     height, width = bgr.shape[:2]
     for d in detections:
         d['areaRatioImage'] = round(d['areaPx'] / (width * height), 4)
