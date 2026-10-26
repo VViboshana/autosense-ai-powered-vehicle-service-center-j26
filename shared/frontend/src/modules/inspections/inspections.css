@@ -1923,3 +1923,99 @@
 .as-dmg-strict {
   color: var(--as-warning);
 }
+
+/* ---------- Hand-over to maintenance ---------- */
+.as-ho-safe {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+}
+.as-ho-safe > i {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+.as-ho-safe b {
+  display: block;
+  font-size: 1.05rem;
+}
+.as-ho-safe ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.88rem;
+}
+.as-ho-safe.ok {
+  background: var(--as-success-soft);
+  color: var(--as-success);
+}
+.as-ho-safe.no {
+  background: var(--as-danger-soft);
+  color: var(--as-danger);
+}
+.as-ho-safe span,
+.as-ho-safe li {
+  color: var(--as-ink-2);
+}
+.as-ho-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.as-ho-tiles > div {
+  display: grid;
+  align-content: start;
+  gap: 0.15rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--as-line);
+  border-radius: 12px;
+}
+.as-ho-tiles small {
+  color: var(--as-muted);
+  font-size: 0.78rem;
+}
+.as-ho-tiles b {
+  font-size: 1.35rem;
+}
+.as-ho-tiles span {
+  color: var(--as-muted);
+  font-size: 0.82rem;
+}
+.as-ho-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
+}
+.as-ho-chips span {
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: var(--as-primary-soft);
+  color: var(--as-primary);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+.as-ho-parts {
+  margin-bottom: 1rem;
+}
+.as-ho-diag {
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  background: var(--as-surface-2);
+  margin-bottom: 0.75rem;
+}
+.as-ho-diag small {
+  color: var(--as-muted);
+  font-weight: 600;
+}
+.as-ho-diag p {
+  margin: 0;
+  font-size: 0.88rem;
+}
+@media (max-width: 767.98px) {
+  .as-ho-tiles {
+    grid-template-columns: 1fr;
+  }
+}

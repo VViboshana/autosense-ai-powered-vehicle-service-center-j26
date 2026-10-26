@@ -12,6 +12,7 @@ import { formatDate, formatTime } from '@/lib/format';
 import { useApi } from '@/lib/useApi';
 import { Celebration } from './Celebration';
 import { DamagePhoto } from './DamagePhoto';
+import { HandoverCard } from './HandoverCard';
 import { PhotoViewer } from './PhotoViewer';
 import { MechanicalGuide, SoundResults } from './SoundResults';
 import { Toasts } from './Toasts';
@@ -413,6 +414,9 @@ export function InspectionDetailPage() {
             />
             <MechanicalGuide plan={data.mechanical} reviewing={data.status === 'awaiting_review'} />
           </div>}
+
+          {/* Under both tabs: it sums up the whole inspection */}
+          <HandoverCard handover={data.handover} />
         </div>
       </div>
 

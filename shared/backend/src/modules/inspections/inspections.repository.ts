@@ -2,6 +2,7 @@ import type { Db } from '../../db/pool.js';
 import { offsetOf, toPage, type Page, type PageRequest } from '../../http/pagination.js';
 import { PLATE_KEY } from '../claims/claims.routes.js';
 import { groupRegions } from './inspections.areas.js';
+import { inspectionHandover, type Handover } from './inspections.handover.js';
 import { mechanicalPlan, type MechanicalPlan } from './inspections.mechanical.js';
 import { repairFor, repairPlan, type AreaRepair, type RepairPlan } from './inspections.repair.js';
 import type { DamageLabel, INSPECTION_STATUSES, OverallSeverity, REVIEW_DECISIONS, Severity, VIEW_ANGLES } from './inspections.rules.js';
@@ -78,6 +79,8 @@ export type InspectionDetail = Omit<InspectionListItem, 'imageCount' | 'thumbnai
   sounds: SoundCheckView[];
   /** Mechanical repair guide from the sound findings (not rejected; undecided ones count with the model's answer) */
   mechanical: MechanicalPlanView;
+  /** Hand-over to maintenance forecasting (inspection-handover-v1); final once the inspection is confirmed */
+  handover: Handover;
 };
 
 export type MechanicalPlanView = Omit<MechanicalPlan, 'services'> & { services: (MechanicalPlan['services'][number] & { name: string })[] };
@@ -236,9 +239,27 @@ export async function getInspection(db: Db, id: number): Promise<InspectionDetai
     ),
   );
 
+  const repair = await withServiceNames(db, repairPlan(areas));
+  const { sounds, mechanical } = await soundsAndPlan(db, id);
+  const handover = inspectionHandover({
+    inspectionId: h.inspection_id,
+    inspectionNo: h.inspection_no,
+    status: h.status,
+    reviewedAt: h.reviewed_at,
+    vehicle: { vehicleId: h.vehicle_id, registrationNo: h.registration_no },
+    jobId: h.job_id,
+    overallSeverity: h.overall_severity,
+    areas,
+    sounds: sounds.filter((s) => s.finalLabel !== null).map((s) => ({ situation: s.situation, label: s.finalLabel! })),
+    serviceNames: Object.fromEntries([...repair.services, ...mechanical.services].map((s) => [s.code, s.name])),
+    methods: { severity: h.severity_method, repair: repair.method, mechanical: mechanical.method },
+  });
+
   return {
-    repair: await withServiceNames(db, repairPlan(areas)),
-    ...(await soundsAndPlan(db, id)),
+    repair,
+    sounds,
+    mechanical,
+    handover,
     inspectionId: h.inspection_id,
     inspectionNo: h.inspection_no,
     status: h.status,
