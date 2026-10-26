@@ -10,6 +10,7 @@ import { getSetting } from '../../lib/settings.js';
 import { requireScreen, signedInUser } from '../../middleware/requireScreen.js';
 import { fieldPerformance } from './inspections.performance.js';
 import { PROGRESS_ID, progressReporter, readProgress } from './inspections.progress.js';
+import { liveFrame } from './inspections.live.js';
 import {
   getInspection,
   imageStorageKey,
@@ -32,7 +33,7 @@ import {
 } from './inspections.service.js';
 import { AUDIO_TYPES, SOUND_LABELS, SOUND_SITUATIONS, type SoundLabel } from './inspections.sound.js';
 
-const DEFAULT_UPLOAD = { maxImageMb: 10, maxImagesPerInspection: 5, allowedTypes: ['image/jpeg', 'image/png', 'image/webp'] };
+const DEFAULT_UPLOAD = { maxImageMb: 10, maxImagesPerInspection: 8, allowedTypes: ['image/jpeg', 'image/png', 'image/webp'] };
 // Sound recordings: one per situation (starting, idling, braking); 5-10 s of WAV is about 1-2 MB
 const MAX_SOUND_MB = 10;
 
@@ -129,6 +130,20 @@ async function receiveUpload(req: Request, res: Response, limits: typeof DEFAULT
   return { photos: photos.map(file), sounds: sounds.map(file) };
 }
 
+/** One live walk-around frame (field "frame"): a small JPEG from the phone camera, at most 3 MB. */
+async function receiveFrame(req: Request, res: Response) {
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 3 * 1024 * 1024, files: 1, fields: 0 },
+    fileFilter: (_req, file, accept) => accept(null, ['image/jpeg', 'image/webp', 'image/png'].includes(file.mimetype)),
+  }).single('frame');
+  await new Promise<void>((resolve, reject) =>
+    upload(req, res, (err: unknown) => (err ? reject(new ValidationError('The camera frame could not be read (JPEG up to 3 MB).')) : resolve())),
+  );
+  if (!req.file) throw new ValidationError('Send one camera frame (JPEG) in the field "frame".');
+  return { buffer: req.file.buffer, filename: 'frame.jpg', mimeType: req.file.mimetype };
+}
+
 /**
  * Damage inspections (component 2). Staff take photos (and may record the vehicle starting, idling or braking); the
  * damage service finds and grades the damage and names the fault it hears; a technician reviews each region and sound
@@ -138,6 +153,8 @@ async function receiveUpload(req: Request, res: Response, limits: typeof DEFAULT
  *                                                            optional sounds + soundSituations, one recording per situation;
  *                                                            optional progressId to follow the analysis)
  *   GET   /api/inspections/progress/:progressId              live analysis progress of a new inspection
+ *   POST  /api/inspections/live-frame                        one camera frame of a live walk-around (multipart "frame");
+ *                                                            vehicle + damage boxes, nothing stored
  *   GET   /api/inspections?status=&search=&page=&pageSize=    list (review queue: status=awaiting_review)
  *   GET   /api/inspections/vehicle-options?search=            open jobs to start an inspection for
  *   GET   /api/inspections/performance                        field figures: model per damage type + severity rule check
@@ -170,6 +187,12 @@ export function inspectionsRoutes(deps: InspectionDeps) {
     const recordings: SoundRecording[] = sounds.map((s, n) => ({ ...s, situation: body.soundSituations[n]! }));
     const id = await createInspection(deps, { ...body, photos, sounds: recordings, userId: me.userId }, progressReporter(me.userId, body.progressId));
     sendOk(res, await getInspection(pool, id), 201);
+  });
+
+  router.post('/live-frame', requireScreen('INSPECTION_CREATE'), async (req, res) => {
+    const me = signedInUser(req);
+    const frame = await receiveFrame(req, res);
+    sendOk(res, await liveFrame(deps.damageServiceUrl, me.userId, frame));
   });
 
   router.get('/progress/:progressId', requireScreen('INSPECTION_CREATE'), (req, res) => {

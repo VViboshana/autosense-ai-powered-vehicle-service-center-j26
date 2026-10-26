@@ -179,7 +179,7 @@ function UploadStage({ sent, bytes, photos }: { sent: number; bytes: number; pho
   return (
     <div className="as-an-upload">
       <div className="as-an-thumbs">
-        {photos.map((p, i) => <img key={p.angle} src={p.preview} alt="" style={{ '--i': i } as CSSProperties} />)}
+        {photos.map((p, i) => <img key={i} src={p.preview} alt="" style={{ '--i': i } as CSSProperties} />)}
       </div>
       <div className="as-an-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(sent * 100)}>
         <i style={{ width: `${sent * 100}%` }} />

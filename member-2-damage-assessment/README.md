@@ -45,6 +45,7 @@ Without `model/best.pt` the service uses the COCO model (`yolo11n-seg.pt`, downl
   "quality": { "passed": true, "blurVar": 512.3, "brightness": 121.4, "warnings": [] },
   "vehicle": { "label": "car", "confidence": 0.91, "bbox": [x1, y1, x2, y2], "polygon": [[x, y], ...],
                "areaPx": 573000, "cropped": false },
+  "person": false,
   "detections": [
     { "label": "dent", "confidence": 0.87, "bbox": [x1, y1, x2, y2], "polygon": [[x, y], ...],
       "areaPx": 18342, "areaRatioImage": 0.0149, "vehicleOverlap": 0.97, "onVehicle": true, "areaRatioVehicle": 0.032, "location": "lower left",

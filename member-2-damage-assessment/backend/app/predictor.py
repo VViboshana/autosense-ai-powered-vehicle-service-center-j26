@@ -48,15 +48,29 @@ class SegModel:
 
 
 VEHICLE_CLASSES = [2, 3, 5, 7]  # COCO ids: car, motorcycle, bus, truck
+PERSON_CLASS = 0
+PERSON_MIN_SHARE = 0.03  # a person this large in the frame is what the camera is pointed at, not a passer-by far away
+
+
+def look(model: SegModel, image: np.ndarray) -> tuple[dict | None, bool]:
+    """One COCO pass: the main vehicle (or None), and whether a person is clearly in view. The damage model only knows
+    cars, so without a vehicle it would still find "damage" in anything (a shirt, a face): callers use this to say so."""
+    regions = model.predict(image, config.VEHICLE_CONFIDENCE, VEHICLE_CLASSES + [PERSON_CLASS])
+    height, width = image.shape[:2]
+    person = any(r['label'] == 'person' and r['areaPx'] >= PERSON_MIN_SHARE * width * height for r in regions)
+    return find_vehicle_in([r for r in regions if r['label'] != 'person'], width, height), person
 
 
 def find_vehicle(model: SegModel, image: np.ndarray) -> dict | None:
     """The main vehicle in the photo (the largest one), or None when no vehicle is found."""
-    vehicles = model.predict(image, config.VEHICLE_CONFIDENCE, VEHICLE_CLASSES)
+    height, width = image.shape[:2]
+    return find_vehicle_in(model.predict(image, config.VEHICLE_CONFIDENCE, VEHICLE_CLASSES), width, height)
+
+
+def find_vehicle_in(vehicles: list[dict], width: int, height: int) -> dict | None:
     if not vehicles:
         return None
     vehicle = max(vehicles, key=lambda v: v['areaPx'])
-    height, width = image.shape[:2]
     x1, y1, x2, y2 = vehicle['bbox']
     # Touching two or more photo edges (within 1% of the photo size): only part of the vehicle is visible (a close-up)
     mx, my = 0.01 * width, 0.01 * height

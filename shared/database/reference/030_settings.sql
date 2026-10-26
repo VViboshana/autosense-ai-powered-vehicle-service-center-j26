@@ -8,7 +8,7 @@ INSERT INTO app.settings (setting_key, value, description, is_public) VALUES
     ('app.date_format', '"dd/MM/yyyy"',   'How dates are shown', true),
     ('app.currency',    '"LKR"',          'Currency for estimates and invoices', true),
     ('damage.upload',
-     '{"maxImageMb": 10, "maxImagesPerInspection": 5, "allowedTypes": ["image/jpeg", "image/png", "image/webp"]}',
+     '{"maxImageMb": 10, "maxImagesPerInspection": 8, "allowedTypes": ["image/jpeg", "image/png", "image/webp"]}',
      'Photo limits for a damage inspection', true),
     ('damage.severity',
      '{"method": "rule-v0", "validated": false}',

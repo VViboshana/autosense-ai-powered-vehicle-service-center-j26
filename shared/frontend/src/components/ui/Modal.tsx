@@ -1,8 +1,11 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * A dialog over the page (Bootstrap modal styles, controlled by React). Closes on Escape and on the backdrop.
  * Put the form's buttons in `footer`. Focus moves into the dialog when it opens.
+ * Rendered at the end of <body> (a portal): opened from inside a table row or an animated card, it would otherwise be
+ * caught in that element's stacking and alignment (drawn behind a highlighted row, its text right-aligned).
  */
 export function Modal({ title, onClose, children, footer, size }: {
   title: string;
@@ -25,7 +28,7 @@ export function Modal({ title, onClose, children, footer, size }: {
     };
   }, [onClose]);
 
-  return (
+  return createPortal(
     <>
       <div className="modal-backdrop fade show" />
       <div className="modal fade show d-block" role="dialog" aria-modal="true" aria-labelledby={id} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -42,6 +45,7 @@ export function Modal({ title, onClose, children, footer, size }: {
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body,
   );
 }

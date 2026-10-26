@@ -128,7 +128,10 @@ async function analyseAndSave(
           storageKey,
           width: result.image.width,
           height: result.image.height,
-          quality: result.quality,
+          // A side photo without a vehicle (the close-up slot may show only part of one): say so to the technician
+          quality: !result.vehicle && viewAngle !== 'other'
+            ? { ...result.quality, warnings: [...result.quality.warnings, 'No vehicle was found in this photo: check that the marked damage is on the vehicle.'] }
+            : result.quality,
           processingMs: result.processingMs,
         });
         for (const d of result.detections) {

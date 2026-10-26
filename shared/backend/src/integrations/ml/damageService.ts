@@ -26,6 +26,10 @@ const prediction = z.object({
   image: z.object({ width: z.number().int().positive(), height: z.number().int().positive() }),
   quality: z.object({ passed: z.boolean(), blurVar: z.number(), brightness: z.number(), warnings: z.array(z.string()) }),
   detections: z.array(detection),
+  // The main vehicle in the photo (COCO vehicle finder); null when none was found. Used by the live walk-around.
+  vehicle: z.object({ bbox: z.array(z.number()).length(4), areaPx: z.number(), cropped: z.boolean() }).nullable().default(null),
+  // A person clearly in view (and no vehicle): the damage regions are then most likely not damage
+  person: z.boolean().default(false),
   severity: z.object({ overall: z.string().nullable(), method: z.string(), validated: z.boolean() }),
   processingMs: z.number(),
 });

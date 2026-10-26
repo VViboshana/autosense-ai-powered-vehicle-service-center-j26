@@ -2019,3 +2019,483 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- New inspection: how to capture (walk-around, video, photo slots) ---------- */
+.as-capture-modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.as-capture-modes button {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--as-line);
+  border-radius: 12px;
+  background: var(--as-surface);
+  color: var(--as-ink);
+  text-align: left;
+}
+.as-capture-modes button > i {
+  font-size: 1.3rem;
+  color: var(--as-muted);
+}
+.as-capture-modes button span {
+  display: grid;
+  min-width: 0;
+}
+.as-capture-modes small {
+  color: var(--as-muted);
+  font-size: 0.78rem;
+}
+.as-capture-modes button.on {
+  border-color: var(--as-primary);
+  box-shadow: 0 0 0 1px var(--as-primary);
+  background: linear-gradient(135deg, var(--as-primary-soft), var(--as-surface) 75%);
+}
+.as-capture-modes button.on > i {
+  color: var(--as-primary);
+}
+.as-capture-modes button:focus-visible {
+  outline: none;
+  box-shadow: var(--as-focus);
+}
+@media (max-width: 575.98px) {
+  .as-capture-modes small {
+    display: none;
+  }
+  .as-capture-modes button {
+    justify-content: center;
+    padding: 0.55rem;
+  }
+}
+
+.as-walk-intro {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 1rem;
+  border: 1px dashed var(--as-line);
+  border-radius: 14px;
+}
+.as-walk-intro > div {
+  flex: 1;
+  min-width: 15rem;
+}
+.as-walk-intro > i {
+  font-size: 2.6rem;
+  color: var(--as-primary);
+}
+.as-walk-intro b {
+  font-size: 1.05rem;
+}
+.as-walk-intro ol {
+  padding-left: 1.1rem;
+  margin: 0.4rem 0 0.8rem;
+  font-size: 0.9rem;
+  color: var(--as-ink-2);
+}
+.as-walk-illus {
+  width: 7.5rem;
+  flex: none;
+}
+.as-walk-illus .path {
+  fill: none;
+  stroke: var(--as-line);
+  stroke-width: 2;
+  stroke-dasharray: 4 5;
+}
+.as-walk-illus .car {
+  fill: var(--as-neutral-soft);
+  stroke: var(--as-muted);
+  stroke-width: 1.5;
+}
+.as-walk-illus .glass {
+  fill: var(--as-surface-2);
+  stroke: var(--as-muted);
+}
+.as-walk-illus .walker {
+  fill: var(--as-primary);
+}
+
+/* ---------- Live walk-around: full screen camera ---------- */
+.as-walk {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: #05070a;
+  color: #fff;
+}
+.as-walk-top {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  padding-top: max(0.6rem, env(safe-area-inset-top));
+  background: linear-gradient(#05070a, rgba(5, 7, 10, 0.6));
+}
+.as-walk-icon {
+  flex: none;
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.as-walk-prompt {
+  flex: 1;
+  display: grid;
+  min-width: 0;
+  line-height: 1.25;
+}
+.as-walk-prompt small {
+  color: #9aa4b2;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.as-walk-prompt b {
+  font-size: 1.15rem;
+}
+.as-walk-prompt span {
+  font-size: 0.82rem;
+  color: #c9d1d9;
+}
+.as-walk-rate {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-family: var(--as-mono);
+  background: rgba(var(--as-primary-rgb), 0.22);
+  border: 1px solid rgba(var(--as-primary-rgb), 0.6);
+}
+.as-walk-rate i {
+  color: var(--as-primary);
+  animation: as-snd-blink 1.2s steps(2) infinite;
+}
+.as-walk-stage {
+  position: relative;
+  overflow: hidden;
+}
+.as-walk-stage video,
+.as-walk-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.as-walk-overlay {
+  pointer-events: none;
+}
+.as-walk-vehicle path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 4;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.8;
+  transition: stroke 0.2s;
+}
+.as-walk-vehicle.ready path {
+  stroke: #3ddc84;
+  opacity: 1;
+}
+.as-walk-dmg polygon {
+  fill: rgba(var(--as-primary-rgb), 0.22);
+  stroke: var(--as-primary);
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+}
+.as-walk-dmg rect {
+  fill: var(--as-primary);
+}
+.as-walk-dmg text {
+  fill: #fff;
+  font-weight: 700;
+  font-family: var(--as-font);
+}
+.as-walk-dmg.possible polygon {
+  fill: none;
+  stroke: #ffd166;
+  stroke-dasharray: 6 5;
+}
+.as-walk-dmg.possible rect {
+  fill: rgba(0, 0, 0, 0.65);
+}
+.as-walk-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.95rem 0.45rem 0.5rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-weight: 600;
+  background: rgba(5, 7, 10, 0.75);
+  backdrop-filter: blur(6px);
+}
+.as-walk-hint svg {
+  width: 1.7rem;
+  height: 1.7rem;
+  transform: rotate(-90deg);
+}
+.as-walk-hint circle {
+  fill: none;
+  stroke-width: 4;
+}
+.as-walk-hint .track {
+  stroke: rgba(255, 255, 255, 0.2);
+}
+.as-walk-hint .fill {
+  stroke: #3ddc84;
+  stroke-dasharray: 94.2;
+  transition: stroke-dashoffset 0.25s linear;
+}
+.as-walk-hint.ready {
+  box-shadow: 0 0 0 2px #3ddc84;
+}
+.as-walk-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  pointer-events: none;
+  animation: as-walk-flash 0.45s ease-out forwards;
+}
+@keyframes as-walk-flash {
+  from { opacity: 0.85; }
+  to { opacity: 0; }
+}
+.as-walk-toast {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  background: #3ddc84;
+  color: #05070a;
+  font-weight: 700;
+  animation: as-an-pop 0.3s var(--as-ease);
+}
+.as-walk-error {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.5rem;
+  padding: 2rem;
+  text-align: center;
+  color: #c9d1d9;
+}
+.as-walk-error i {
+  font-size: 2.5rem;
+  color: var(--as-primary);
+}
+.as-walk-bottom {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  padding-bottom: max(0.6rem, env(safe-area-inset-bottom));
+  background: linear-gradient(rgba(5, 7, 10, 0.6), #05070a);
+}
+.as-walk-compass {
+  width: 5.2rem;
+  height: 5.2rem;
+}
+.as-walk-compass .car {
+  fill: rgba(255, 255, 255, 0.1);
+  stroke: rgba(255, 255, 255, 0.5);
+  stroke-width: 1.5;
+}
+.as-walk-compass .glass {
+  fill: rgba(255, 255, 255, 0.18);
+}
+.as-walk-compass .spot {
+  cursor: pointer;
+}
+.as-walk-compass .spot circle {
+  fill: rgba(255, 255, 255, 0.12);
+  stroke: rgba(255, 255, 255, 0.4);
+}
+.as-walk-compass .spot text {
+  fill: #fff;
+  font-size: 8px;
+  font-weight: 700;
+}
+.as-walk-compass .spot.on circle {
+  fill: var(--as-primary);
+  stroke: #fff;
+  animation: as-walk-pulse 1.2s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.as-walk-compass .spot.done circle {
+  fill: #2ea043;
+  stroke: #3ddc84;
+}
+@keyframes as-walk-pulse {
+  50% { transform: scale(1.25); }
+}
+.as-walk-shots {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  overflow-x: auto;
+  min-width: 0;
+}
+.as-walk-shots img {
+  width: 3.4rem;
+  height: 2.4rem;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 2px solid #3ddc84;
+  flex: none;
+  animation: as-an-pop 0.3s var(--as-ease);
+}
+.as-walk-shots img.closeup {
+  border-color: var(--as-primary);
+}
+.as-walk-count {
+  font-size: 0.78rem;
+  color: #9aa4b2;
+  white-space: nowrap;
+  padding-left: 0.25rem;
+}
+.as-walk-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+@media (max-width: 767.98px) {
+  .as-walk-bottom {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .as-walk-actions {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+  .as-walk-actions .btn {
+    flex: 1;
+  }
+  .as-walk-rate {
+    font-size: 0.68rem;
+  }
+}
+
+/* ---------- Walk-around from a video ---------- */
+.as-walk-reading {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: center;
+}
+.as-walk-frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0d1117;
+}
+.as-walk-frame img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.as-walk-wait {
+  position: absolute;
+  inset: 45% 20% auto;
+  height: 3px;
+  background: rgba(var(--as-primary-rgb), 0.5);
+}
+.as-walk-progress {
+  display: grid;
+  gap: 0.4rem;
+}
+.as-walk-progress span {
+  color: var(--as-muted);
+  font-size: 0.88rem;
+}
+.as-walk-picked {
+  display: grid;
+  gap: 0.75rem;
+}
+.as-walk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.6rem;
+}
+.as-walk-grid figure {
+  margin: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--as-line);
+  animation: as-an-pop 0.3s var(--as-ease);
+}
+.as-walk-grid img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  display: block;
+}
+.as-walk-grid figcaption {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.8rem;
+}
+@media (max-width: 767.98px) {
+  .as-walk-reading {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .as-walk-rate i,
+  .as-walk-flash,
+  .as-walk-toast,
+  .as-walk-compass .spot.on circle,
+  .as-walk-shots img,
+  .as-walk-grid figure {
+    animation: none;
+  }
+  .as-walk-illus .walker {
+    display: none;
+  }
+}
+
+/* live walk-around: damage hidden because no vehicle is in view */
+.as-walk-paused {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  max-width: calc(100% - 2rem);
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: rgba(5, 7, 10, 0.78);
+  border: 1px solid #ffd166;
+  color: #ffd166;
+  backdrop-filter: blur(6px);
+}

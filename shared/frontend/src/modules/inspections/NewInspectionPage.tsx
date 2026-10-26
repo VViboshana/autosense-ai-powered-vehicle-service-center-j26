@@ -17,12 +17,15 @@ import { VIEW_ANGLES } from './inspections.ui';
 import { checkPhoto, type PhotoCheck } from './photoCheck';
 import { SoundCapture, type Sound } from './SoundCapture';
 import { VehicleSide } from './VehicleSide';
+import { LiveWalkAround, VideoWalkAround } from './WalkAround';
+import type { WalkResult } from './walkFrames';
 import './inspections.css';
 
 type Shot = { file: File; preview: string; check: PhotoCheck | 'checking' | 'failed' };
+type CaptureMode = 'walk' | 'video' | 'slots';
 type UploadLimits = { maxImageMb: number; maxImagesPerInspection: number; allowedTypes: string[] };
 
-const DEFAULT_LIMITS: UploadLimits = { maxImageMb: 10, maxImagesPerInspection: 5, allowedTypes: ['image/jpeg', 'image/png', 'image/webp'] };
+const DEFAULT_LIMITS: UploadLimits = { maxImageMb: 10, maxImagesPerInspection: 8, allowedTypes: ['image/jpeg', 'image/png', 'image/webp'] };
 // One slot per side, in the order people walk round a vehicle; close-up for a detail
 const SLOTS: ViewAngle[] = ['front', 'left', 'rear', 'right', 'other'];
 
@@ -44,6 +47,11 @@ export function NewInspectionPage() {
   const [search, setSearch] = useState('');
   const [job, setJob] = useState<VehicleOption | null>(null);
   const [shots, setShots] = useState<Partial<Record<ViewAngle, Shot>>>({});
+  // More close-ups than the one close-up slot (from a walk-around)
+  const [extras, setExtras] = useState<Shot[]>([]);
+  const [mode, setMode] = useState<CaptureMode>('walk');
+  const [walking, setWalking] = useState(false);
+  const [walkNote, setWalkNote] = useState<string | null>(null);
   const [sounds, setSounds] = useState<Partial<Record<SoundSituation, Sound>>>({});
   const [problem, setProblem] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -82,6 +90,11 @@ export function NewInspectionPage() {
     shotsRef.current = shots;
   }, [shots]);
   useEffect(() => () => Object.values(shotsRef.current).forEach((s) => s && URL.revokeObjectURL(s.preview)), []);
+  const extrasRef = useRef(extras);
+  useEffect(() => {
+    extrasRef.current = extras;
+  }, [extras]);
+  useEffect(() => () => extrasRef.current.forEach((s) => URL.revokeObjectURL(s.preview)), []);
   const soundsRef = useRef(sounds);
   useEffect(() => {
     soundsRef.current = sounds;
@@ -104,7 +117,12 @@ export function NewInspectionPage() {
   }, [analysing, progressId]);
 
   const taken = SLOTS.filter((a) => shots[a]);
-  const full = taken.length >= limits.maxImagesPerInspection;
+  // Every photo to send: one per side slot, then the extra close-ups (view angle 'other')
+  const photos = [
+    ...taken.map((angle) => ({ angle, shot: shots[angle]! })),
+    ...extras.map((shot) => ({ angle: 'other' as ViewAngle, shot })),
+  ];
+  const full = photos.length >= limits.maxImagesPerInspection;
   const busy = run !== null;
 
   function pick(angle: ViewAngle) {
@@ -129,6 +147,45 @@ export function NewInspectionPage() {
   }
   const recorded = (Object.keys(sounds) as SoundSituation[]).filter((s) => sounds[s]);
 
+  /** A new shot with its quality check (run in the background, kept only if the shot is still there). */
+  function newShot(file: File, update: (fn: (s: Shot) => Shot) => void): Shot {
+    const shot: Shot = { file, preview: URL.createObjectURL(file), check: 'checking' };
+    checkPhoto(file)
+      .then((check) => update((s) => (s.file === file ? { ...s, check } : s)))
+      .catch(() => update((s) => (s.file === file ? { ...s, check: 'failed' } : s)));
+    return shot;
+  }
+  const updateSlot = (angle: ViewAngle) => (fn: (s: Shot) => Shot) =>
+    setShots((all) => (all[angle] ? { ...all, [angle]: fn(all[angle]!) } : all));
+  const updateExtras = (fn: (s: Shot) => Shot) => setExtras((all) => all.map(fn));
+
+  /** The walk-around's photos go into the slots (replacing those sides); close-ups fill the close-up slot, then extras. */
+  function addWalk(r: WalkResult) {
+    setWalking(false);
+    const sides = Object.entries(r.sides) as [ViewAngle, File][];
+    let room = limits.maxImagesPerInspection - photos.filter((p) => !(p.angle in r.sides)).length;
+    const used: string[] = [];
+    for (const [angle, file] of sides) {
+      if (room <= 0 && !shots[angle]) break;
+      setShot(angle, newShot(file, updateSlot(angle)));
+      used.push(VIEW_ANGLES[angle].toLowerCase());
+      if (!shots[angle]) room -= 1;
+    }
+    let closeups = 0;
+    for (const file of r.closeups) {
+      if (room <= 0) break;
+      if (!shots.other && closeups === 0) setShot('other', newShot(file, updateSlot('other')));
+      else setExtras((all) => [...all, newShot(file, updateExtras)]);
+      closeups += 1;
+      room -= 1;
+    }
+    setMode('slots');
+    setWalkNote(
+      `Walk-around added ${used.length} ${used.length === 1 ? 'side' : 'sides'}${used.length ? ` (${used.join(', ')})` : ''}` +
+      `${closeups ? ` and ${closeups} close-up${closeups === 1 ? '' : 's'}` : ''}. Check them, retake any that look wrong, then go on.`,
+    );
+  }
+
   function onFile(file: File | undefined) {
     if (fileInput.current) fileInput.current.value = ''; // so the same file can be chosen again
     if (!file) return;
@@ -136,25 +193,21 @@ export function NewInspectionPage() {
     if (!limits.allowedTypes.includes(file.type)) return setProblem(`${file.name} is not a JPEG, PNG or WebP photo.`);
     if (file.size > limits.maxImageMb * 1024 * 1024) return setProblem(`${file.name} is larger than ${limits.maxImageMb} MB.`);
     const angle = target.current;
-    const shot: Shot = { file, preview: URL.createObjectURL(file), check: 'checking' };
-    setShot(angle, shot);
-    checkPhoto(file)
-      .then((check) => setShots((all) => (all[angle]?.file === file ? { ...all, [angle]: { ...shot, check } } : all)))
-      .catch(() => setShots((all) => (all[angle]?.file === file ? { ...all, [angle]: { ...shot, check: 'failed' } } : all)));
+    setShot(angle, newShot(file, updateSlot(angle)));
   }
 
   /** Uploads the photos (and, from step 3, the recordings), then shows the analysis as the server reports it. */
   async function analyse(withSound: boolean) {
-    if (!job || taken.length === 0) return;
+    if (!job || photos.length === 0) return;
     setError(null);
     const situations = withSound ? recorded : [];
     const id = newProgressId();
     const form = new FormData();
     form.append('jobId', String(job.jobId));
     form.append('progressId', id);
-    for (const angle of taken) {
-      form.append('images', shots[angle]!.file);
-      form.append('viewAngles', angle);
+    for (const p of photos) {
+      form.append('images', p.shot.file);
+      form.append('viewAngles', p.angle);
     }
     for (const situation of situations) {
       form.append('sounds', sounds[situation]!.file);
@@ -162,8 +215,8 @@ export function NewInspectionPage() {
     }
     setRun({
       progressId: id,
-      bytes: taken.reduce((s, a) => s + shots[a]!.file.size, 0) + situations.reduce((s, k) => s + sounds[k]!.file.size, 0),
-      photos: taken.map((angle) => ({ angle, preview: shots[angle]!.preview })),
+      bytes: photos.reduce((s, p) => s + p.shot.file.size, 0) + situations.reduce((s, k) => s + sounds[k]!.file.size, 0),
+      photos: photos.map((p) => ({ angle: p.angle, preview: p.shot.preview })),
       sounds: situations.map((situation) => ({ situation, file: sounds[situation]!.file })),
     });
     setSent(0);
@@ -198,13 +251,10 @@ export function NewInspectionPage() {
   }
 
   const fields = fieldErrors(error);
-  const warned = taken.filter((a) => {
-    const c = shots[a]!.check;
-    return typeof c === 'object' && c.warnings.length > 0;
-  }).length;
-  const reachable = (s: 1 | 2 | 3) => s === 1 || (s === 2 && !!job) || (s === 3 && !!job && taken.length > 0);
+  const warned = photos.filter((p) => typeof p.shot.check === 'object' && p.shot.check.warnings.length > 0).length;
+  const reachable = (s: 1 | 2 | 3) => s === 1 || (s === 2 && !!job) || (s === 3 && !!job && photos.length > 0);
   const analyseLabel = (withSound: boolean) =>
-    `Analyse ${taken.length > 1 ? `${taken.length} photos` : 'photo'}${withSound && recorded.length > 0 ? ` + ${recorded.length} ${recorded.length === 1 ? 'recording' : 'recordings'}` : ''}`;
+    `Analyse ${photos.length > 1 ? `${photos.length} photos` : 'photo'}${withSound && recorded.length > 0 ? ` + ${recorded.length} ${recorded.length === 1 ? 'recording' : 'recordings'}` : ''}`;
 
   return (
     <>
@@ -227,7 +277,7 @@ export function NewInspectionPage() {
             <ol className="as-wiz" aria-label="Steps">
               {([
                 [1, 'Vehicle', job ? job.registrationNo : 'Choose the open job'],
-                [2, 'Photos', taken.length ? `${taken.length} of ${limits.maxImagesPerInspection} taken` : 'Each damaged side'],
+                [2, 'Photos', photos.length ? `${photos.length} of ${limits.maxImagesPerInspection} taken` : 'Walk round or photograph'],
                 [3, 'Sound', recorded.length ? `${recorded.length} ${recorded.length === 1 ? 'recording' : 'recordings'}` : 'Optional'],
               ] as const).map(([n, title, note]) => {
                 const done = n < step || (n === 1 && !!job && step > 1);
@@ -307,10 +357,48 @@ export function NewInspectionPage() {
               className="mb-3"
               icon="bi-camera"
               title="2. Photos"
-              subtitle={`Photograph each side that shows damage, up to ${limits.maxImagesPerInspection} photos. Stand 2–3 m back so the whole side is in the frame, in good light.`}
-              actions={<span className="small text-body-secondary as-num">{taken.length} of {limits.maxImagesPerInspection}</span>}
+              subtitle={`Walk round the vehicle with the camera, upload a walk-around video, or photograph each side (up to ${limits.maxImagesPerInspection} photos). Stand 2–3 m back, in good light.`}
+              actions={<span className="small text-body-secondary as-num">{photos.length} of {limits.maxImagesPerInspection}</span>}
             >
               <div className="as-card-body">
+              <div className="as-capture-modes" role="tablist" aria-label="How to capture the photos">
+                {([
+                  ['walk', 'bi-person-walking', 'Walk-around', 'Live camera, AI picks the shots'],
+                  ['video', 'bi-film', 'Upload video', 'A walk-around filmed earlier'],
+                  ['slots', 'bi-images', 'Photo slots', `One photo per side${photos.length ? ` · ${photos.length} added` : ''}`],
+                ] as const).map(([key, icon, title, note]) => (
+                  <button key={key} type="button" role="tab" aria-selected={mode === key} className={mode === key ? 'on' : ''} onClick={() => setMode(key)}>
+                    <i className={`bi ${icon}`} aria-hidden="true" />
+                    <span><b>{title}</b><small>{note}</small></span>
+                  </button>
+                ))}
+              </div>
+
+              {mode === 'walk' && (
+                <div className="as-walk-intro">
+                  <WalkIllustration />
+                  <div>
+                    <b>Live walk-around</b>
+                    <ol>
+                      <li>Stand 2–3 m in front of the vehicle and press <b>Start</b>.</li>
+                      <li>Walk round it: front, left side, rear, right side. Each side is captured by itself when it is sharp and fills the screen.</li>
+                      <li>The AI marks damage live; clear damage is kept as close-ups. Press <b>Finish</b>.</li>
+                    </ol>
+                    {!window.isSecureContext && (
+                      <p className="small text-warning">
+                        <i className="bi bi-shield-lock me-1" aria-hidden="true" />The camera needs https: on the laptop run <code>npm run dev:phone</code> and open the https address on the phone.
+                      </p>
+                    )}
+                    <button type="button" className="btn btn-primary" disabled={busy} onClick={() => setWalking(true)}>
+                      <i className="bi bi-camera-video me-1" aria-hidden="true" />Start walk-around
+                    </button>
+                  </div>
+                </div>
+              )}
+              {mode === 'video' && <VideoWalkAround onDone={addWalk} />}
+
+              {mode === 'slots' && <>
+              {walkNote && <Alert tone="success">{walkNote}</Alert>}
               {problem && <Alert tone="warning">{problem}</Alert>}
               {fields.images && <Alert>{fields.images}</Alert>}
               <input
@@ -350,6 +438,19 @@ export function NewInspectionPage() {
                     </button>
                   );
                 })}
+                {extras.map((shot, i) => (
+                  <FilledSlot
+                    key={shot.preview}
+                    angle="other"
+                    title={`Close-up ${i + 2}`}
+                    shot={shot}
+                    disabled={busy}
+                    onRemove={() => {
+                      URL.revokeObjectURL(shot.preview);
+                      setExtras((all) => all.filter((s) => s !== shot));
+                    }}
+                  />
+                ))}
               </div>
               <p className="small text-body-secondary mt-3 mb-0">
                 <i className="bi bi-info-circle me-1" aria-hidden="true" />
@@ -357,6 +458,7 @@ export function NewInspectionPage() {
                   ? `${warned === 1 ? 'One photo is' : `${warned} photos are`} unclear and may give less reliable results. Retake if you can; you can still analyse.`
                   : 'Each photo is checked for sharpness and light as you add it. The damage itself is assessed when you analyse.'}
               </p>
+              </>}
               </div>
             </Card>
             )}
@@ -378,7 +480,7 @@ export function NewInspectionPage() {
                 {step === 1
                   ? job ? 'Vehicle chosen.' : 'Choose the vehicle first.'
                   : step === 2
-                    ? taken.length === 0 ? 'Add at least one photo.' : 'Next: record the engine, or analyse the photos only.'
+                    ? photos.length === 0 ? 'Add at least one photo.' : 'Next: record the engine, or analyse the photos only.'
                     : recorded.length === 0 ? 'No recordings: only the photos will be analysed.' : 'The results open for review.'}
               </span>
               {step === 1 && (
@@ -388,16 +490,16 @@ export function NewInspectionPage() {
               )}
               {step === 2 && (
                 <>
-                  <button type="button" className="btn btn-light" disabled={taken.length === 0} onClick={() => void analyse(false)}>
+                  <button type="button" className="btn btn-light" disabled={photos.length === 0} onClick={() => void analyse(false)}>
                     <i className="bi bi-magic me-1" aria-hidden="true" />{analyseLabel(false)} only
                   </button>
-                  <button type="button" className="btn btn-primary" disabled={taken.length === 0} onClick={() => setStep(3)}>
+                  <button type="button" className="btn btn-primary" disabled={photos.length === 0} onClick={() => setStep(3)}>
                     Next: sound<i className="bi bi-arrow-right ms-1" aria-hidden="true" />
                   </button>
                 </>
               )}
               {step === 3 && (
-                <button type="button" className="btn btn-primary as-wiz-go" disabled={!job || taken.length === 0} onClick={() => void analyse(true)}>
+                <button type="button" className="btn btn-primary as-wiz-go" disabled={!job || photos.length === 0} onClick={() => void analyse(true)}>
                   <i className="bi bi-magic me-1" aria-hidden="true" />{analyseLabel(true)}
                 </button>
               )}
@@ -406,7 +508,23 @@ export function NewInspectionPage() {
           )}
         </div>
       </div>
+      {walking && <LiveWalkAround onDone={addWalk} onClose={() => setWalking(false)} />}
     </>
+  );
+}
+
+/** Top view of a vehicle and the walk round it (front, left, rear, right). */
+function WalkIllustration() {
+  return (
+    <svg className="as-walk-illus" viewBox="0 0 120 120" aria-hidden="true">
+      <circle cx="60" cy="60" r="46" className="path" />
+      <rect x="44" y="30" width="32" height="60" rx="11" className="car" />
+      <rect x="49" y="40" width="22" height="11" rx="3" className="glass" />
+      <rect x="49" y="70" width="22" height="8" rx="3" className="glass" />
+      <circle r="5" className="walker">
+        <animateMotion dur="6s" repeatCount="indefinite" path="M60 14 A46 46 0 1 0 60.01 14" />
+      </circle>
+    </svg>
   );
 }
 
@@ -424,20 +542,22 @@ function newProgressId() {
     : `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function FilledSlot({ angle, shot, disabled, onReplace, onRemove }: {
+function FilledSlot({ angle, title, shot, disabled, onReplace, onRemove }: {
   angle: ViewAngle;
+  title?: string;
   shot: Shot;
   disabled: boolean;
-  onReplace: () => void;
+  onReplace?: () => void;
   onRemove: () => void;
 }) {
+  const name = title ?? VIEW_ANGLES[angle];
   const check = shot.check;
   return (
     <div className="as-dmg-shot">
-      <img src={shot.preview} alt={`${VIEW_ANGLES[angle]} photo`} />
+      <img src={shot.preview} alt={`${name} photo`} />
       <div className="as-dmg-shot-body">
         <div className="d-flex justify-content-between align-items-center gap-2">
-          <b className="small">{VIEW_ANGLES[angle]}</b>
+          <b className="small">{name}</b>
           {check === 'checking' ? (
             <span className="small text-body-secondary"><span className="spinner-border spinner-border-sm me-1" aria-hidden="true" />Checking photo</span>
           ) : check === 'failed' ? (
@@ -457,10 +577,12 @@ function FilledSlot({ angle, shot, disabled, onReplace, onRemove }: {
           </div>
         )}
         <div className="as-dmg-shot-foot">
-          <button type="button" className="btn btn-sm btn-light" disabled={disabled} onClick={onReplace}>
-            <i className="bi bi-arrow-repeat me-1" aria-hidden="true" />Retake
-          </button>
-          <button type="button" className="btn btn-sm btn-light" aria-label={`Remove the ${VIEW_ANGLES[angle]} photo`} disabled={disabled} onClick={onRemove}>
+          {onReplace && (
+            <button type="button" className="btn btn-sm btn-light" disabled={disabled} onClick={onReplace}>
+              <i className="bi bi-arrow-repeat me-1" aria-hidden="true" />Retake
+            </button>
+          )}
+          <button type="button" className="btn btn-sm btn-light" aria-label={`Remove the ${name} photo`} disabled={disabled} onClick={onRemove}>
             <i className="bi bi-trash" aria-hidden="true" />
           </button>
         </div>

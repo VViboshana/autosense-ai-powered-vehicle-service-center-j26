@@ -23,7 +23,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from . import config, sound, training
 from .findings import split_findings
-from .predictor import SegModel, find_vehicle
+from .predictor import SegModel, look
 from .quality import check_quality
 from .severity import assess
 
@@ -75,7 +75,7 @@ def predict(
     bgr = np.ascontiguousarray(np.asarray(pil)[:, :, ::-1])  # OpenCV and YOLO expect BGR
 
     quality = check_quality(bgr)
-    vehicle = find_vehicle(state['coco'], bgr)
+    vehicle, person = look(state['coco'], bgr)
     # One model run at the lower threshold; then findings (>= confidence, glass >= its stricter bar) and possible damage
     regions = state['damage'].predict(bgr, min(config.POSSIBLE_CONFIDENCE, confidence))
     detections = split_findings(regions, confidence, config.MAX_POSSIBLE_PER_PHOTO, config.STRICT_CONFIDENCE)
@@ -89,6 +89,8 @@ def predict(
         'image': {'width': width, 'height': height},
         'quality': quality,
         'vehicle': vehicle,
+        # No vehicle but a person in view: the damage regions are then most likely not damage (the walk-around says so)
+        'person': person,
         'detections': detections,
         'severity': severity,
         'processingMs': round((time.perf_counter() - started) * 1000),
