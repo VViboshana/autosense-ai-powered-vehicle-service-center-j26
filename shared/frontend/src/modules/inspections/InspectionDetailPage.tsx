@@ -12,6 +12,7 @@ import { formatDate, formatTime } from '@/lib/format';
 import { useApi } from '@/lib/useApi';
 import { Celebration } from './Celebration';
 import { DamagePhoto } from './DamagePhoto';
+import { HandoverCard } from './HandoverCard';
 import { PhotoViewer } from './PhotoViewer';
 import { MechanicalGuide, SoundResults } from './SoundResults';
 import { Toasts } from './Toasts';
@@ -364,7 +365,7 @@ export function InspectionDetailPage() {
                           <section className="as-dmg-possible" aria-label="Possible damage">
                             <h3><i className="bi bi-question-circle" aria-hidden="true" />Possible damage</h3>
                             <p>
-                              The model is less sure about these (confidence under 25%). Accept the ones that are real damage;
+                              The model is less sure about these (confidence under 25%, or under 70% for glass). Accept the ones that are real damage;
                               the rest are dismissed when the inspection is confirmed.
                             </p>
                             <ol className="as-dmg-list">{open.map(item)}</ol>
@@ -413,6 +414,9 @@ export function InspectionDetailPage() {
             />
             <MechanicalGuide plan={data.mechanical} reviewing={data.status === 'awaiting_review'} />
           </div>}
+
+          {/* Under both tabs: it sums up the whole inspection */}
+          <HandoverCard handover={data.handover} />
         </div>
       </div>
 
@@ -715,6 +719,13 @@ function RegionItem({ d, no, serviceName, on, editable, busy, onSelect, onHover,
           <StatusPill tone={REVIEW[d.reviewStatus].tone}>{REVIEW[d.reviewStatus].label}</StatusPill>
         )}
       </div>
+      {open && d.label === 'glass_shatter' && (d.confidence ?? 0) >= 0.25 && (
+        <p className="as-dmg-reason as-dmg-strict mb-0">
+          <i className="bi bi-shield-exclamation me-1" aria-hidden="true" />
+          Glass needs a higher confidence (70%) to count as damage: reflections can look like shattered glass. Look at the
+          glass itself before accepting.
+        </p>
+      )}
       {d.suggestion && !open && <p className="as-dmg-reason mb-0">Suggested by the model at low confidence, accepted by the technician.</p>}
       {added ? (
         <p className="as-dmg-reason">Missed by the model; added by {d.reviewedBy ?? 'a technician'}.</p>

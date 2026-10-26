@@ -18,6 +18,10 @@ CONFIDENCE = float(os.getenv('DAMAGE_CONFIDENCE', '0.25'))       # detections fr
 # Between this and CONFIDENCE: "possible damage" the technician can accept or dismiss (helps recall on subtle damage)
 POSSIBLE_CONFIDENCE = float(os.getenv('DAMAGE_POSSIBLE_CONFIDENCE', '0.10'))
 MAX_POSSIBLE_PER_PHOTO = int(os.getenv('DAMAGE_MAX_POSSIBLE', '5'))
+# Stricter bar for shattered glass: reflections on intact glass are its typical false alarm, and it is a before-driving
+# repair. Below the bar it is possible damage instead of a finding. 0.70 measured on the CarDD test set
+# (evaluation/results/glass_threshold.md): keeps 96% of real shattered glass as findings, false alarms 12 -> 3 of 16.
+STRICT_CONFIDENCE = {'glass_shatter': float(os.getenv('DAMAGE_GLASS_CONFIDENCE', '0.70'))}
 MAX_UPLOAD_MB = int(os.getenv('DAMAGE_MAX_UPLOAD_MB', '15'))
 
 # Sound inspection (see sound.py). The audio code is shared with training (acoustic/audio.py) so both prepare

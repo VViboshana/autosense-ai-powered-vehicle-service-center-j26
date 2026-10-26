@@ -142,6 +142,7 @@ async function receiveUpload(req: Request, res: Response, limits: typeof DEFAULT
  *   GET   /api/inspections/vehicle-options?search=            open jobs to start an inspection for
  *   GET   /api/inspections/performance                        field figures: model per damage type + severity rule check
  *   GET   /api/inspections/:id                               detail with photos and damage regions
+ *   GET   /api/inspections/:id/handover                      hand-over to maintenance forecasting (inspection-handover-v1)
  *   GET   /api/inspections/:id/images/:imageId                the photo itself
  *   GET   /api/inspections/:id/sounds/:soundId/audio          a sound recording itself
  *   PATCH /api/inspections/:id/sounds/:soundId                review one sound result (confirmed | corrected | rejected)
@@ -198,6 +199,14 @@ export function inspectionsRoutes(deps: InspectionDeps) {
     const inspection = await getInspection(pool, id);
     if (!inspection) throw new NotFoundError('Inspection not found.');
     sendOk(res, inspection);
+  });
+
+  // Also for the maintenance forecast (MAINTENANCE_FORECASTS), which builds on the inspection
+  router.get('/:id/handover', requireScreen('INSPECTION_HISTORY', 'INSPECTION_REVIEW', 'MAINTENANCE_FORECASTS'), async (req, res) => {
+    const { id } = parse(idParam, req.params);
+    const inspection = await getInspection(pool, id);
+    if (!inspection) throw new NotFoundError('Inspection not found.');
+    sendOk(res, inspection.handover);
   });
 
   router.get('/:id/images/:imageId', requireScreen('INSPECTION_HISTORY', 'INSPECTION_REVIEW', 'INSPECTION_CREATE'), async (req, res) => {
