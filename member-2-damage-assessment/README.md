@@ -95,6 +95,12 @@ are findings (`"possible": false`). Weaker regions come back as possible damage 
 They are graded like findings but do not count towards `severity.overall`. In the app a technician accepts or dismisses
 them; the test set showed the model misses subtle damage (dent, scratch, crack) just below the threshold.
 
+**Stricter bar for shattered glass (`DAMAGE_GLASS_CONFIDENCE`, 0.70).** Reflections on intact glass are the model's
+typical glass false alarm, and shattered glass is a before-driving repair, so glass becomes a finding only from 0.70;
+between 0.25 and 0.70 it is possible damage (the app tells the technician to check for reflections). Measured on the
+CarDD test set (`evaluation/glass_threshold.py` -> `evaluation/results/glass_threshold.md`): 68 of 71 real shattered
+glass regions stay findings (the other 3 become possible damage, none lost), glass false alarms as findings 12 -> 3 of 16.
+
 ## Severity (rule-v0, preliminary)
 The COCO model finds the main vehicle (car, motorcycle, bus or truck: the largest one). Each damage's area is divided
 by the vehicle's area (`areaRatioVehicle`), which does not depend on how far away the photo was taken. The rules in
@@ -129,6 +135,7 @@ visible part only. The thresholds are a proposal until checked with the technici
 | `DAMAGE_MODEL_VERSION` | `AutoSense Damage Detection V1` (training run `expA_yolo11n_640`) |
 | `DAMAGE_IMGSZ` | `640` (must match training) |
 | `DAMAGE_CONFIDENCE` | `0.25` |
+| `DAMAGE_GLASS_CONFIDENCE` | `0.70` (glass_shatter only) |
 | `DAMAGE_MAX_UPLOAD_MB` | `15` |
 | `SOUND_MODEL_PATH` | unset: the active version (`acoustic/model/active.json`); set: always this file |
 | `SOUND_SURE_CONFIDENCE` | `0.7` |

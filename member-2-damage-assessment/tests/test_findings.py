@@ -31,3 +31,11 @@ def test_possible_damage_does_not_change_the_overall_severity():
     result = assess(detections, vehicle)
     assert detections[1]['severity'] == 'severe'  # graded, ready if accepted
     assert result['overall'] == 'minor'           # but only the finding counts
+
+
+def test_glass_needs_the_stricter_bar_to_be_a_finding():
+    regions = [region('glass_shatter', 0.9, 0, 0, 10, 10), region('glass_shatter', 0.5, 20, 0, 30, 10),
+               region('dent', 0.5, 40, 0, 50, 10)]
+    out = split_findings(regions, 0.25, 5, strict={'glass_shatter': 0.7})
+    assert [(r['confidence'], r['label'], r['possible']) for r in out] == [
+        (0.9, 'glass_shatter', False), (0.5, 'dent', False), (0.5, 'glass_shatter', True)]
