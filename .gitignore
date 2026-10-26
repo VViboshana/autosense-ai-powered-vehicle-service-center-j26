@@ -148,7 +148,6 @@ activemq-data/
 *.sage.py
 
 # Environments
-.env
 .envrc
 .venv
 .venv312/
@@ -229,3 +228,5 @@ __marimo__/
 
 # Occupancy test videos (large, may show people/number plates): never committed
 member-1-occupancy/videos/
+config.bat
+node_modules

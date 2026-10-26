@@ -10,10 +10,10 @@
     "node": ">=22.9"
   },
   "scripts": {
-    "dev": "concurrently -k -n api,web -c blue,green \"npm run dev -w backend\" \"npm run dev -w frontend\"",
-    "dev:backend": "npm run dev -w backend",
-    "dev:frontend": "npm run dev -w frontend",
-    "build": "npm run build -w backend && npm run build -w frontend",
+    "dev": "node init && concurrently -k -n api,web -c blue,green \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "dev:backend": "node init && npm run dev -w backend",
+    "dev:frontend": "node init && npm run dev -w frontend",
+    "build": "node init && npm run build -w backend && npm run build -w frontend",
     "typecheck": "npm run typecheck -w backend && npm run typecheck -w frontend",
     "lint": "npm run lint -w backend && npm run lint -w frontend",
     "test": "npm run test -w backend",
