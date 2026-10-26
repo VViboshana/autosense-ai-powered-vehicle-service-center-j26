@@ -13,7 +13,8 @@ export const MECHANICAL_VALIDATED = false;
 type Hours = [number, number];
 type Rule = { priority: Priority; why: string; service: string; effortHours: Hours };
 
-const RULES: Partial<Record<SoundLabel, Rule>> = {
+/** Per fault: priority, service, proposed hours (normal sounds have no rule). Also used by the forecast hand-over. */
+export const MECHANICAL_RULES: Partial<Record<SoundLabel, Rule>> = {
   worn_brakes: { priority: 'before_driving', why: 'Worn brakes make the vehicle unsafe to drive.', service: 'BRAKE_SERVICE', effortHours: [1.5, 2.5] },
   low_oil: { priority: 'before_driving', why: 'Driving with low oil can damage the engine.', service: 'OIL_CHANGE', effortHours: [0.5, 1] },
   misfire: { priority: 'soon', why: 'A misfire wastes fuel and can damage the catalytic converter.', service: 'ENGINE_REPAIR', effortHours: [1, 3] },
@@ -40,8 +41,8 @@ export type MechanicalPlan = {
 /** The plan from the final sound findings (normal results need nothing). */
 export function mechanicalPlan(findings: { situation: SoundSituation; label: SoundLabel }[]): MechanicalPlan {
   const items: MechanicalItem[] = findings
-    .filter((f) => RULES[f.label])
-    .map((f) => ({ situation: f.situation, label: f.label, name: SOUND_FAULTS[f.label].name, ...RULES[f.label]! }))
+    .filter((f) => MECHANICAL_RULES[f.label])
+    .map((f) => ({ situation: f.situation, label: f.label, name: SOUND_FAULTS[f.label].name, ...MECHANICAL_RULES[f.label]! }))
     .sort((a, b) => PRIORITIES.indexOf(a.priority) - PRIORITIES.indexOf(b.priority));
   const codes = [...new Set(items.map((i) => i.service))];
   return {

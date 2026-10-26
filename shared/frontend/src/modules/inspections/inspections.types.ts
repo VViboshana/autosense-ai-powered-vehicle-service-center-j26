@@ -95,6 +95,28 @@ export type InspectionDetail = {
   sounds: SoundCheck[];
   /** Mechanical repair guide from the sound findings (sound-repair-v0), kept apart from the body-damage plan */
   mechanical: MechanicalPlan;
+  /** What the maintenance forecast receives (inspection-handover-v1); a draft until the inspection is confirmed */
+  handover: Handover;
+};
+
+export type Handover = {
+  version: string;
+  final: boolean;
+  confirmedAt: string | null;
+  safeToDrive: { safe: boolean; reasons: string[] };
+  /** Ready for the forecast's "technician diagnosis" */
+  diagnosis: string;
+  /** Sound faults in the forecast model's categories */
+  categoryHints: { category: string; because: string[] }[];
+  work: {
+    bodyHours: Hours | null;
+    mechanicalHours: Hours | null;
+    totalHours: Hours | null;
+    services: { code: string; name: string; kind: 'body' | 'mechanical'; priority: Priority; effortHours: Hours | null }[];
+  };
+  /** Proposed (parts-v0): a guide, not a quote or an order */
+  parts: { part: string; quantity: number; for: string[]; kind: 'body' | 'mechanical' }[];
+  methods: { severity: string | null; repair: string; mechanical: string; parts: string; validated: boolean };
 };
 
 export type MechanicalPlan = {

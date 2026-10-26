@@ -348,6 +348,8 @@ export async function confirmInspection(pool: pg.Pool, c: { inspectionId: number
         sounds,
         // Mechanical work from the sounds (sound-repair-v0): priority, services and proposed hours for the forecast
         mechanical: { method: mechanical.method, priority: mechanical.priority, services: mechanical.services, effortHours: mechanical.effortHours },
+        // Everything the maintenance forecast needs, in its terms (inspection-handover-v1, docs/forecast-handover.md)
+        handover: (await repo.getInspection(client, c.inspectionId))!.handover,
       })],
     );
     await audit(client, {
