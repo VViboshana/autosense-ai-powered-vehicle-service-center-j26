@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type pg from 'pg';
 import { z } from 'zod';
 import { sendOk } from '../../http/envelope.js';
-import { ConflictError, NotFoundError } from '../../http/errors.js';
+import { ConflictError, ForbiddenError, NotFoundError } from '../../http/errors.js';
 import { parse } from '../../http/validate.js';
 import { audit } from '../../lib/audit.js';
 import { photoUrl, receiveVehiclePhoto, saveVehiclePhoto, sendStoredPhoto } from '../../lib/vehiclePhotos.js';
@@ -13,6 +13,8 @@ import { repairFor, repairPlan } from '../inspections/inspections.repair.js';
 import { withServiceNames } from '../inspections/inspections.repository.js';
 import { mechanicalPlan } from '../inspections/inspections.mechanical.js';
 import { SOUND_FAULTS, type SoundLabel, type SoundSituation } from '../inspections/inspections.sound.js';
+import type { GeminiSettings } from '../../integrations/llm/gemini.js';
+import { reportSummary, SUMMARY_LANGUAGES } from './my.summary.js';
 
 const claimBody = z.object({
   registrationNo: z
@@ -29,6 +31,8 @@ const photoParams = idParam.extend({
   inspectionId: z.coerce.number().int().positive(),
   imageId: z.coerce.number().int().positive(),
 });
+const inspectionParams = idParam.extend({ inspectionId: z.coerce.number().int().positive() });
+const summaryQuery = z.object({ lang: z.enum(SUMMARY_LANGUAGES).default('en') });
 
 /** The job's place among vehicles waiting for a bay (1 = next), when it is waiting. */
 const QUEUE_POSITION = (job: string) => `CASE WHEN ${job}.stage = 'waiting_for_bay' THEN
@@ -43,7 +47,7 @@ const vehicleText = (r: { make: string; model: string; year: number | null; colo
  * (req.user.customerId), and show a vehicle only through an APPROVED request. Never accept a customer id from the
  * request. Customers see confirmed inspections only, never the unreviewed AI result.
  */
-export function myRoutes(pool: pg.Pool, uploadDir: string) {
+export function myRoutes(pool: pg.Pool, uploadDir: string, writer: GeminiSettings = { apiKey: undefined, model: '' }) {
   const router = Router();
   router.use(requireCustomer());
 
@@ -67,11 +71,12 @@ export function myRoutes(pool: pg.Pool, uploadDir: string) {
    * joined into damaged areas (inspections/inspections.areas.ts) and numbered across the report, the photos, the overall severity,
    * the technician's note, and the repair guide (priority, services, rough effort; inspections/inspections.repair.ts).
    */
-  async function confirmedInspections(vehicleId: number, limit = 20) {
+  async function confirmedInspections(vehicleId: number, { limit = 20, inspectionId = null as number | null } = {}) {
     const heads = await pool.query(
       `SELECT inspection_id, inspection_no, reviewed_at, overall_severity, review_notes
-       FROM damage.inspections WHERE vehicle_id = $1 AND status = 'confirmed' ORDER BY reviewed_at DESC LIMIT $2`,
-      [vehicleId, limit],
+       FROM damage.inspections WHERE vehicle_id = $1 AND status = 'confirmed' AND ($3::int IS NULL OR inspection_id = $3)
+       ORDER BY reviewed_at DESC LIMIT $2`,
+      [vehicleId, limit, inspectionId],
     );
     if (!heads.rows.length) return [];
     const ids = heads.rows.map((r) => r.inspection_id);
@@ -147,6 +152,22 @@ export function myRoutes(pool: pg.Pool, uploadDir: string) {
     await sendStoredPhoto(res, uploadDir, rows[0]?.storage_key);
   });
 
+  /**
+   * The "In plain words" summary of one of my confirmed inspection reports, in English, Sinhala or Tamil (?lang=en|si|ta).
+   * Made from the same facts the report shows (my.summary.ts); English from a template when the AI writer is not
+   * available, and the answer says so.
+   */
+  router.get('/vehicles/:id/inspections/:inspectionId/summary', async (req, res) => {
+    const user = signedInUser(req);
+    const p = parse(inspectionParams, req.params);
+    const { lang } = parse(summaryQuery, req.query);
+    if (!user.screens.has('MY_INSPECTIONS')) throw new ForbiddenError();
+    await myVehicle(user.customerId!, p.id);
+    const [report] = await confirmedInspections(p.id, { limit: 1, inspectionId: p.inspectionId });
+    if (!report) throw new NotFoundError('This inspection report was not found.');
+    sendOk(res, await reportSummary(pool, writer, p.inspectionId, report, lang));
+  });
+
   /** The photo of my vehicle (the one I added, or changed to later). */
   router.get('/vehicles/:id/photo', async (req, res) => {
     const { id } = parse(idParam, req.params);
@@ -208,7 +229,7 @@ export function myRoutes(pool: pg.Pool, uploadDir: string) {
     const showInspections = user.screens.has('MY_INSPECTIONS');
     const list = await Promise.all(
       vehicles.rows.map(async (r) => {
-        const latest = showInspections ? (await confirmedInspections(r.vehicle_id, 1))[0] : undefined;
+        const latest = showInspections ? (await confirmedInspections(r.vehicle_id, { limit: 1 }))[0] : undefined;
         return {
           vehicleId: r.vehicle_id,
           registrationNo: r.registration_no,

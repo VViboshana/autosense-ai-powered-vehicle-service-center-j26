@@ -68,7 +68,21 @@ export type InspectionReport = {
   };
 };
 
-type Section<T> = { available: false } | { available: true; connected?: boolean; data: T };
+export type SummaryLanguage = 'en' | 'si' | 'ta';
+
+/** The "In plain words" summary of a report (/api/my/vehicles/:id/inspections/:inspectionId/summary?lang=) */
+export type ReportSummary = {
+  /** The language of the text: English when the translation was not available */
+  language: SummaryLanguage;
+  requested: SummaryLanguage;
+  /** ai: reworded by the AI writer from the confirmed facts; template: written by fixed rules */
+  source: 'ai' | 'template';
+  model: string | null;
+  method: string;
+  text: string;
+};
+
+type Section<T> ={ available: false } | { available: true; connected?: boolean; data: T };
 
 export type MyVehicle = {
   vehicle: {

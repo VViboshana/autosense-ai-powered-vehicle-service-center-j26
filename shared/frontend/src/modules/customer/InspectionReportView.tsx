@@ -5,6 +5,7 @@ import { DamageIcon } from './art';
 import type { InspectionReport, MyVehicle } from './customer.types';
 import { DAMAGE_NAMES, plural, PRIORITY_INFO, roughTime, SEVERITIES, severityName, severityOf, severityTone, VIEW_NAMES, VIEW_ORDER } from './customer.ui';
 import { DamageMap } from './DamageMap';
+import { PlainWords } from './PlainWords';
 import { ReportPhoto } from './ReportPhoto';
 import { useCountUp } from '@/lib/useCountUp';
 
@@ -78,6 +79,7 @@ export function InspectionReportView({ vehicle, report, history, onPick }: {
           <i className="bi bi-arrow-right text-body-secondary" aria-hidden="true" />
           <span className="cp-step ok"><i className="bi bi-check-lg" />A technician checked every mark</span>
         </div>
+        <PlainWords vehicleId={vehicle.vehicleId} inspectionId={report.inspectionId} />
         {report.notes && (
           <p className="cp-note cp-rise" style={{ '--i': 5 } as CSSProperties}><b>Technician's note:</b> {report.notes}</p>
         )}

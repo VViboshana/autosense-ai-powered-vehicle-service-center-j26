@@ -23,6 +23,12 @@ const schema = z.object({
   MAINTENANCE_ML_SERVICE_URL: z.url().optional(),
   /** Component 4 security service (member-4-anomaly-detection/service). */
   ML_SECURITY_URL: z.url().default('http://localhost:8004'),
+  /**
+   * Optional. Google Gemini API key (free from Google AI Studio) for the "In plain words" report summary in English,
+   * Sinhala and Tamil. Put it in backend/.env.local only (backend/.env is committed). Without it, an English template is used.
+   */
+  GEMINI_API_KEY: z.string().min(10).optional(),
+  GEMINI_MODEL: z.string().min(1).default('gemini-3.5-flash'), // 3.8-flash timed out on the free tier (27 Oct 2026); 3.5-flash answered in ~8 s
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
 

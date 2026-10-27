@@ -60,7 +60,7 @@ export function createApp(pool: pg.Pool, env: Env) {
   app.use('/api/my/bookings', myBookingsRoutes(pool));
   app.use('/api/my/service-centre', myServiceCentreRoutes(pool));
   app.use('/api/my', myActivityRoutes(pool));
-  app.use('/api/my', myRoutes(pool, env.UPLOAD_DIR));
+  app.use('/api/my', myRoutes(pool, env.UPLOAD_DIR, { apiKey: env.GEMINI_API_KEY, model: env.GEMINI_MODEL }));
 
   app.use('/api', notFound);
   app.use(errorHandler);

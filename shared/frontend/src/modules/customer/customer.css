@@ -170,6 +170,20 @@
 .cp-how .cp-step { display: inline-flex; align-items: center; gap: 0.45rem; background: var(--as-surface-2); border: 1px solid var(--as-line-soft); border-radius: 999px; padding: 0.25rem 0.7rem 0.25rem 0.3rem; }
 .cp-how .cp-step i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--as-primary-soft); color: var(--as-primary); font-style: normal; font-size: 0.75rem; }
 .cp-how .cp-step.ok i { background: var(--as-success-soft); color: var(--as-success); }
+/* In plain words: the report retold in a few sentences, with a language switch */
+.cp-plain { margin: 0 1.4rem 1.1rem; padding: 0.85rem 1rem; border: 1px solid var(--as-line-soft); background: var(--as-surface-2); border-radius: 12px; }
+.cp-plain-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.55rem; }
+.cp-langs { display: inline-flex; border: 1px solid var(--as-line); border-radius: 999px; overflow: hidden; background: var(--as-surface); }
+.cp-langs button { border: 0; background: transparent; color: var(--as-ink-2); font-size: 0.8rem; padding: 0.25rem 0.75rem; transition: background 0.15s var(--as-ease), color 0.15s var(--as-ease); }
+.cp-langs button + button { border-left: 1px solid var(--as-line-soft); }
+.cp-langs button:hover { background: var(--as-hover); }
+.cp-langs button[aria-pressed='true'] { background: var(--as-primary-soft); color: var(--as-primary); font-weight: 600; }
+.cp-langs button:focus-visible { outline: 2px solid var(--as-focus); outline-offset: -2px; }
+.cp-plain-text { margin: 0; font-size: 0.98rem; line-height: 1.6; color: var(--as-ink); }
+.cp-plain-text:lang(si), .cp-plain-text:lang(ta) { line-height: 1.8; }
+.cp-plain-text[aria-busy='true'] { opacity: 0.6; }
+.cp-plain-foot { margin: 0.55rem 0 0; font-size: 0.78rem; color: var(--as-muted); }
+
 .cp-note { margin: 0 1.4rem 1.1rem; padding: 0.6rem 0.9rem; border-left: 3px solid var(--as-line); background: var(--as-surface-2); border-radius: 0 10px 10px 0; font-size: 0.9rem; color: var(--as-ink-2); }
 
 .cp-rgrid { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 1.1rem; align-items: start; }
@@ -293,6 +307,13 @@
   .as-print-target .cp-rgrid { grid-template-columns: 1fr; }
   .as-print-target .cp-rside { position: static; }
   .as-print-target .cp-card, .as-print-target .cp-item { break-inside: avoid; }
+  /*
+   * The top card (title, plain words, note, what needs doing) can be taller than what is left of the first page; kept
+   * whole it would move to page 2 and leave page 1 blank. It may split, but only between its parts.
+   */
+  .as-print-target > .cp-card { break-inside: auto; }
+  .as-print-target .cp-rhead, .as-print-target .cp-plain, .as-print-target .cp-note,
+  .as-print-target .cp-todo-head, .as-print-target .cp-todo-list li { break-inside: avoid; }
 }
 
 /* ---------- What needs doing (repair guide, in customer words) ---------- */

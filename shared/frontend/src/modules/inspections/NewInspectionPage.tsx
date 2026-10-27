@@ -297,6 +297,18 @@ export function NewInspectionPage() {
                 );
               })}
             </ol>
+            {job && !IN_BAY.includes(job.stage) && (
+              // Service flow: inspection is a bay step. A job still in the queue keeps its stage when the inspection is
+              // confirmed, so the customer's journey would stay on "Waiting for a bay".
+              <div className="as-dmg-notbay as-tone-warning" role="status">
+                <i className="bi bi-exclamation-triangle-fill" aria-hidden="true" />
+                <span>
+                  <b>{job.registrationNo} is not in a bay yet</b> ({STAGES[job.stage as JobStage]?.label.toLowerCase() ?? job.stage}).
+                  You can still inspect it, but the customer's progress will not move on to "Damage inspection" until
+                  the vehicle is in a bay. Move it into a bay first (Bay monitor or Vehicles &amp; jobs) to keep the service flow in order.
+                </span>
+              </div>
+            )}
 
             {step === 1 && (
             <Card className="mb-3" icon="bi-car-front" title="1. Vehicle" subtitle="Choose the vehicle's open job.">
@@ -590,6 +602,9 @@ function FilledSlot({ angle, title, shot, disabled, onReplace, onRemove }: {
     </div>
   );
 }
+
+/** Job stages where the vehicle is in a bay: the stages an inspection moves on (inspections.service.ts). */
+const IN_BAY = ['in_bay', 'inspecting', 'inspected'];
 
 function JobLine({ o }: { o: VehicleOption }) {
   const stage = STAGES[o.stage as JobStage];

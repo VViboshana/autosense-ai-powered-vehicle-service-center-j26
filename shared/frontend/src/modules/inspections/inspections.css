@@ -8,6 +8,19 @@
   margin: 0;
 }
 
+/* New inspection: the chosen vehicle is not in a bay yet (the inspection would not move its job on) */
+.as-dmg-notbay {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.7rem 0.95rem;
+  margin-bottom: 1rem;
+  border-radius: var(--as-radius);
+  font-size: 0.88rem;
+}
+.as-dmg-notbay span { color: var(--as-ink); }
+.as-dmg-notbay .bi { margin-top: 0.15rem; }
+
 /* ---------- Photo with damage outlines ---------- */
 /* Beside the region list (wide screens), the photo stays in view while the technician scrolls through the regions */
 @media (min-width: 992px) {

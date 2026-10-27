@@ -65,7 +65,7 @@ Five wrong passwords lock an account; an administrator unlocks it in Administrat
 | Where | What |
 |---|---|
 | `backend/.env` (**committed**) | The team's shared API settings: `PORT`, `ALLOWED_ORIGINS`, AI service URLs including `MAINTENANCE_ML_SERVICE_URL=http://127.0.0.1:8003`, `LOG_LEVEL`, pool size. No secrets. Checked at startup; a bad value stops the API with a message naming it. |
-| `backend/.env.local` (**not committed**) | Your secrets and overrides: `DATABASE_URL` (always), `SETUP_KEY` (servers), or e.g. `PORT=5001`. Wins over `.env`. Template: `backend/.env.local.example`. |
+| `backend/.env.local` (**not committed**) | Your secrets and overrides: `DATABASE_URL` (always), `SETUP_KEY` (servers), `GEMINI_API_KEY` (optional: the customer report's "In plain words" summary in Sinhala and Tamil; free from Google AI Studio, without it an English template is used), or e.g. `PORT=5001`. Wins over `.env`. Template: `backend/.env.local.example`. |
 
 ### Maintenance ML proxy
 
