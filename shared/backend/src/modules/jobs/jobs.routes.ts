@@ -7,6 +7,8 @@ import { parse } from '../../http/validate.js';
 import { requireScreen, signedInUser } from '../../middleware/requireScreen.js';
 import { arrivalsFor, findVehicles, JOB_STAGES, listJobs, serviceTypes } from './jobs.repository.js';
 import { centreToday, changeStage, checkIn, type JobAction } from './jobs.service.js';
+import { freeBaysForJobs } from '../occupancy/occupancy.repository.js';
+import { confirmJobInBay } from '../occupancy/occupancy.service.js';
 
 const listQuery = pageQuery.extend({
   scope: z.enum(['today', 'open']).default('today'),
@@ -24,6 +26,7 @@ export const checkInBody = z.union([
 ]);
 const vehicleQuery = z.object({ search: z.string().trim().min(2, 'Type at least 2 characters.').max(60) });
 const idParam = z.object({ id: z.coerce.number().int().positive() });
+const intoBayBody = z.object({ bayId: z.number({ error: 'Pick the bay.' }).int().positive() });
 export const actionBody = z.object({
   note: z.string().trim().max(200).optional().transform((s) => s || null),
   anyway: z.boolean().optional(),
@@ -37,6 +40,8 @@ export const actionBody = z.object({
  *   GET  /api/jobs/vehicles?search=             vehicles on record, for a walk-in            (JOB_CHECK_IN)
  *   GET  /api/jobs/service-types                                                             (JOB_CHECK_IN)
  *   POST /api/jobs/check-in                     { bookingId } or { vehicleId, serviceTypeId }  (JOB_CHECK_IN)
+ *   GET  /api/jobs/free-bays                    bays a waiting job can be moved into by hand (BAY_JOB_CONFIRM)
+ *   POST /api/jobs/:id/move-into-bay            { bayId } waiting -> in a bay, without a camera (BAY_JOB_CONFIRM)
  *   POST /api/jobs/:id/send-to-inspection       in a bay -> damage inspection                (BAY_JOB_CONFIRM)
  *   POST /api/jobs/:id/back-to-queue            in a bay -> waiting again (wrong vehicle)    (BAY_JOB_CONFIRM)
  *   POST /api/jobs/:id/work-done                in a bay -> ready ({ anyway } skips the inspection warning)
@@ -67,6 +72,19 @@ export function jobsRoutes(pool: pg.Pool) {
   router.post('/check-in', requireScreen('JOB_CHECK_IN'), async (req, res) => {
     const me = signedInUser(req);
     sendOk(res, await checkIn(pool, parse(checkInBody, req.body), me.userId), 201);
+  });
+
+  // Without a camera (switched off, or no occupancy service running): staff put the vehicle in a bay themselves
+  router.get('/free-bays', requireScreen('BAY_JOB_CONFIRM'), async (_req, res) => {
+    sendOk(res, await freeBaysForJobs(pool));
+  });
+
+  router.post('/:id/move-into-bay', requireScreen('BAY_JOB_CONFIRM'), async (req, res) => {
+    const me = signedInUser(req);
+    const { id } = parse(idParam, req.params);
+    const { bayId } = parse(intoBayBody, req.body ?? {});
+    await confirmJobInBay(pool, { jobId: id, bayId, userId: me.userId, manual: true });
+    sendOk(res, { jobId: id, stage: 'in_bay' });
   });
 
   const action = (name: JobAction, ...codes: [string, ...string[]]) =>

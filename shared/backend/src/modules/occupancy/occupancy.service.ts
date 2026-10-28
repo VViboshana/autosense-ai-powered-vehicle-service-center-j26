@@ -304,8 +304,11 @@ export async function confirmJobLeftBay(pool: pg.Pool, input: { bayId: number; j
   });
 }
 
-/** Staff confirmed that this job's vehicle is the one in the bay: the job moves to in_bay. */
-export async function confirmJobInBay(pool: pg.Pool, input: { bayId: number; jobId: number; userId: number }) {
+/**
+ * Staff confirmed that this job's vehicle is the one in the bay: the job moves to in_bay. `manual`: no camera saw it;
+ * staff picked the bay on Vehicles & jobs (the fallback when the bay's camera is not running). The same checks apply.
+ */
+export async function confirmJobInBay(pool: pg.Pool, input: { bayId: number; jobId: number; userId: number; manual?: boolean }) {
   return withTransaction(pool, async (client) => {
     // Lock the bay row first, so two people confirming at once cannot put two vehicles in one bay
     await repo.lockBay(client, input.bayId);
@@ -322,9 +325,12 @@ export async function confirmJobInBay(pool: pg.Pool, input: { bayId: number; job
       jobId: input.jobId,
       bayId: input.bayId,
       userId: input.userId,
-      note: `Confirmed on the Bay monitor: the camera saw ${bay.name} occupied`,
+      note: input.manual ? `Moved into ${bay.name} by staff (no camera)` : `Confirmed on the Bay monitor: the camera saw ${bay.name} occupied`,
     });
     if (!moved) throw new BusinessRuleError('JOB_NOT_WAITING', 'That job is no longer waiting for a bay. Refresh and pick another vehicle.');
-    await audit(client, { table: 'workshop.jobs', recordId: input.jobId, action: 'move_to_bay', snapshot: { bayId: input.bayId, source: 'occupancy_suggestion' }, userId: input.userId });
+    await audit(client, {
+      table: 'workshop.jobs', recordId: input.jobId, action: 'move_to_bay',
+      snapshot: { bayId: input.bayId, source: input.manual ? 'manual' : 'occupancy_suggestion' }, userId: input.userId,
+    });
   });
 }

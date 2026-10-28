@@ -529,6 +529,23 @@ export async function bayHasJob(db: Db, bayId: number): Promise<boolean> {
   return rows.length > 0;
 }
 
+/**
+ * Bays a waiting job can be moved into by hand (Vehicles & jobs): active, on a camera that takes jobs (real cameras and
+ * the simulated demo camera, never test footage), and with no job in them. Whether a camera sees a vehicle is not asked.
+ */
+export async function freeBaysForJobs(db: Db): Promise<{ bayId: number; name: string }[]> {
+  const { rows } = await db.query<{ bayId: number; name: string }>(
+    `SELECT b.bay_id AS "bayId", b.name
+     FROM occupancy.bays b LEFT JOIN occupancy.cameras c ON c.camera_id = b.camera_id
+     WHERE b.is_active
+       AND (c.code IS NULL OR c.code NOT LIKE $1 || '%' OR c.code = ANY($2::varchar[]))
+       AND NOT EXISTS (SELECT 1 FROM workshop.jobs j WHERE j.bay_id = b.bay_id AND j.stage IN ${IN_BAY})
+     ORDER BY b.display_order, b.code`,
+    [TEST_CAMERA_PREFIX, TEST_CAMERAS_WITH_JOBS],
+  );
+  return rows;
+}
+
 /** Moves a waiting job into a bay, with its stage history. False when the job is not (or no longer) waiting. */
 export async function moveJobIntoBay(db: Db, m: { jobId: number; bayId: number; userId: number | null; note: string }): Promise<boolean> {
   const { rowCount } = await db.query(
